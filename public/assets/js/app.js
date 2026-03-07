@@ -1,12 +1,16 @@
-/* Orland Dashboard — multipage app.js (Bootstrap + Purple)
+/* Orland Dashboard — multipage app.js (SAFE, anti redirect-loop)
  * Same-origin API under /api/*
  */
 (function(){
   "use strict";
 
+  // -------------------------
+  // API helper (returns {status,data,http})
+  // -------------------------
   async function api(path, opt = {}) {
     const headers = Object.assign({}, opt.headers || {});
     if (opt.body != null && !headers["content-type"]) headers["content-type"] = "application/json";
+
     try {
       const res = await fetch(path, {
         method: opt.method || "GET",
@@ -14,20 +18,30 @@
         body: opt.body || undefined,
         credentials: "include",
       });
+
+      const http = res.status;
       const ct = res.headers.get("content-type") || "";
-      if (!ct.includes("application/json")) {
-        const text = await res.text().catch(() => "");
-        return { status: "server_error", data: { http: res.status, body: text.slice(0, 280) } };
+
+      // if JSON -> parse
+      if (ct.includes("application/json")) {
+        const j = await res.json();
+        // normalize: include http to allow logic decisions
+        if (j && typeof j === "object" && j.status) return { ...j, http };
+        return { status:"server_error", data:{ http, body:"invalid_json_shape" }, http };
       }
-      return await res.json();
+
+      // non-json response (cloudflare html error page, etc)
+      const text = await res.text().catch(() => "");
+      return { status:"server_error", data:{ http, body: text.slice(0, 280) }, http };
+
     } catch (e) {
-      return { status: "network_error", data: { message: String(e?.message || e) } };
+      return { status:"network_error", data:{ message: String(e?.message || e), url: path }, http: 0 };
     }
   }
 
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  function esc(s){ return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
+  const esc = (s)=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 
   function toast(msg, type="info"){
     const host = document.getElementById("toast-host");
@@ -58,14 +72,51 @@
     });
   }
 
+  // --------------------------------
+  // REDIRECT POLICY (IMPORTANT)
+  // --------------------------------
+  function shouldRedirectToLogin(meResp){
+    // redirect ONLY when truly unauthorized
+    return (
+      meResp?.status === "unauthorized" ||
+      meResp?.http === 401 ||
+      meResp?.http === 403
+    );
+  }
+
+  function showFatal(boxSel, msg, payload){
+    const box = $(boxSel);
+    if(!box) return;
+    box.innerHTML = `
+      <div class="orland-card p-3" style="border:1px solid rgba(255,0,0,.2)">
+        <div style="font-weight:900;color:#ffb4b4">Backend error</div>
+        <div class="small-muted mt-2">${esc(msg)}</div>
+        <details class="mt-2">
+          <summary class="small-muted">Debug</summary>
+          <pre class="small-muted mt-2" style="white-space:pre-wrap">${esc(JSON.stringify(payload,null,2))}</pre>
+        </details>
+        <div class="small-muted mt-2">Tip: cek D1 schema/binding + logs Pages Functions.</div>
+      </div>
+    `;
+  }
+
   // ---------- Auth pages ----------
   async function pageLogin(){
     const out = $("#debugOut");
 
-    // already logged in?
+    // ✅ SAFE check session - DO NOT redirect on 500
     const me0 = await api("/api/me");
     if (out) out.textContent = JSON.stringify(me0, null, 2);
-    if(me0.status === "ok"){ location.href="/dashboard.html"; return; }
+    if(me0.status === "ok"){
+      location.href="/dashboard.html";
+      return;
+    }
+    if (shouldRedirectToLogin(me0)) {
+      // ok, stay on login
+    } else if (me0.status === "server_error" || me0.status === "network_error") {
+      // show warning but don't redirect
+      toast("Server sedang error. Login bisa gagal sampai backend normal.", "error");
+    }
 
     const st = await api("/api/setup/status");
     if(out) out.textContent = JSON.stringify(st,null,2);
@@ -79,10 +130,13 @@
       const password = String($("#password")?.value||"");
       const r = await api("/api/login", { method:"POST", body: JSON.stringify({ email, password }) });
       if(out) out.textContent = JSON.stringify(r,null,2);
+
       if(r.status==="ok"){
         toast("Login sukses", "success");
         location.href="/dashboard.html";
-      } else toast("Login gagal: "+r.status, "error");
+      } else {
+        toast("Login gagal: "+r.status, "error");
+      }
     });
 
     $("#password")?.addEventListener("keydown",(e)=>{ if(e.key==="Enter") $("#btnLogin")?.click(); });
@@ -100,7 +154,6 @@
       location.href = "/index.html";
       return;
     }
-    if(invite){ const t=$("#setupTitle"); if(t) t.textContent="Accept Invite (Admin)"; }
 
     $("#btnSetup")?.addEventListener("click", async ()=>{
       const display_name = String($("#display_name")?.value||"").trim();
@@ -108,12 +161,7 @@
       const password = String($("#password")?.value||"");
       if(!email.includes("@") || password.length<10){ toast("Email invalid / password min 10", "error"); return; }
 
-      let r;
-      if(invite){
-        r = await api("/api/invites/accept", { method:"POST", body: JSON.stringify({ token: invite, email, display_name, password }) });
-      }else{
-        r = await api("/api/setup/bootstrap", { method:"POST", body: JSON.stringify({ email, display_name, password }) });
-      }
+      const r = await api("/api/setup/bootstrap", { method:"POST", body: JSON.stringify({ email, display_name, password }) });
       if(out) out.textContent = JSON.stringify(r,null,2);
       if(r.status==="ok"){ toast("Berhasil. Silakan login.", "success"); location.href="/index.html"; }
       else toast("Gagal: "+r.status, "error");
@@ -153,7 +201,19 @@
     const out = $("#debugOut");
     const me = await api("/api/me");
     if(out) out.textContent = JSON.stringify(me,null,2);
-    if(me.status!=="ok"){ location.href="/index.html"; return null; }
+
+    // ✅ Redirect ONLY on unauthorized
+    if (shouldRedirectToLogin(me)) {
+      location.href="/index.html";
+      return null;
+    }
+
+    // ✅ If server error -> show error UI, DO NOT redirect (prevents loop)
+    if (me.status !== "ok") {
+      toast("Tidak bisa memuat sesi karena backend error.", "error");
+      showFatal("#opsBox", "Gagal memuat /api/me (backend error).", me);
+      return null;
+    }
 
     $("#meName").textContent = me.data.display_name || me.data.email_norm || me.data.id;
     $("#meRole").textContent = (me.data.roles||[]).join(", ");
@@ -175,15 +235,15 @@
 
     const map = {
       overview:["Overview","Ringkasan sistem & KPI"],
+      profile:["Profile","Akun kamu & ganti password"],
       users:["Users","CRUD admin/staff"],
       roles:["Roles","Kelola role"],
-      menus:["Menus","Kelola menu & icon"],
-      rbac:["RBAC","Assign menus ke role"],
+      menus:["Menus","Kelola menu"],
+      rbac:["RBAC","Assign menu ke role"],
       security:["Security","Metrics & trend"],
       ipblocks:["IP Blocks","Kelola IP blokir"],
       audit:["Audit Logs","Jejak aktivitas"],
       ops:["Ops","System status"],
-      profile:["Profile","Akun kamu & ganti password"],
     };
     const t = map[pageKey] || ["Dashboard",""];
     $("#pageTitle").textContent = t[0];
@@ -196,7 +256,6 @@
     const root = $("#navList");
     if(!root) return;
 
-    // always add profile
     const fixed = [{ label:"Profile", code:"profile", path:"/profile", icon:"fa-solid fa-id-badge", children:[] }];
 
     const items = [];
@@ -236,13 +295,14 @@
     return map[p] || "/dashboard.html";
   }
 
-  // ---------- Page implementations (UI only; API in Functions) ----------
+  // ---------- Pages ----------
   async function pageOverview(){
     const me = await bootAuthed("overview"); if(!me) return;
     const out = $("#debugOut");
 
     const ops = await api("/api/ops/status");
     if(out) out.textContent = JSON.stringify({ me, ops }, null, 2);
+
     if(ops.status==="ok"){
       $("#kpiUsers").textContent = ops.data.users;
       $("#kpiRoles").textContent = ops.data.roles;
@@ -256,53 +316,12 @@
         </div>
       `;
     } else {
-      $("#opsBox").textContent = "Failed: " + ops.status;
+      // ✅ do not redirect; just show error
+      showFatal("#opsBox", "Gagal memuat /api/ops/status", ops);
     }
   }
 
-  async function pageProfile(){
-    const me = await bootAuthed("profile"); if(!me) return;
-    const out = $("#debugOut");
-
-    $("#profileBox").innerHTML = `
-      <div class="row g-3">
-        <div class="col-md-6">
-          <div class="orland-card p-3">
-            <div style="font-weight:900">Info</div>
-            <div class="small-muted mt-2">Email: <b>${esc(me.data.email_norm||"")}</b></div>
-            <div class="small-muted">Name: <b>${esc(me.data.display_name||"")}</b></div>
-            <div class="small-muted">Roles: <b>${esc((me.data.roles||[]).join(", "))}</b></div>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="orland-card p-3">
-            <div style="font-weight:900">Change Password</div>
-            <div class="small-muted mt-2">Min 10 chars.</div>
-            <div class="input-group mt-2">
-              <input id="pwNew" type="password" class="form-control orland-input" placeholder="new password">
-              <button class="btn orland-btn-ghost pw-toggle" type="button" data-target="pwNew"><i class="fa-solid fa-eye"></i></button>
-            </div>
-            <button id="btnPw" class="orland-btn mt-3 w-100">Update</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    bindPasswordToggles();
-
-    $("#btnPw").onclick = async ()=>{
-      const new_password = String($("#pwNew").value||"");
-      if(new_password.length<10) return toast("Min 10", "error");
-      const r = await api("/api/profile/password", { method:"POST", body: JSON.stringify({ new_password }) });
-      if(out) out.textContent = JSON.stringify(r,null,2);
-      toast(r.status, r.status==="ok"?"success":"error");
-      if(r.status==="ok") $("#pwNew").value="";
-    };
-  }
-
-  // NOTE: Users/Roles/Menus/RBAC/Security/IPBlocks/Audit/Ops handlers
-  // will be included in PART 2/4 & PART 3/4 to keep script stable + not too long in one message.
-
+  // ---------- Boot ----------
   document.addEventListener("DOMContentLoaded", async ()=>{
     bindPasswordToggles();
 
@@ -314,9 +333,8 @@
 
     const page = window.__PAGE__ || "";
     if(page==="overview") return pageOverview();
-    if(page==="profile") return pageProfile();
 
-    // Other pages wired in PART 2/4 + PART 3/4
+    // fallback
     await bootAuthed("overview");
   });
 })();
