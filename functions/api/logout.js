@@ -1,13 +1,15 @@
-import { json, requireAuth, revokeSessionBySid, cookie } from "../_lib.js";
+import { json, parseCookies, cookie, revokeSessionBySid } from "../_lib.js";
 
 export async function onRequestPost({ request, env }) {
-  const a = await requireAuth(env, request);
-  if (!a.ok) return a.res;
+  const c = parseCookies(request);
+  const sid = c.sid || "";
 
-  await revokeSessionBySid(env, a.token);
+  if (sid) {
+    await revokeSessionBySid(env, sid);
+  }
 
   const res = json(200, "ok", { logged_out: true });
-  // clear cookie
-  res.headers.append("set-cookie", cookie("sid","", { maxAge: 0 }));
+  // delete cookie
+  res.headers.append("set-cookie", cookie("sid", "", { maxAge: 0 }));
   return res;
 }
