@@ -1,37 +1,21 @@
-import { audit, requireAuth } from "./_lib.js";
-
 export async function onRequest(ctx) {
-  const { request, env } = ctx;
+  const { request } = ctx;
   const url = new URL(request.url);
 
-  // Only audit API routes
-  if (!url.pathname.startsWith("/api/")) {
-    return await ctx.next();
-  }
+  // hanya set headers untuk /api
+  if (!url.pathname.startsWith("/api/")) return await ctx.next();
 
-  // Best-effort actor (no hard fail)
-  let actor_user_id = null;
   try {
-    const a = await requireAuth(env, request);
-    if (a.ok) actor_user_id = a.uid;
-  } catch {}
-
-  const res = await ctx.next();
-
-  // Write audit log (best effort)
-  try {
-    await audit(env, {
-      actor_user_id,
-      action: "http.request",
-      route: `${request.method} ${url.pathname}`,
-      http_status: res.status,
-      meta: {}
+    const res = await ctx.next();
+    const h = new Headers(res.headers);
+    h.set("cache-control","no-store");
+    h.set("x-content-type-options","nosniff");
+    return new Response(res.body, { status: res.status, headers: h });
+  } catch (e) {
+    console.error("MIDDLEWARE_CRASH", e);
+    return new Response(JSON.stringify({ status:"server_error", data:{ message: String(e?.message || e) } }), {
+      status: 500,
+      headers: { "content-type":"application/json; charset=utf-8", "cache-control":"no-store" }
     });
-  } catch {}
-
-  // Security headers for API
-  const h = new Headers(res.headers);
-  h.set("cache-control","no-store");
-  h.set("x-content-type-options","nosniff");
-  return new Response(res.body, { status: res.status, headers: h });
+  }
 }
