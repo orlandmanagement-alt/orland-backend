@@ -1,34 +1,264 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Orland Management — Profile</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
-<link href="/assets/css/style.css" rel="stylesheet"><style>body{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif}</style></head>
-<body data-page="authed"><div id="toast-host" class="toast-host"></div>
-<div class="shell">
-  <aside id="sidebar" class="sidebar"><div class="orland-card p-3">
-    <div class="brand"><div class="logo"><i class="fa-solid fa-gem"></i></div><div><div style="font-size:16px">Orland Management</div><div class="small-muted" style="font-size:12px">Dashboard</div></div></div>
-    <hr style="border-color:var(--orland-border)">
-    <div class="d-flex align-items-center gap-2 mb-2"><img id="meAvatar" class="avatar"><div style="min-width:0"><div id="meName" style="font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div><div id="meRole" class="small-muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div></div></div>
-    <div id="navList" class="d-grid gap-1 mt-2"></div>
-    <div class="d-grid gap-2 mt-3"><button id="btnLogout" class="orland-btn-ghost"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</button></div>
-  </div></aside>
+<!DOCTYPE html>
+<html lang="id" x-data="orlandAdminApp()" :class="darkMode ? 'dark' : ''" x-init="init()">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORLAND • Admin</title>
 
-  <main class="content">
-    <div class="topbar">
-      <div class="d-flex align-items-center gap-2">
-        <button id="navToggle" class="orland-btn-ghost d-lg-none"><i class="fa-solid fa-bars"></i></button>
-        <div><div id="pageTitle" style="font-weight:900;font-size:18px">Profile</div><div id="pageSubtitle" class="small-muted" style="font-size:12px">Akun kamu & ganti password</div></div>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>[x-cloak]{display:none!important}</style>
+</head>
+
+<body data-require-auth="1" class="bg-[#f3f4f6] text-slate-800 dark:bg-[#0f1115] dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
+  <div id="toastHost" class="fixed top-4 right-4 z-[200] space-y-2"></div>
+
+  <div x-show="isLoggedIn" x-transition.opacity.duration.800ms x-cloak class="flex h-screen overflow-hidden">
+
+    <div x-show="sidebarOpen" @click="sidebarOpen = false" x-cloak class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm transition-opacity"></div>
+
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-[#16181d] shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-[#2b2d31] flex flex-col">
+
+      <div class="h-16 flex items-center px-6 border-b border-slate-200 dark:border-[#2b2d31] justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white shadow-md">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</h1>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400" x-text="me ? (me.email_norm || me.id) : ''"></p>
+          </div>
+        </div>
+        <button @click="sidebarOpen = false" class="lg:hidden text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
       </div>
-    </div>
 
-    <div id="profileBox"></div>
+      <nav class="flex-1 overflow-y-auto py-4">
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Core Operations</p>
+        <template x-for="menu in menus.core" :key="menu.id">
+          <div>
+            <template x-if="!menu.submenus || menu.submenus.length===0">
+              <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
+                <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
+              </button>
+            </template>
 
-    <details class="mt-3"><summary class="small-muted">Debug</summary><pre id="debugOut" class="small-muted mt-2" style="white-space:pre-wrap"></pre></details>
-    <div class="small-muted text-center mt-3">© Orland Management</div>
-  </main>
-</div>
-<script>window.__PAGE__="profile";</script>
-<script src="/assets/js/app.js"></script>
-</body></html>
+            <template x-if="menu.submenus && menu.submenus.length">
+              <div x-data="{ open: page === menu.id }">
+                <button @click="open=!open" :class="page===menu.id ? 'text-blue-500 bg-slate-50 dark:bg-white/5' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'" class="w-full flex items-center justify-between px-6 py-2.5 transition-colors duration-150">
+                  <div class="flex items-center gap-3"><i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span></div>
+                  <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                </button>
+                <div x-show="open" class="bg-slate-50/50 dark:bg-black/20 py-1">
+                  <template x-for="sub in menu.submenus" :key="sub.id">
+                    <button @click="navigate(menu.id, sub.id)"
+                      :class="page===menu.id && subpage===sub.id ? 'text-blue-500 border-blue-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent'"
+                      class="w-full flex items-center pl-14 pr-6 py-2 text-xs font-medium border-l-2 transition-colors duration-150"
+                      x-text="sub.label"></button>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Integrations</p>
+        <template x-for="menu in menus.integrations" :key="menu.id">
+          <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
+            <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
+          </button>
+        </template>
+
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">System & Ops</p>
+        <template x-for="menu in menus.system" :key="menu.id">
+          <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
+            <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
+          </button>
+        </template>
+      </nav>
+
+      <div class="p-4 border-t border-slate-200 dark:border-[#2b2d31] shrink-0">
+        <button @click="logout()" class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-rose-500/10 text-slate-800 dark:text-white hover:text-rose-500 transition group">
+          <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500 font-bold border border-blue-500/30 group-hover:bg-rose-500/20 group-hover:text-rose-500 group-hover:border-rose-500/30 transition">
+            <i class="fa-solid fa-power-off"></i>
+          </div>
+          <div class="text-left flex-1 overflow-hidden">
+            <p class="text-xs font-bold truncate" x-text="me?.display_name || 'Admin'"></p>
+            <p class="text-[10px] text-slate-500 truncate group-hover:text-rose-500 transition">Logout</p>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-[#0f1115]">
+
+      <header class="h-16 bg-white dark:bg-[#16181d] border-b border-slate-200 dark:border-[#2b2d31] flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
+        <div class="flex items-center gap-4 flex-1">
+          <button @click="sidebarOpen = true" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="hidden sm:flex items-center text-xs font-medium text-slate-500 dark:text-slate-400">
+            <i class="fa-solid fa-house mr-2"></i><span class="mx-2">/</span>
+            <span class="capitalize" x-text="page.replace('-', ' ')"></span>
+            <span x-show="subpage" class="mx-2">/</span>
+            <span x-show="subpage" class="capitalize text-slate-900 dark:text-white" x-text="subpage ? subpage.replace('-', ' ') : ''"></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-4">
+          <button @click="toggleTheme()" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i x-show="!darkMode" class="fa-solid fa-moon"></i>
+            <i x-show="darkMode" class="fa-solid fa-sun text-amber-500" x-cloak></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-auto">
+        <div class="p-6 max-w-[1600px] mx-auto space-y-6">
+
+          <!-- DASHBOARD -->
+          <template x-if="page === 'dashboard'">
+            <div class="space-y-6" x-transition>
+              <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white">Enterprise Overview</h2>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <p class="text-xs font-medium text-slate-500">Total Users</p>
+                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                </div>
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <p class="text-xs font-medium text-slate-500">Projects</p>
+                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                </div>
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <p class="text-xs font-medium text-slate-500">Latency</p>
+                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                </div>
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <p class="text-xs font-medium text-slate-500">Security Alerts</p>
+                  <h3 class="text-2xl font-bold text-rose-500 mt-1">—</h3>
+                </div>
+              </div>
+
+              <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm h-80 flex flex-col">
+                <h3 class="text-sm font-bold mb-4">Traffic Rate</h3>
+                <div class="flex-1 relative w-full h-full"><canvas id="mainChart"></canvas></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- USERS (Admin list) -->
+          <template x-if="page === 'users'">
+            <div class="space-y-6" x-transition>
+              <h2 class="text-xl font-bold text-slate-900 dark:text-white capitalize" x-text="(subpage || 'admin') + ' Users'"></h2>
+
+              <div class="bg-white dark:bg-[#16181d] border border-slate-200 dark:border-[#2b2d31] rounded-xl shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-slate-200 dark:border-[#2b2d31] flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
+                  <div class="text-xs text-slate-500">
+                    Data dari <code>/api/users/admin</code>
+                    <span x-show="data.loadingAdmins" class="ml-2 text-blue-500"><i class="fa-solid fa-circle-notch animate-spin"></i> loading</span>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-xs whitespace-nowrap">
+                    <thead class="bg-slate-50 dark:bg-[#0f1115] text-slate-500 border-b border-slate-200 dark:border-[#2b2d31]">
+                      <tr>
+                        <th class="px-4 py-3 font-semibold">User</th>
+                        <th class="px-4 py-3 font-semibold">Role</th>
+                        <th class="px-4 py-3 font-semibold">Status</th>
+                        <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-[#2b2d31]">
+                      <template x-for="u in data.admins" :key="u.id">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
+                          <td class="px-4 py-3">
+                            <div class="font-medium text-slate-900 dark:text-white" x-text="u.name"></div>
+                            <div class="text-[10px] text-slate-500" x-text="u.email"></div>
+                          </td>
+                          <td class="px-4 py-3">
+                            <span class="bg-slate-100 dark:bg-[#0f1115] border border-slate-200 dark:border-[#2b2d31] px-2 py-0.5 rounded text-[10px]" x-text="u.role"></span>
+                          </td>
+                          <td class="px-4 py-3">
+                            <span class="text-emerald-500 font-medium" x-show="u.status==='active'"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Active</span>
+                            <span class="text-rose-500 font-medium" x-show="u.status!=='active'"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Disabled</span>
+                          </td>
+                          <td class="px-4 py-3 text-right">
+                            <button class="text-slate-400 hover:text-blue-500 mx-1" title="Edit (next)"><i class="fa-solid fa-pen"></i></button>
+                            <button class="text-slate-400 hover:text-rose-500 mx-1" title="Disable (next)"><i class="fa-solid fa-ban"></i></button>
+                          </td>
+                        </tr>
+                      </template>
+                      <tr x-show="!data.loadingAdmins && data.admins.length===0">
+                        <td colspan="4" class="px-4 py-6 text-center text-slate-500">No data.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- PROFILE -->
+          <template x-if="page === 'profile'">
+            <div class="space-y-6" x-transition>
+              <h2 class="text-xl font-bold text-slate-900 dark:text-white">My Profile</h2>
+
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <div class="text-xs text-slate-500">Account</div>
+                  <div class="mt-2 text-sm">
+                    <div><b>Name:</b> <span x-text="me?.display_name || '-'"></span></div>
+                    <div><b>Email:</b> <span x-text="me?.email_norm || '-'"></span></div>
+                    <div><b>Roles:</b> <span x-text="(me?.roles||[]).join(', ')"></span></div>
+                  </div>
+                </div>
+
+                <div class="bg-white dark:bg-[#16181d] p-5 rounded-xl border border-slate-200 dark:border-[#2b2d31] shadow-sm">
+                  <div class="text-xs text-slate-500">Change Password</div>
+                  <div class="mt-3">
+                    <input x-ref="newpw" type="password" placeholder="new password (min 10)"
+                      class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#0f1115] border border-slate-200 dark:border-[#2b2d31] outline-none">
+                    <button @click="changeMyPassword()"
+                      class="mt-3 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg">
+                      Update Password
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- FALLBACK: other pages -->
+          <template x-if="!['dashboard','users','profile'].includes(page)">
+            <div class="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6" x-transition>
+              <div class="w-24 h-24 bg-slate-100 dark:bg-[#2b2d31] rounded-full flex items-center justify-center text-4xl text-slate-400 shadow-inner">
+                <i class="fa-solid fa-person-digging"></i>
+              </div>
+              <div class="max-w-md">
+                <h3 class="text-2xl font-bold text-slate-900 dark:text-white capitalize mb-2" x-text="page.replace('-', ' ')"></h3>
+                <p class="text-sm text-slate-500 leading-relaxed">
+                  Module ini disiapkan sesuai template. CRUD & tabel akan dihubungkan ke endpoint kamu berikutnya.
+                </p>
+              </div>
+            </div>
+          </template>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.__START_PAGE = "profile";
+    window.__START_SUBPAGE = null;
+  </script>
+  <script src="/assets/js/admin-app.js"></script>
+</body>
+</html>
