@@ -158,14 +158,17 @@ export async function createSession(env, user_id, roles){
   const exp = now + ttl;
   const sid = crypto.randomUUID();
 
-  const token_hash = sid; // keep schema compatible
+  // token_hash disimpan sebagai sid agar simple (cookie SID)
+  const token_hash = sid;
 
   await env.DB.prepare(`
-    INSERT INTO sessions (id,user_id,token_hash,roles_json,expires_at,created_at,revoked_at,ua_hash,ip_prefix_hash,last_seen_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
+    INSERT INTO sessions (
+      id,user_id,token_hash,created_at,expires_at,revoked_at,
+      ip_hash,ua_hash,role_snapshot,ip_prefix_hash,last_seen_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
-    sid, user_id, token_hash, JSON.stringify(r), exp, now, null,
-    null, null, now
+    sid, user_id, token_hash, now, exp, null,
+    null, null, JSON.stringify(r), null, now
   ).run();
 
   return { sid, exp, ttl };
@@ -184,7 +187,7 @@ export async function requireAuth(env, request){
 
   const now = nowSec();
   const row = await env.DB.prepare(`
-    SELECT id,user_id,roles_json,expires_at,revoked_at
+    SELECT id,user_id,role_snapshot,expires_at,revoked_at
     FROM sessions
     WHERE id=?
     LIMIT 1
@@ -194,8 +197,12 @@ export async function requireAuth(env, request){
     return { ok:false, res: json(401,"unauthorized",null) };
   }
 
-  try{ await env.DB.prepare(`UPDATE sessions SET last_seen_at=? WHERE id=?`).bind(now, row.id).run(); }catch{}
+  try{
+    await env.DB.prepare(`UPDATE sessions SET last_seen_at=? WHERE id=?`).bind(now, row.id).run();
+  }catch{}
 
-  const roles = JSON.parse(row.roles_json||"[]") || [];
+  let roles = [];
+  try{ roles = JSON.parse(row.role_snapshot || "[]") || []; }catch{ roles=[]; }
+
   return { ok:true, uid: row.user_id, roles, token: sid };
 }
