@@ -1,64 +1,51 @@
 <!DOCTYPE html>
-<html lang="id" x-data="orlandAdminApp()" :class="darkMode ? 'dark' : ''" x-init="init()">
+<html lang="id" x-data="orlandApp()" :class="darkMode ? 'dark' : ''" x-cloak>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ORLAND | Enterprise Operations</title>
+  <title>ORLAND | Admin Dashboard</title>
 
-  <!-- Frameworks -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Icons & Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link href="/assets/css/admin.css" rel="stylesheet">
 
   <script>
     tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            dark: '#0f1115',
-            darkLighter: '#16181d',
-            darkBorder: '#2b2d31',
-            primary: '#3b82f6',
-            secondary: '#64748b',
-            success: '#10b981',
-            danger: '#ef4444',
-            warning: '#f59e0b',
-            info: '#0ea5e9',
-            blogger: '#f57c00'
-          },
-          fontFamily: { sans: ['Inter', 'sans-serif'] }
-        }
-      }
+      darkMode:'class',
+      theme:{ extend:{
+        colors:{
+          dark:'#0f1115', darkLighter:'#16181d', darkBorder:'#2b2d31',
+          primary:'#3b82f6', secondary:'#64748b', success:'#10b981',
+          danger:'#ef4444', warning:'#f59e0b', info:'#0ea5e9', blogger:'#f57c00'
+        },
+        fontFamily:{ sans:['Inter','sans-serif'] }
+      }}
     }
   </script>
 
   <style>
-    .sidebar-active {
-      background-color: rgba(59,130,246,0.1);
-      color: #3b82f6 !important;
-      border-right: 3px solid #3b82f6;
-    }
+    [x-cloak]{display:none!important}
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+    .dark ::-webkit-scrollbar-thumb{background:#334155}
+    .sidebar-active{background-color:rgba(59,130,246,.1);color:#3b82f6!important;border-right:3px solid #3b82f6}
   </style>
 </head>
 
-<body data-require-auth="1" class="bg-[#f3f4f6] text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
+<body class="bg-[#f3f4f6] text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
 
-  <div id="toastHost" class="fixed top-4 right-4 z-[200] space-y-2"></div>
+  <!-- DASHBOARD -->
+  <div class="flex h-screen overflow-hidden">
 
-  <!-- DASHBOARD CONTAINER -->
-  <div x-show="isLoggedIn" x-transition.opacity.duration.800ms x-cloak class="flex h-screen overflow-hidden">
+    <!-- overlay -->
+    <div x-show="sidebarOpen" @click="sidebarOpen=false" class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm" x-cloak></div>
 
-    <!-- SIDEBAR OVERLAY -->
-    <div x-show="sidebarOpen" @click="sidebarOpen = false" x-cloak class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm transition-opacity"></div>
-
-    <!-- SIDEBAR -->
-    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col">
+    <!-- Sidebar -->
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+      class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static border-r border-slate-200 dark:border-darkBorder flex flex-col">
 
       <div class="h-16 flex items-center px-6 border-b border-slate-200 dark:border-darkBorder justify-between shrink-0">
         <div class="flex items-center gap-3">
@@ -67,124 +54,141 @@
           </div>
           <div>
             <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</h1>
-            <p class="text-[10px] text-slate-500 dark:text-slate-400" x-text="me ? (me.email_norm || me.id) : ''"></p>
+            <div class="text-[10px] text-slate-500" x-text="me?.email_norm || ''"></div>
           </div>
         </div>
-        <button @click="sidebarOpen = false" class="lg:hidden text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+        <button @click="sidebarOpen=false" class="lg:hidden text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
-      <!-- Navigation -->
       <nav class="flex-1 overflow-y-auto py-4">
+        <template x-if="loadingNav">
+          <div class="px-6 text-xs text-slate-500">Loading menus…</div>
+        </template>
 
-        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Core Operations</p>
-        <template x-for="menu in menus.core" :key="menu.id">
+        <template x-if="!loadingNav">
           <div>
-            <template x-if="!menu.submenus || menu.submenus.length===0">
-              <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
-                <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
+            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Core Operations</p>
+            <template x-for="menu in menus.core" :key="menu.id">
+              <div>
+                <template x-if="!menu.children || menu.children.length===0">
+                  <button @click="navigate(menu)" :class="page===menu.code ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'"
+                    class="w-full flex items-center gap-3 px-6 py-2.5 transition">
+                    <i :class="menu.icon || 'fa-solid fa-circle-dot'" class="w-5 text-center"></i>
+                    <span class="font-medium" x-text="menu.label"></span>
+                  </button>
+                </template>
+
+                <template x-if="menu.children && menu.children.length">
+                  <div x-data="{open: page===menu.code}">
+                    <button @click="open=!open" :class="page===menu.code ? 'text-primary bg-slate-50 dark:bg-white/5' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'"
+                      class="w-full flex items-center justify-between px-6 py-2.5 transition">
+                      <div class="flex items-center gap-3">
+                        <i :class="menu.icon || 'fa-solid fa-circle-dot'" class="w-5 text-center"></i>
+                        <span class="font-medium" x-text="menu.label"></span>
+                      </div>
+                      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="open?'rotate-180':''"></i>
+                    </button>
+
+                    <div x-show="open" class="bg-slate-50/50 dark:bg-black/20 py-1">
+                      <template x-for="sub in menu.children" :key="sub.id">
+                        <button @click="navigate(sub, menu)" :class="page===menu.code && subpage===sub.code ? 'text-primary border-primary' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent'"
+                          class="w-full flex items-center pl-14 pr-6 py-2 text-xs font-medium border-l-2 transition" x-text="sub.label"></button>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Integrations</p>
+            <template x-for="menu in menus.integrations" :key="menu.id">
+              <button @click="navigate(menu)" :class="page===menu.code ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'"
+                class="w-full flex items-center gap-3 px-6 py-2.5 transition">
+                <i :class="menu.icon || 'fa-brands fa-blogger'" class="w-5 text-center"></i>
+                <span class="font-medium" x-text="menu.label"></span>
               </button>
             </template>
 
-            <template x-if="menu.submenus && menu.submenus.length">
-              <div x-data="{ open: page === menu.id }">
-                <button @click="open=!open" :class="page===menu.id ? 'text-primary bg-slate-50 dark:bg-white/5' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'" class="w-full flex items-center justify-between px-6 py-2.5 transition-colors duration-150">
-                  <div class="flex items-center gap-3"><i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span></div>
-                  <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
-                </button>
-                <div x-show="open" class="bg-slate-50/50 dark:bg-black/20 py-1">
-                  <template x-for="sub in menu.submenus" :key="sub.id">
-                    <button @click="navigate(menu.id, sub.id)"
-                      :class="page===menu.id && subpage===sub.id ? 'text-primary border-primary' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent'"
-                      class="w-full flex items-center pl-14 pr-6 py-2 text-xs font-medium border-l-2 transition-colors duration-150"
-                      x-text="sub.label"></button>
-                  </template>
-                </div>
-              </div>
+            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">System & Ops</p>
+            <template x-for="menu in menus.system" :key="menu.id">
+              <button @click="navigate(menu)" :class="page===menu.code ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'"
+                class="w-full flex items-center gap-3 px-6 py-2.5 transition">
+                <i :class="menu.icon || 'fa-solid fa-gear'" class="w-5 text-center"></i>
+                <span class="font-medium" x-text="menu.label"></span>
+              </button>
             </template>
           </div>
-        </template>
-
-        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Integrations</p>
-        <template x-for="menu in menus.integrations" :key="menu.id">
-          <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
-            <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
-          </button>
-        </template>
-
-        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">System & Ops</p>
-        <template x-for="menu in menus.system" :key="menu.id">
-          <button @click="navigate(menu.id)" :class="sidebarBtnClass(menu.id)" class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150">
-            <i :class="menu.icon" class="w-5 text-center"></i><span class="font-medium" x-text="menu.label"></span>
-          </button>
         </template>
       </nav>
 
       <div class="p-4 border-t border-slate-200 dark:border-darkBorder shrink-0">
-        <button @click="logout()" class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-danger/10 text-slate-800 dark:text-white hover:text-danger transition group">
-          <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30 group-hover:bg-danger/20 group-hover:text-danger group-hover:border-danger/30 transition">
+        <button @click="logout()" class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-danger/10 hover:text-danger transition">
+          <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary border border-primary/30">
             <i class="fa-solid fa-power-off"></i>
           </div>
           <div class="text-left flex-1 overflow-hidden">
             <p class="text-xs font-bold truncate" x-text="me?.display_name || 'Admin'"></p>
-            <p class="text-[10px] text-slate-500 truncate group-hover:text-danger transition">Logout</p>
+            <p class="text-[10px] text-slate-500 truncate">Click to Logout</p>
           </div>
         </button>
       </div>
     </aside>
 
-    <!-- MAIN VIEWPORT -->
+    <!-- Main -->
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-dark">
-
       <header class="h-16 bg-white dark:bg-darkLighter border-b border-slate-200 dark:border-darkBorder flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
         <div class="flex items-center gap-4 flex-1">
-          <button @click="sidebarOpen = true" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+          <button @click="sidebarOpen=true" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
             <i class="fa-solid fa-bars"></i>
           </button>
-          <div class="hidden sm:flex items-center text-xs font-medium text-slate-500 dark:text-slate-400">
-            <i class="fa-solid fa-house mr-2"></i><span class="mx-2">/</span>
-            <span class="capitalize" x-text="page.replace('-', ' ')"></span>
-            <span x-show="subpage" class="mx-2">/</span>
-            <span x-show="subpage" class="capitalize text-slate-900 dark:text-white" x-text="subpage ? subpage.replace('-', ' ') : ''"></span>
+          <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+            <i class="fa-solid fa-house mr-2"></i> / <span class="capitalize" x-text="page"></span>
+            <template x-if="subpage"><span> / <span class="capitalize text-slate-900 dark:text-white" x-text="subpage"></span></span></template>
           </div>
         </div>
 
-        <div class="flex items-center gap-2 sm:gap-4">
+        <div class="flex items-center gap-3">
           <button @click="toggleTheme()" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             <i x-show="!darkMode" class="fa-solid fa-moon"></i>
-            <i x-show="darkMode" class="fa-solid fa-sun text-warning" x-cloak></i>
+            <i x-show="darkMode" x-cloak class="fa-solid fa-sun text-warning"></i>
           </button>
+          <button class="relative w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i class="fa-solid fa-bell"></i>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full ring-2 ring-white dark:ring-darkLighter"></span>
+          </button>
+          <img :src="avatarUrl()" class="w-8 h-8 rounded-full border border-slate-200 dark:border-darkBorder shadow-sm">
         </div>
       </header>
 
       <div class="flex-1 overflow-auto">
         <div class="p-6 max-w-[1600px] mx-auto space-y-6">
 
-          <!-- DASHBOARD -->
-          <template x-if="page === 'dashboard'">
-            <div class="space-y-6" x-transition>
+          <!-- Dashboard -->
+          <template x-if="page==='dashboard'">
+            <div class="space-y-6">
               <div class="flex justify-between items-center">
                 <h2 class="text-xl font-bold text-slate-900 dark:text-white">Enterprise Overview</h2>
               </div>
-
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Users</p>
-                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                  <p class="text-xs font-medium text-slate-500">Roles</p>
+                  <h3 class="text-2xl font-bold" x-text="(me?.roles||[]).length"></h3>
                 </div>
                 <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Projects</p>
-                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                  <p class="text-xs font-medium text-slate-500">Session</p>
+                  <h3 class="text-sm font-bold truncate" x-text="me?.id || ''"></h3>
                 </div>
                 <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Latency</p>
-                  <h3 class="text-2xl font-bold text-slate-900 dark:text-white mt-1">—</h3>
+                  <p class="text-xs font-medium text-slate-500">Status</p>
+                  <h3 class="text-2xl font-bold text-success">OK</h3>
                 </div>
                 <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
                   <p class="text-xs font-medium text-slate-500">Security Alerts</p>
-                  <h3 class="text-2xl font-bold text-danger mt-1">—</h3>
+                  <h3 class="text-2xl font-bold text-danger">0</h3>
                 </div>
               </div>
-
               <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm h-80 flex flex-col">
                 <h3 class="text-sm font-bold mb-4">Traffic Rate</h3>
                 <div class="flex-1 relative w-full h-full"><canvas id="mainChart"></canvas></div>
@@ -192,54 +196,55 @@
             </div>
           </template>
 
-          <!-- USERS -->
-          <template x-if="page === 'users'">
-            <div class="space-y-6" x-transition>
-              <h2 class="text-xl font-bold text-slate-900 dark:text-white capitalize" x-text="(subpage || 'admin') + ' Users'"></h2>
+          <!-- Users (Admin) -->
+          <template x-if="page==='users'">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white">Admin Users</h2>
+                <div class="flex gap-2">
+                  <input x-model="userQ" placeholder="Search..." class="px-3 py-2 text-xs bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-md">
+                  <button @click="loadAdminUsers()" class="bg-primary hover:bg-blue-600 text-white px-3 py-2 rounded-md text-xs font-bold">Reload</button>
+                </div>
+              </div>
 
               <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-slate-200 dark:border-darkBorder flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
-                  <div class="text-xs text-slate-500">
-                    Data dari <code>/api/users/admin</code>
-                    <span x-show="data.loadingAdmins" class="ml-2 text-primary"><i class="fa-solid fa-circle-notch animate-spin"></i> loading</span>
-                  </div>
-                  <button class="bg-primary hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium transition">
-                    <i class="fa-solid fa-plus mr-1"></i> Create (next)
-                  </button>
-                </div>
-
                 <div class="overflow-x-auto">
                   <table class="w-full text-left text-xs whitespace-nowrap">
                     <thead class="bg-slate-50 dark:bg-dark text-slate-500 border-b border-slate-200 dark:border-darkBorder">
                       <tr>
                         <th class="px-4 py-3 font-semibold">User</th>
-                        <th class="px-4 py-3 font-semibold">Role</th>
+                        <th class="px-4 py-3 font-semibold">Roles</th>
                         <th class="px-4 py-3 font-semibold">Status</th>
+                        <th class="px-4 py-3 font-semibold">Last Login</th>
                         <th class="px-4 py-3 font-semibold text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-darkBorder">
-                      <template x-for="u in data.admins" :key="u.id">
+                      <template x-for="u in adminUsers" :key="u.id">
                         <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                           <td class="px-4 py-3">
-                            <div class="font-medium text-slate-900 dark:text-white" x-text="u.name"></div>
-                            <div class="text-[10px] text-slate-500" x-text="u.email"></div>
+                            <div class="font-medium text-slate-900 dark:text-white" x-text="u.display_name || '-'"></div>
+                            <div class="text-[10px] text-slate-500" x-text="u.email_norm"></div>
                           </td>
-                          <td class="px-4 py-3">
-                            <span class="bg-slate-100 dark:bg-dark border border-slate-200 dark:border-darkBorder px-2 py-0.5 rounded text-[10px]" x-text="u.role"></span>
-                          </td>
+                          <td class="px-4 py-3 text-[10px]" x-text="(u.roles||[]).join(', ')"></td>
                           <td class="px-4 py-3">
                             <span class="text-success font-medium" x-show="u.status==='active'"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Active</span>
-                            <span class="text-danger font-medium" x-show="u.status!=='active'"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Disabled</span>
+                            <span class="text-danger font-medium" x-show="u.status!=='active'" x-cloak><i class="fa-solid fa-circle text-[8px] mr-1"></i> Disabled</span>
                           </td>
+                          <td class="px-4 py-3 text-[10px] text-slate-500" x-text="u.last_login_at || '-'"></td>
                           <td class="px-4 py-3 text-right">
-                            <button class="text-slate-400 hover:text-primary mx-1" title="Edit (next)"><i class="fa-solid fa-pen"></i></button>
-                            <button class="text-slate-400 hover:text-danger mx-1" title="Disable (next)"><i class="fa-solid fa-ban"></i></button>
+                            <button @click="toggleUser(u)" class="text-slate-400 hover:text-danger mx-1"><i class="fa-solid fa-ban"></i></button>
+                            <button @click="resetPw(u)" class="text-slate-400 hover:text-primary mx-1"><i class="fa-solid fa-key"></i></button>
+                            <button @click="revoke(u)" class="text-slate-400 hover:text-warning mx-1"><i class="fa-solid fa-right-from-bracket"></i></button>
                           </td>
                         </tr>
                       </template>
-                      <tr x-show="!data.loadingAdmins && data.admins.length===0">
-                        <td colspan="4" class="px-4 py-6 text-center text-slate-500">No data.</td>
+
+                      <tr x-show="adminUsers.length===0 && !loadingUsers" x-cloak>
+                        <td colspan="5" class="px-4 py-6 text-center text-slate-500">No data</td>
+                      </tr>
+                      <tr x-show="loadingUsers" x-cloak>
+                        <td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -248,17 +253,14 @@
             </div>
           </template>
 
-          <!-- FALLBACK -->
-          <template x-if="!['dashboard','users'].includes(page)">
-            <div class="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6" x-transition>
-              <div class="w-24 h-24 bg-slate-100 dark:bg-darkBorder rounded-full flex items-center justify-center text-4xl text-slate-400 shadow-inner">
+          <!-- Fallback -->
+          <template x-if="page!=='dashboard' && page!=='users'">
+            <div class="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-3">
+              <div class="w-20 h-20 bg-slate-100 dark:bg-darkBorder rounded-full flex items-center justify-center text-3xl text-slate-400">
                 <i class="fa-solid fa-person-digging"></i>
               </div>
-              <div class="max-w-md">
-                <h3 class="text-2xl font-bold text-slate-900 dark:text-white capitalize mb-2" x-text="page.replace('-', ' ')"></h3>
-                <p class="text-sm text-slate-500 leading-relaxed">
-                  Module ini masih <b>Under Construction</b>.
-                </p>
+              <div class="text-slate-600 dark:text-slate-300">
+                Module <b x-text="page"></b> under construction.
               </div>
             </div>
           </template>
@@ -268,6 +270,6 @@
     </main>
   </div>
 
-  <script src="/assets/js/admin-app.js"></script>
+  <script src="/assets/js/app.js"></script>
 </body>
 </html>
