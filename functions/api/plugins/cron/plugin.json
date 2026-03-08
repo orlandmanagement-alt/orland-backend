@@ -1,0 +1,8 @@
+{
+  "name": "cron",
+  "title": "Cron Jobs",
+  "version": "1.0.0",
+  "routes": [
+    "/ops/maintenance"
+  ]
+}
