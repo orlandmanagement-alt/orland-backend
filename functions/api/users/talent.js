@@ -2,36 +2,10 @@ import { json, requireAuth, hasRole } from "../../_lib.js";
 
 function allowed(a){ return hasRole(a.roles, ["super_admin","admin","staff"]); }
 
-function clamp(n, lo, hi){ n=Number(n); if(!Number.isFinite(n)) return null; return Math.max(lo, Math.min(hi, n)); }
-
-function b64e(s){
-  const u=new TextEncoder().encode(String(s));
-  let bin=""; for(const c of u) bin+=String.fromCharCode(c);
-  return btoa(bin).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
-}
-function b64d(s){
-  s=String(s||"").replaceAll("-","+").replaceAll("_","/");
-  while(s.length%4) s+="=";
-  const bin=atob(s);
-  const u8=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
-  return new TextDecoder().decode(u8);
-}
-function parseCursor(cur){
-  if(!cur) return null;
-  try{
-    const j=JSON.parse(b64d(cur));
-    const score=Number(j.score||0);
-    const id=String(j.id||"");
-    if(!id) return null;
-    return { score, id };
-  }catch{ return null; }
-}
-function makeCursor(row){
-  return b64e(JSON.stringify({ score:Number(row.score||0), id:String(row.user_id||row.id||"") }));
+function normLoc(s){
+  return String(s||"").trim().toLowerCase().replace(/\s+/g," ");
 }
 
-// GET /api/users/talent?loc=&gender=&age_min=&age_max=&h_min=&h_max=&cat=&score_min=&progress_min=&limit=&cursor=
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
@@ -39,92 +13,67 @@ export async function onRequestGet({ request, env }){
 
   const url = new URL(request.url);
 
-  const loc = String(url.searchParams.get("loc")||"").trim().toLowerCase();
+  const q = String(url.searchParams.get("q")||"").trim().toLowerCase();
+  const loc = normLoc(url.searchParams.get("location")||"");
   const gender = String(url.searchParams.get("gender")||"").trim();
-  const cat = String(url.searchParams.get("cat")||"").trim().toLowerCase();
+  const minScore = Number(url.searchParams.get("min_score")||0);
+  const minAge = Number(url.searchParams.get("min_age")||0);
+  const maxAge = Number(url.searchParams.get("max_age")||99);
+  const minH = Number(url.searchParams.get("min_height")||0);
+  const maxH = Number(url.searchParams.get("max_height")||999);
+  const category = String(url.searchParams.get("category")||"").trim().toLowerCase();
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")||50)));
 
-  const age_min = clamp(url.searchParams.get("age_min"), 0, 120);
-  const age_max = clamp(url.searchParams.get("age_max"), 0, 120);
-  const h_min = clamp(url.searchParams.get("h_min"), 0, 300);
-  const h_max = clamp(url.searchParams.get("h_max"), 0, 300);
+  // Talent = users that have role 'talent'
+  // Optional: join talent_profiles if exists (won't crash if table missing)
+  let hasTP = true;
+  try{
+    await env.DB.prepare("SELECT 1 FROM talent_profiles LIMIT 1").all();
+  }catch{ hasTP = false; }
 
-  const score_min = clamp(url.searchParams.get("score_min"), 0, 1000000);
-  const progress_min = clamp(url.searchParams.get("progress_min"), 0, 100);
+  const like = q ? `%${q}%` : null;
 
-  const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit")||"50")));
-  const cur = parseCursor(url.searchParams.get("cursor"));
-
-  // Build WHERE pieces with safe binds
-  const where = [];
-  const bind = [];
-
-  // talent role only
-  where.push("r.name='talent'");
-
-  if(loc){
-    where.push("tp.location_norm LIKE ?");
-    bind.push(`%${loc}%`);
-  }
-  if(gender){
-    where.push("tp.gender = ?");
-    bind.push(gender);
-  }
-  if(age_min != null){
-    where.push("tp.age_years >= ?");
-    bind.push(age_min);
-  }
-  if(age_max != null){
-    where.push("tp.age_years <= ?");
-    bind.push(age_max);
-  }
-  if(h_min != null){
-    where.push("tp.height_cm >= ?");
-    bind.push(h_min);
-  }
-  if(h_max != null){
-    where.push("tp.height_cm <= ?");
-    bind.push(h_max);
-  }
-  if(cat){
-    where.push("lower(tp.category_csv) LIKE ?");
-    bind.push(`%${cat}%`);
-  }
-  if(score_min != null){
-    where.push("tp.score >= ?");
-    bind.push(score_min);
-  }
-  if(progress_min != null){
-    where.push("tp.progress_pct >= ?");
-    bind.push(progress_min);
-  }
-
-  // cursor: order by score desc, then user_id desc
-  if(cur){
-    where.push("(tp.score < ? OR (tp.score = ? AND tp.user_id < ?))");
-    bind.push(cur.score, cur.score, cur.id);
-  }
-
-  const sql = `
+  let sql = `
     SELECT
-      tp.user_id, tp.name, tp.gender, tp.age_years, tp.location, tp.height_cm,
-      tp.category_csv, tp.score, tp.progress_pct,
-      tp.verified_email, tp.verified_phone, tp.verified_identity,
-      u.email_norm, u.status, u.created_at
-    FROM talent_profiles tp
-    JOIN users u ON u.id=tp.user_id
+      u.id, u.email_norm, u.display_name, u.status, u.created_at,
+      ${hasTP ? `
+      tp.gender, tp.age_years, tp.height_cm, tp.location, tp.score, tp.progress_pct, tp.category_csv
+      ` : `
+      NULL AS gender, NULL AS age_years, NULL AS height_cm, NULL AS location, 0 AS score, 0 AS progress_pct, '' AS category_csv
+      `}
+    FROM users u
     JOIN user_roles ur ON ur.user_id=u.id
-    JOIN roles r ON r.id=ur.role_id
-    WHERE ${where.join(" AND ")}
-    ORDER BY tp.score DESC, tp.user_id DESC
-    LIMIT ?
+    JOIN roles r ON r.id=ur.role_id AND r.name='talent'
+    ${hasTP ? `LEFT JOIN talent_profiles tp ON tp.user_id=u.id` : ``}
+    WHERE 1=1
   `;
 
-  const rows = await env.DB.prepare(sql).bind(...bind, limit + 1).all();
+  const bind = [];
 
-  const list = rows.results || [];
-  const hasMore = list.length > limit;
-  const page = hasMore ? list.slice(0, limit) : list;
-  const next_cursor = hasMore ? makeCursor(page[page.length-1]) : null;
+  if(like){
+    sql += ` AND (u.email_norm LIKE ? OR u.display_name LIKE ?) `;
+    bind.push(like, like);
+  }
+  if(loc){
+    sql += hasTP ? ` AND LOWER(tp.location) LIKE ? ` : ` AND 1=1 `;
+    if(hasTP) bind.push(`%${loc}%`);
+  }
+  if(gender){
+    sql += hasTP ? ` AND tp.gender=? ` : ` AND 1=1 `;
+    if(hasTP) bind.push(gender);
+  }
+  if(hasTP){
+    sql += ` AND tp.score >= ? AND (tp.age_years BETWEEN ? AND ?) AND (tp.height_cm BETWEEN ? AND ?) `;
+    bind.push(minScore, minAge, maxAge, minH, maxH);
+    if(category){
+      sql += ` AND (','||LOWER(tp.category_csv)||',') LIKE ? `;
+      bind.push(`%,${category},%`);
+    }
+  }
 
-  return json(200,"ok",{ rows: page, next_cursor });
+  sql += ` ORDER BY ${hasTP ? "tp.score DESC, tp.progress_pct DESC" : "u.created_at DESC"} LIMIT ? `;
+  bind.push(limit);
+
+  const rws = await env.DB.prepare(sql).bind(...bind).all();
+  return json(200,"ok",{ users: rws.results || [] });
 }
