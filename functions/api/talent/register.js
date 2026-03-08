@@ -1,4 +1,4 @@
-import { json, readJson, nowSec, normEmail, randomB64, pbkdf2Hash, sha256Base64 } from "../_lib.js";
+import { json, readJson, nowSec, normEmail, randomB64, pbkdf2Hash, sha256Base64 } from "../../_lib.js";
 
 // public endpoint (no session): invite token required
 export async function onRequestPost({ request, env }){
