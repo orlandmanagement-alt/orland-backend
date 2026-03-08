@@ -1,672 +1,155 @@
 <!DOCTYPE html>
-<html lang="id" x-data="orlandApp()" :class="darkMode ? 'dark' : ''" x-init="init()">
+<html lang="id" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ORLAND | Admin Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>ORLAND | Enterprise Operations</title>
 
-  <!-- Frameworks -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Icons & Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <script>
     tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            dark: '#0f1115',
-            darkLighter: '#16181d',
-            darkBorder: '#2b2d31',
-            primary: '#3b82f6',
-            secondary: '#64748b',
-            success: '#10b981',
-            danger: '#ef4444',
-            warning: '#f59e0b',
-            info: '#0ea5e9',
-            blogger: '#f57c00'
-          },
-          fontFamily: { sans: ['Inter', 'sans-serif'] }
-        }
-      }
-    }
+      darkMode:'class',
+      theme:{ extend:{
+        colors:{
+          dark:'#0f1115', darkLighter:'#16181d', darkBorder:'#2b2d31',
+          primary:'#3b82f6', success:'#10b981', danger:'#ef4444', warning:'#f59e0b', info:'#0ea5e9', blogger:'#f57c00'
+        },
+        fontFamily:{ sans:['Inter','sans-serif'] }
+      }}
+    };
   </script>
 
   <style>
     [x-cloak]{display:none!important}
-    body{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif}
-    ::-webkit-scrollbar{width:6px;height:6px}
-    ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
-    .dark ::-webkit-scrollbar-thumb{background:#334155}
-
-    .sidebar-active{background-color:rgba(59,130,246,.10);color:#3b82f6!important;border-right:3px solid #3b82f6}
-    @keyframes gradientBG{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-    .login-animated-bg{background:linear-gradient(-45deg,#3b82f6,#8b5cf6,#ec4899,#0ea5e9);background-size:400% 400%;animation:gradientBG 15s ease infinite}
-    .login-glass{background:rgba(255,255,255,.10);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.20);box-shadow:0 25px 50px -12px rgba(0,0,0,.50)}
-    .toast{position:fixed;right:14px;bottom:14px;z-index:9999;display:flex;flex-direction:column;gap:10px}
-    .toast-item{background:rgba(15,17,21,.95);color:#fff;border:1px solid rgba(255,255,255,.12);padding:10px 12px;border-radius:12px;min-width:220px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
-    .toast-item.good{border-color:rgba(16,185,129,.4)}
-    .toast-item.bad{border-color:rgba(239,68,68,.45)}
+    .sidebar-active{background-color:rgba(59,130,246,.1);color:#3b82f6!important;border-right:3px solid #3b82f6}
   </style>
 </head>
 
-<body class="bg-[#f3f4f6] text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
-  <div class="toast" id="toast"></div>
+<body class="bg-slate-50 text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
+  <div id="toast-host"></div>
 
-  <!-- LOGIN OVERLAY (REAL API) -->
-  <div x-show="!isLoggedIn" x-cloak class="fixed inset-0 z-[100] login-animated-bg flex items-center justify-center p-4">
-    <div class="absolute top-1/4 left-1/4 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-    <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/30 rounded-full blur-3xl"></div>
+  <div id="sidebarOverlay" class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm hidden"></div>
 
-    <div class="login-glass p-8 md:p-10 rounded-3xl w-full max-w-md relative z-10 text-white">
-      <div class="text-center mb-8">
-        <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner border border-white/30">
-          <i class="fa-solid fa-shield-halved"></i>
-        </div>
-        <h1 class="text-3xl font-bold tracking-tight mb-1">ORLAND</h1>
-        <p class="text-sm text-white/70">Admin Portal</p>
-      </div>
+  <div class="flex h-screen overflow-hidden">
 
-      <form @submit.prevent="doLogin" class="space-y-5">
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-widest text-white/80 mb-2">Email Address</label>
-          <div class="relative">
-            <i class="fa-solid fa-envelope absolute left-4 top-3.5 text-white/50"></i>
-            <input x-model="login.email" type="email" required
-                   class="w-full bg-black/20 border border-white/10 text-white placeholder-white/30 pl-11 pr-4 py-3 rounded-xl focus:border-white/50 focus:bg-black/30 transition outline-none">
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-widest text-white/80 mb-2">Password</label>
-          <div class="relative">
-            <i class="fa-solid fa-lock absolute left-4 top-3.5 text-white/50"></i>
-            <input :type="login.showPw ? 'text' : 'password'" x-model="login.password" required
-                   class="w-full bg-black/20 border border-white/10 text-white placeholder-white/30 pl-11 pr-12 py-3 rounded-xl focus:border-white/50 focus:bg-black/30 transition outline-none">
-            <button type="button" @click="login.showPw=!login.showPw" class="absolute right-3 top-2.5 text-white/60 hover:text-white">
-              <i class="fa-solid" :class="login.showPw ? 'fa-eye-slash' : 'fa-eye'"></i>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" :disabled="isLoggingIn"
-                class="w-full bg-white text-blue-600 hover:bg-blue-50 font-bold py-3.5 rounded-xl mt-6 transition-all flex items-center justify-center gap-2">
-          <span x-show="!isLoggingIn">Secure Login</span>
-          <span x-show="isLoggingIn" class="flex items-center gap-2" x-cloak>
-            <i class="fa-solid fa-circle-notch animate-spin"></i> Authenticating...
-          </span>
-        </button>
-      </form>
-
-      <div class="mt-8 text-center text-[10px] text-white/50">
-        <p>&copy; 2026 ORLAND Systems.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- DASHBOARD -->
-  <div x-show="isLoggedIn" x-cloak class="flex h-screen overflow-hidden">
-    <!-- overlay -->
-    <div x-show="sidebarOpen" @click="sidebarOpen=false" x-cloak class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm"></div>
-
-    <!-- sidebar -->
-    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-           class="fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col">
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col -translate-x-full lg:translate-x-0">
       <div class="h-16 flex items-center px-6 border-b border-slate-200 dark:border-darkBorder justify-between shrink-0">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white shadow-md">
+          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-md">
             <i class="fa-solid fa-shield-halved"></i>
           </div>
-          <div>
-            <div class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</div>
-            <div class="text-[10px] text-slate-500">Admin Dashboard</div>
-          </div>
+          <div><h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</h1></div>
         </div>
-        <button @click="sidebarOpen=false" class="lg:hidden text-slate-400 hover:text-slate-600">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="px-6 py-4 border-b border-slate-200 dark:border-darkBorder">
-        <div class="flex items-center gap-3">
-          <img :src="avatarUrl" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder">
-          <div class="min-w-0">
-            <div class="font-bold text-slate-900 dark:text-white truncate" x-text="me.display_name || me.email_norm || 'Admin'"></div>
-            <div class="text-[10px] text-slate-500 truncate" x-text="(me.roles||[]).join(', ')"></div>
-          </div>
-        </div>
+        <button id="btnSidebarClose" class="lg:hidden text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <nav class="flex-1 overflow-y-auto py-4">
-        <template x-for="section in navSections" :key="section.key">
-          <div class="mb-6">
-            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2" x-text="section.title"></p>
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Core Operations</p>
+        <div id="nav-core"></div>
 
-            <template x-for="menu in section.items" :key="menu.id">
-              <div>
-                <template x-if="!menu.children || menu.children.length===0">
-                  <button @click="go(menu.path)"
-                          :class="currentPath===menu.path ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'"
-                          class="w-full flex items-center gap-3 px-6 py-2.5 transition-colors">
-                    <i class="w-5 text-center" :class="menu.icon || 'fa-solid fa-circle-dot'"></i>
-                    <span class="font-medium" x-text="menu.label"></span>
-                  </button>
-                </template>
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Integrations</p>
+        <div id="nav-integrations"></div>
 
-                <template x-if="menu.children && menu.children.length">
-                  <div x-data="{ open: currentPath.startsWith(menu.path) }">
-                    <button @click="open=!open"
-                            class="w-full flex items-center justify-between px-6 py-2.5 transition-colors"
-                            :class="currentPath.startsWith(menu.path) ? 'text-primary bg-slate-50 dark:bg-white/5' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'">
-                      <div class="flex items-center gap-3">
-                        <i class="w-5 text-center" :class="menu.icon || 'fa-solid fa-folder'"></i>
-                        <span class="font-medium" x-text="menu.label"></span>
-                      </div>
-                      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
-                    </button>
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">System & Ops</p>
+        <div id="nav-system"></div>
 
-                    <div x-show="open" x-cloak class="bg-slate-50/50 dark:bg-black/20 py-1">
-                      <template x-for="sub in menu.children" :key="sub.id">
-                        <button @click="go(sub.path)"
-                                class="w-full flex items-center pl-14 pr-6 py-2 text-xs font-medium border-l-2 transition-colors"
-                                :class="currentPath===sub.path ? 'text-primary border-primary' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent'">
-                          <span x-text="sub.label"></span>
-                        </button>
-                      </template>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </template>
-          </div>
-        </template>
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Configuration</p>
+        <div id="nav-config"></div>
       </nav>
 
       <div class="p-4 border-t border-slate-200 dark:border-darkBorder shrink-0">
-        <button @click="logout()"
-                class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-danger/10 text-slate-800 dark:text-white hover:text-danger transition">
-          <div class="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary border border-primary/30">
+        <div class="flex items-center gap-3 mb-3">
+          <img id="meAvatar" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder bg-slate-100" alt="avatar">
+          <div class="min-w-0">
+            <div id="meName" class="text-xs font-bold truncate">—</div>
+            <div id="meEmail" class="text-[10px] text-slate-500 truncate">—</div>
+          </div>
+        </div>
+        <button id="btnLogout" class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-danger/10 text-slate-800 dark:text-white hover:text-danger transition group">
+          <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30 group-hover:bg-danger/20 group-hover:text-danger group-hover:border-danger/30 transition">
             <i class="fa-solid fa-power-off"></i>
           </div>
           <div class="text-left flex-1 overflow-hidden">
-            <p class="text-xs font-bold truncate" x-text="me.display_name || 'Admin'"></p>
-            <p class="text-[10px] text-slate-500 truncate">Click to Logout</p>
+            <p class="text-xs font-bold truncate">Logout</p>
+            <p class="text-[10px] text-slate-500 truncate group-hover:text-danger transition">End session</p>
           </div>
         </button>
       </div>
     </aside>
 
-    <!-- main -->
+    <!-- MAIN -->
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-dark">
       <header class="h-16 bg-white dark:bg-darkLighter border-b border-slate-200 dark:border-darkBorder flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
-        <div class="flex items-center gap-4">
-          <button @click="sidebarOpen=true" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+        <div class="flex items-center gap-3">
+          <button id="btnSidebarOpen" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
             <i class="fa-solid fa-bars"></i>
           </button>
-
-          <div class="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:flex items-center">
-            <i class="fa-solid fa-house mr-2"></i><span class="mx-2">/</span>
-            <span class="capitalize" x-text="pageTitle"></span>
+          <div class="text-xs text-slate-500 dark:text-slate-400">
+            <i class="fa-solid fa-house mr-2"></i>
+            <span id="breadcrumb">/</span>
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
-          <button @click="toggleTheme()" class="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-            <i x-show="!darkMode" class="fa-solid fa-moon"></i>
-            <i x-show="darkMode" x-cloak class="fa-solid fa-sun text-warning"></i>
-          </button>
-
-          <button class="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <div class="flex items-center gap-2">
+          <!-- notifications -->
+          <button class="relative w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             <i class="fa-solid fa-bell"></i>
-            <span class="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full ring-2 ring-white dark:ring-darkLighter"></span>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full ring-2 ring-white dark:ring-darkLighter"></span>
           </button>
 
-          <img :src="avatarUrl" class="w-9 h-9 rounded-full border border-slate-200 dark:border-darkBorder">
+          <!-- profile dropdown -->
+          <div class="relative">
+            <button id="btnProfile" class="flex items-center gap-2 focus:outline-none">
+              <img id="profileAvatar" src="" class="w-8 h-8 rounded-full border border-slate-200 dark:border-darkBorder shadow-sm bg-slate-100" alt="profile">
+              <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 hidden sm:block"></i>
+            </button>
+
+            <div id="profileMenu" class="absolute right-0 mt-3 w-56 bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl shadow-lg py-2 z-50 hidden">
+              <div class="px-4 py-3 border-b border-slate-100 dark:border-darkBorder">
+                <p id="profileName" class="text-sm font-bold text-slate-900 dark:text-white">—</p>
+                <p id="profileEmail" class="text-xs text-slate-500 truncate">—</p>
+              </div>
+              <div class="py-1">
+                <a id="goMyProfile" href="/profile" class="flex items-center gap-3 px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                  <i class="fa-solid fa-user w-4 text-center"></i> My Profile
+                </a>
+                <a id="goSecurityPassword" href="/security-password" class="flex items-center gap-3 px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                  <i class="fa-solid fa-shield-halved w-4 text-center"></i> Security & Password
+                </a>
+              </div>
+              <div class="py-1 border-t border-slate-100 dark:border-darkBorder">
+                <a id="goLogout" href="#" class="flex items-center gap-3 px-4 py-2 text-xs font-bold text-danger hover:bg-danger/10 transition cursor-pointer">
+                  <i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout
+                </a>
+              </div>
+            </div>
+          </div>
+
         </div>
       </header>
 
       <div class="flex-1 overflow-auto">
-        <div class="p-5 max-w-[1600px] mx-auto space-y-5">
-
-          <!-- DASHBOARD -->
-          <template x-if="currentPath==='/dashboard'">
-            <div class="space-y-5">
-              <div class="flex justify-between items-center">
-                <h2 class="text-xl font-bold text-slate-900 dark:text-white">Enterprise Overview</h2>
-                <button @click="loadOps()" class="text-xs px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600">
-                  Refresh
-                </button>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Users</p>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-white" x-text="ops.users ?? '—'"></div>
-                </div>
-                <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Roles</p>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-white" x-text="ops.roles ?? '—'"></div>
-                </div>
-                <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Menus</p>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-white" x-text="ops.menus ?? '—'"></div>
-                </div>
-                <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm">
-                  <p class="text-xs font-medium text-slate-500">Active IP Blocks</p>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-white" x-text="ops.ip_blocks_active ?? '—'"></div>
-                </div>
-              </div>
-
-              <div class="bg-white dark:bg-darkLighter p-5 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm h-80 flex flex-col">
-                <h3 class="text-sm font-bold mb-4">Traffic Rate</h3>
-                <div class="flex-1 relative w-full h-full"><canvas id="mainChart"></canvas></div>
-              </div>
-            </div>
-          </template>
-
-          <!-- USERS -->
-          <template x-if="currentPath.startsWith('/users')">
-            <div class="space-y-4">
-              <div class="flex items-center justify-between gap-3">
-                <h2 class="text-xl font-bold text-slate-900 dark:text-white">User Manager (Admin/Staff)</h2>
-                <div class="flex gap-2">
-                  <input x-model="users.q" placeholder="Search..." class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter">
-                  <button @click="loadUsers()" class="text-xs px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600">Search</button>
-                </div>
-              </div>
-
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-slate-200 dark:border-darkBorder flex flex-wrap gap-2 items-center justify-between bg-slate-50/50 dark:bg-white/5">
-                  <div class="text-xs text-slate-500">
-                    Total: <b class="text-slate-900 dark:text-white" x-text="users.rows.length"></b>
-                  </div>
-
-                  <div class="flex gap-2">
-                    <button @click="openCreate=true" class="text-xs px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600">
-                      <i class="fa-solid fa-plus mr-1"></i>Create
-                    </button>
-                    <button @click="loadUsers()" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder">
-                      Reload
-                    </button>
-                  </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                  <table class="w-full text-left text-xs whitespace-nowrap">
-                    <thead class="bg-slate-50 dark:bg-dark text-slate-500 border-b border-slate-200 dark:border-darkBorder">
-                      <tr>
-                        <th class="px-4 py-3 font-semibold">User</th>
-                        <th class="px-4 py-3 font-semibold">Roles</th>
-                        <th class="px-4 py-3 font-semibold">Status</th>
-                        <th class="px-4 py-3 font-semibold text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-darkBorder">
-                      <template x-for="u in users.rows" :key="u.id">
-                        <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
-                          <td class="px-4 py-3">
-                            <div class="font-medium text-slate-900 dark:text-white" x-text="u.display_name || '-'"></div>
-                            <div class="text-[10px] text-slate-500" x-text="u.email_norm"></div>
-                            <div class="text-[10px] text-slate-400">id: <span x-text="u.id"></span></div>
-                          </td>
-                          <td class="px-4 py-3">
-                            <span class="text-[10px] px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-dark"
-                                  x-text="(u.roles||[]).join(', ')"></span>
-                          </td>
-                          <td class="px-4 py-3">
-                            <span class="text-success font-medium" x-show="u.status==='active'"><i class="fa-solid fa-circle text-[8px] mr-1"></i>Active</span>
-                            <span class="text-danger font-medium" x-show="u.status!=='active'" x-cloak><i class="fa-solid fa-circle text-[8px] mr-1"></i>Disabled</span>
-                          </td>
-                          <td class="px-4 py-3 text-right">
-                            <button class="text-slate-400 hover:text-primary mx-1" @click="toggleUser(u)">
-                              <i class="fa-solid" :class="u.status==='active' ? 'fa-ban' : 'fa-check'"></i>
-                            </button>
-                            <button class="text-slate-400 hover:text-warning mx-1" @click="resetPw(u)">
-                              <i class="fa-solid fa-key"></i>
-                            </button>
-                            <button class="text-slate-400 hover:text-danger mx-1" @click="revoke(u)">
-                              <i class="fa-solid fa-right-from-bracket"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      </template>
-
-                      <tr x-show="users.rows.length===0" x-cloak>
-                        <td colspan="4" class="px-4 py-8 text-center text-slate-500">No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- create modal -->
-              <div x-show="openCreate" x-cloak class="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/40" @click="openCreate=false"></div>
-                <div class="relative w-full max-w-lg bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-5">
-                  <div class="flex items-center justify-between">
-                    <div class="text-sm font-bold">Create Admin/Staff</div>
-                    <button class="text-slate-400" @click="openCreate=false"><i class="fa-solid fa-xmark"></i></button>
-                  </div>
-
-                  <div class="mt-4 grid grid-cols-1 gap-3">
-                    <input x-model="create.email" placeholder="email" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
-                    <input x-model="create.display_name" placeholder="display name" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
-                    <select x-model="create.role" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
-                      <option value="staff">staff</option>
-                      <option value="admin">admin</option>
-                      <option value="super_admin">super_admin</option>
-                    </select>
-                    <input :type="create.showPw ? 'text' : 'password'" x-model="create.password" placeholder="password min 10" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
-                    <label class="text-[11px] text-slate-500 flex items-center gap-2">
-                      <input type="checkbox" x-model="create.showPw"> show password
-                    </label>
-                  </div>
-
-                  <div class="mt-4 flex gap-2 justify-end">
-                    <button class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder" @click="openCreate=false">Cancel</button>
-                    <button class="text-xs px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600" @click="createUser()">Create</button>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </template>
-
+        <div class="p-6 max-w-[1600px] mx-auto space-y-6">
+          <div id="module-host"></div>
         </div>
       </div>
     </main>
   </div>
 
+  <script src="/assets/js/orland_core.js"></script>
   <script>
-    function orlandApp(){
-      return {
-        // auth state
-        isLoggedIn: false,
-        isLoggingIn: false,
-        sidebarOpen: false,
-        darkMode: localStorage.getItem('theme') === 'dark',
-
-        // user
-        me: {},
-        avatarUrl: 'https://api.dicebear.com/8.x/initials/svg?seed=orland&backgroundColor=3b82f6&textColor=ffffff',
-
-        // routing (SPA path)
-        currentPath: '/dashboard',
-        pageTitle: 'Dashboard',
-
-        // nav from DB
-        navSections: [
-          { key:'core', title:'CORE OPERATIONS', items:[] },
-          { key:'integrations', title:'INTEGRATIONS', items:[] },
-          { key:'system', title:'SYSTEM & OPS', items:[] }
-        ],
-
-        // ops + charts
-        ops: {},
-        chart: null,
-
-        // users module
-        users: { q:'', rows:[] },
-        openCreate: false,
-        create: { email:'', display_name:'', role:'staff', password:'', showPw:false },
-
-        // --- helpers ---
-        toast(msg, ok=true){
-          const host = document.getElementById('toast');
-          if(!host) return;
-          const div = document.createElement('div');
-          div.className = 'toast-item ' + (ok ? 'good':'bad');
-          div.textContent = msg;
-          host.appendChild(div);
-          setTimeout(()=>{ div.style.opacity='0'; div.style.transform='translateY(6px)'; }, 2600);
-          setTimeout(()=>div.remove(), 3400);
-        },
-
-        async api(path, opt={}){
-          const headers = Object.assign({}, opt.headers||{});
-          if(opt.body!=null && !headers['content-type']) headers['content-type'] = 'application/json';
-          const res = await fetch(path, {
-            method: opt.method || 'GET',
-            headers,
-            body: opt.body || undefined,
-            credentials: 'include'
-          });
-          const ct = res.headers.get('content-type') || '';
-          if(!ct.includes('application/json')){
-            const text = await res.text().catch(()=> '');
-            return { status:'server_error', data:{ http: res.status, body: text.slice(0,300) } };
-          }
-          return await res.json();
-        },
-
-        applyTheme(){
-          localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
-          if(this.darkMode) document.documentElement.classList.add('dark');
-          else document.documentElement.classList.remove('dark');
-          if(this.isLoggedIn && this.currentPath==='/dashboard') this.initChart();
-        },
-        toggleTheme(){ this.darkMode = !this.darkMode; this.applyTheme(); },
-
-        // --- init ---
-        async init(){
-          this.applyTheme();
-
-          // 1) check session
-          const me = await this.api('/api/me');
-          if(me.status==='ok'){
-            this.me = me.data || {};
-            this.isLoggedIn = true;
-            document.body.classList.remove('overflow-hidden');
-            this.avatarUrl = this.makeAvatar(this.me.email_norm || this.me.id || 'admin');
-            await this.loadNav();
-            await this.loadOps();
-            this.go('/dashboard', true);
-            return;
-          }
-
-          // not logged in
-          this.isLoggedIn = false;
-          document.body.classList.add('overflow-hidden');
-        },
-
-        makeAvatar(seed){
-          const s = encodeURIComponent(String(seed||'user'));
-          return `https://api.dicebear.com/8.x/initials/svg?seed=${s}&backgroundColor=3b82f6&textColor=ffffff`;
-        },
-
-        // --- login/logout ---
-        login: { email:'', password:'', showPw:false },
-
-        async doLogin(){
-          this.isLoggingIn = true;
-          const r = await this.api('/api/login', { method:'POST', body: JSON.stringify({ email:this.login.email, password:this.login.password }) });
-          this.isLoggingIn = false;
-
-          if(r.status!=='ok'){
-            this.toast('Login gagal: ' + r.status, false);
-            return;
-          }
-
-          // fetch me
-          const me = await this.api('/api/me');
-          if(me.status!=='ok'){
-            this.toast('Login ok, tapi /api/me error: ' + me.status, false);
-            return;
-          }
-
-          this.me = me.data || {};
-          this.avatarUrl = this.makeAvatar(this.me.email_norm || this.me.id || 'admin');
-
-          this.isLoggedIn = true;
-          document.body.classList.remove('overflow-hidden');
-
-          await this.loadNav();
-          await this.loadOps();
-          this.go('/dashboard', true);
-          this.toast('Login sukses', true);
-        },
-
-        async logout(){
-          await this.api('/api/logout', { method:'POST', body:'{}' });
-          this.isLoggedIn = false;
-          document.body.classList.add('overflow-hidden');
-          this.currentPath = '/dashboard';
-          this.users.rows = [];
-          this.toast('Logged out', true);
-        },
-
-        // --- SPA navigation ---
-        async go(path, silent=false){
-          this.currentPath = path || '/dashboard';
-          this.pageTitle = (path||'').replace('/','') || 'dashboard';
-          this.sidebarOpen = false;
-
-          if(!silent) history.replaceState({}, '', path);
-
-          if(this.currentPath==='/dashboard'){
-            setTimeout(()=>this.initChart(), 50);
-          }
-
-          if(this.currentPath.startsWith('/users')){
-            await this.loadUsers();
-          }
-        },
-
-        // --- load nav from DB ---
-        async loadNav(){
-          const r = await this.api('/api/nav');
-          if(r.status!=='ok'){
-            this.toast('Nav error: ' + r.status, false);
-            return;
-          }
-
-          // expected: {sections:{core:[],integrations:[],system:[]}, tree:[...]}
-          const sec = r.data?.sections || {};
-          this.navSections = [
-            { key:'core', title:'CORE OPERATIONS', items: sec.core || [] },
-            { key:'integrations', title:'INTEGRATIONS', items: sec.integrations || [] },
-            { key:'system', title:'SYSTEM & OPS', items: sec.system || [] },
-          ];
-
-          // fallback: if empty, use tree flat
-          const total = this.navSections.reduce((a,s)=>a+(s.items||[]).length, 0);
-          if(total===0 && Array.isArray(r.data?.tree)){
-            this.navSections[0].items = r.data.tree;
-          }
-        },
-
-        // --- ops / chart ---
-        async loadOps(){
-          const r = await this.api('/api/ops/status');
-          if(r.status==='ok') this.ops = r.data || {};
-        },
-
-        initChart(){
-          const el = document.getElementById('mainChart');
-          if(!el) return;
-
-          const old = Chart.getChart('mainChart');
-          if(old) old.destroy();
-
-          const ctx = el.getContext('2d');
-          const isDark = this.darkMode;
-          const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
-          const textColor = isDark ? '#94a3b8' : '#64748b';
-
-          this.chart = new Chart(ctx, {
-            type:'line',
-            data:{
-              labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-              datasets:[{
-                label:'Traffic',
-                data:[120,190,150,250,220,310,280],
-                borderColor:'#3b82f6',
-                backgroundColor:'rgba(59,130,246,0.10)',
-                borderWidth:2,
-                fill:true,
-                tension:0.4,
-                pointBackgroundColor:'#fff',
-                pointBorderColor:'#3b82f6',
-                pointBorderWidth:2,
-                pointRadius:4,
-              }]
-            },
-            options:{
-              maintainAspectRatio:false,
-              responsive:true,
-              plugins:{ legend:{ display:false } },
-              scales:{
-                y:{ beginAtZero:true, grid:{ color:gridColor }, ticks:{ color:textColor, font:{ size:10 } }, border:{ display:false } },
-                x:{ grid:{ display:false }, ticks:{ color:textColor, font:{ size:10 } }, border:{ display:false } },
-              }
-            }
-          });
-        },
-
-        // --- users ---
-        async loadUsers(){
-          const q = (this.users.q||'').trim();
-          const url = '/api/users/admin?limit=100' + (q ? ('&q='+encodeURIComponent(q)) : '');
-          const r = await this.api(url);
-          if(r.status!=='ok'){
-            this.toast('Users error: ' + r.status, false);
-            this.users.rows = [];
-            return;
-          }
-          this.users.rows = r.data?.users || [];
-        },
-
-        async createUser(){
-          const email = (this.create.email||'').trim();
-          const display_name = (this.create.display_name||'').trim();
-          const role = (this.create.role||'staff').trim();
-          const password = (this.create.password||'');
-          if(!email.includes('@') || password.length<10){
-            this.toast('email invalid / password min 10', false); return;
-          }
-          const r = await this.api('/api/users/admin', { method:'POST', body: JSON.stringify({ email, display_name, role, password }) });
-          if(r.status!=='ok'){ this.toast('Create failed: '+r.status, false); return; }
-          this.toast('Created user', true);
-          this.openCreate = false;
-          this.create = { email:'', display_name:'', role:'staff', password:'', showPw:false };
-          await this.loadUsers();
-        },
-
-        async toggleUser(u){
-          const action = (u.status==='active') ? 'disable' : 'enable';
-          const r = await this.api('/api/users/admin', { method:'PUT', body: JSON.stringify({ action, user_id: u.id }) });
-          if(r.status!=='ok'){ this.toast('Update failed: '+r.status, false); return; }
-          this.toast('Updated user', true);
-          await this.loadUsers();
-        },
-
-        async resetPw(u){
-          const pw = prompt('New password (min 10):');
-          if(!pw || pw.length<10){ this.toast('Min 10', false); return; }
-          const r = await this.api('/api/users/admin', { method:'PUT', body: JSON.stringify({ action:'reset_password', user_id:u.id, new_password: pw }) });
-          if(r.status!=='ok'){ this.toast('Reset failed: '+r.status, false); return; }
-          this.toast('Password reset', true);
-        },
-
-        async revoke(u){
-          const ok = confirm('Revoke sessions for this user?');
-          if(!ok) return;
-          const r = await this.api('/api/users/admin', { method:'PUT', body: JSON.stringify({ action:'revoke_sessions', user_id:u.id }) });
-          if(r.status!=='ok'){ this.toast('Revoke failed: '+r.status, false); return; }
-          this.toast('Sessions revoked', true);
-        }
-      }
-    }
-
-    // (optional) JS error popup for HP debugging
-    window.addEventListener('error', (e)=>{ /* alert('JS Error: '+(e.message||e.error)); */ });
-    window.addEventListener('unhandledrejection', (e)=>{ /* alert('Promise Error: '+(e.reason?.message||e.reason)); */ });
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      // theme
+      if(localStorage.getItem("theme") !== "dark") document.documentElement.classList.remove("dark");
+      await window.Orland.bootDashboard();
+    });
   </script>
 </body>
 </html>
