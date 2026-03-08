@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../_lib.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
 function isDangerAllowed(env){
   return String(env.ALLOW_DANGEROUS_ADMIN||"").trim() === "1";

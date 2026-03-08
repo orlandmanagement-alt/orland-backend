@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../_lib.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
 function canWrite(roles){ return hasRole(roles, ["super_admin","admin"]); }
 
