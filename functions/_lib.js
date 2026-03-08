@@ -206,3 +206,110 @@ export async function requireAuth(env, request){
 
   return { ok:true, uid: row.user_id, roles, token: sid };
 }
+
+
+// =========================
+// Security helpers (rate limit, ip/ua hash, lock policy)
+// =========================
+
+export function getClientIp(request){
+  // Cloudflare standard headers
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    ""
+  );
+}
+
+export function ipPrefix(ip){
+  // IPv4: keep /24 prefix, IPv6: keep first 4 hextets (rough /64)
+  ip = String(ip || "").trim();
+  if (!ip) return "";
+  if (ip.includes(".")){
+    const p = ip.split(".");
+    if (p.length >= 3) return `${p[0]}.${p[1]}.${p[2]}.0/24`;
+    return ip;
+  }
+  if (ip.includes(":")){
+    const parts = ip.split(":").filter(Boolean);
+    return parts.slice(0, 4).join(":") + "::/64";
+  }
+  return ip;
+}
+
+export async function hashIpPrefix(env, request){
+  const ip = getClientIp(request);
+  const pref = ipPrefix(ip);
+  if (!pref) return "";
+  const pepper = env.HASH_PEPPER || "";
+  return await sha256Base64(`${pref}|${pepper}`);
+}
+
+export async function hashUa(env, request){
+  const ua = request.headers.get("user-agent") || "";
+  if (!ua) return "";
+  const pepper = env.HASH_PEPPER || "";
+  return await sha256Base64(`${ua}|${pepper}`);
+}
+
+/**
+ * Simple KV rate limiter (fixed window)
+ * key: rl:<name>:<bucket>
+ */
+export async function rateLimitKV(env, name, limit, windowSec){
+  if (!env.KV) return { ok: true, left: null }; // if no KV binding, don't block
+  const now = nowSec();
+  const bucket = Math.floor(now / windowSec);
+  const key = `rl:${name}:${bucket}`;
+
+  const raw = await env.KV.get(key);
+  const cur = raw ? Number(raw) : 0;
+
+  if (cur >= limit) return { ok: false, left: 0 };
+
+  // increment
+  const next = cur + 1;
+  // keep TTL slightly longer than window
+  await env.KV.put(key, String(next), { expirationTtl: windowSec + 5 });
+
+  return { ok: true, left: Math.max(0, limit - next) };
+}
+
+/**
+ * Account lock policy (non-super_admin):
+ * - maxFail within window => lock for lockSec
+ */
+export async function applyLoginFailPolicy(env, user_id, now, opt){
+  const maxFail = opt.maxFail ?? 5;
+  const windowSec = opt.windowSec ?? 15 * 60;
+  const lockSec = opt.lockSec ?? 15 * 60;
+
+  const u = await env.DB.prepare(
+    "SELECT pw_fail_count, pw_fail_last_at, locked_until FROM users WHERE id=? LIMIT 1"
+  ).bind(user_id).first();
+
+  const last = Number(u?.pw_fail_last_at || 0);
+  const within = (now - last) <= windowSec;
+
+  const nextCount = within ? (Number(u?.pw_fail_count || 0) + 1) : 1;
+  const lockUntil = nextCount >= maxFail ? (now + lockSec) : null;
+
+  await env.DB.prepare(
+    "UPDATE users SET pw_fail_count=?, pw_fail_last_at=?, locked_until=?, lock_reason=?, updated_at=? WHERE id=?"
+  ).bind(
+    nextCount,
+    now,
+    lockUntil,
+    lockUntil ? "too_many_password_fail" : null,
+    now,
+    user_id
+  ).run();
+
+  return { nextCount, locked_until: lockUntil };
+}
+
+export async function clearLoginFailPolicy(env, user_id, now){
+  await env.DB.prepare(
+    "UPDATE users SET pw_fail_count=0, pw_fail_last_at=NULL, locked_until=NULL, lock_reason=NULL, updated_at=? WHERE id=?"
+  ).bind(now, user_id).run();
+}

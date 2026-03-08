@@ -1,102 +1,162 @@
-import { json, requireAuth, menusHasIcon } from "../_lib.js";
+import { json, requireAuth, hasRole } from "../_lib.js";
 
-// Categorize codes into sidebar groups (simple & stable)
-function sectionKeyFor(code){
-  const c = String(code||"").toLowerCase();
-  if (c.startsWith("blog") || c.includes("cms")) return "integrations";
-  if (c.includes("security") || c.includes("audit") || c.includes("ops") || c.includes("config") || c.includes("data") || c.includes("ip")) return "system";
+function sortMenus(a, b){
+  const sa = Number(a.sort_order ?? 9999);
+  const sb = Number(b.sort_order ?? 9999);
+  if (sa !== sb) return sa - sb;
+  const ca = Number(a.created_at ?? 0);
+  const cb = Number(b.created_at ?? 0);
+  return ca - cb;
+}
+
+// IMPORTANT: keep DB id for tree relations (parent_id points to DB id)
+function toNode(m){
+  return {
+    db_id: String(m.id),                 // REAL menus.id (for tree)
+    code: String(m.code || ""),          // for Alpine navigate key
+    label: String(m.label || m.code || "Menu"),
+    path: String(m.path || "/"),
+    icon: m.icon ? String(m.icon) : null,
+    sort_order: Number(m.sort_order ?? 9999),
+    parent_id: m.parent_id ? String(m.parent_id) : null, // points to db_id
+    created_at: Number(m.created_at ?? 0),
+    children: []
+  };
+}
+
+function inferSection(path){
+  const p = String(path || "");
+
+  if (p.startsWith("/integrations/")) return "integrations";
+  if (p.startsWith("/ops")) return "system";
+  if (p.startsWith("/security")) return "system";
+  if (p.startsWith("/audit")) return "system";
+  if (p.startsWith("/data")) return "system";
+
+  // "config" section:
+  if (p.startsWith("/config")) return "config";
+  if (p.startsWith("/ipblocks")) return "config";
+  if (p.startsWith("/menus")) return "config";
+  if (p.startsWith("/profile")) return "config";
+
   return "core";
 }
 
-function buildTree(rows){
-  const map = new Map();
+function buildTree(flat){
+  const byId = new Map();
   const roots = [];
 
-  for (const r of rows){
-    map.set(r.id, { ...r, children: [] });
+  for (const n of flat) byId.set(n.db_id, n);
+
+  for (const n of flat){
+    if (n.parent_id && byId.has(n.parent_id)){
+      byId.get(n.parent_id).children.push(n);
+    } else {
+      roots.push(n);
+    }
   }
 
-  for (const r of rows){
-    const node = map.get(r.id);
-    const pid = r.parent_id || null;
-    if (pid && map.has(pid)) map.get(pid).children.push(node);
-    else roots.push(node);
-  }
-
-  const sortRec = (arr)=>{
-    arr.sort((a,b)=>{
-      const sa = Number(a.sort_order||0), sb = Number(b.sort_order||0);
-      if (sa !== sb) return sa - sb;
-      return Number(a.created_at||0) - Number(b.created_at||0);
-    });
-    for (const x of arr) sortRec(x.children||[]);
+  const walkSort = (arr)=>{
+    arr.sort(sortMenus);
+    for (const x of arr) walkSort(x.children);
   };
-  sortRec(roots);
+  walkSort(roots);
 
   return roots;
 }
 
-function cloneWithoutChildren(node){
-  return {
-    id: node.id,
-    code: node.code,
-    label: node.label,
-    path: node.path,
-    icon: node.icon || null,
-    children: (node.children||[]).map(cloneWithoutChildren),
-  };
+// Convert D1 nodes -> Alpine menu shape
+function toAlpineMenus(tree){
+  const out = { core: [], integrations: [], system: [], config: [] };
+
+  function nodeToMenu(node){
+    const item = {
+      id: node.code || node.db_id,                 // Alpine expects string id
+      label: node.label,
+      icon: node.icon || "fa-solid fa-circle-dot",
+      path: node.path || "/",
+    };
+
+    if (node.children && node.children.length){
+      item.submenus = node.children.map(ch => ({
+        id: ch.code || ch.db_id,
+        label: ch.label,
+        icon: ch.icon || null,
+        path: ch.path || "/",
+      }));
+    }
+    return item;
+  }
+
+  for (const n of tree){
+    const sec = inferSection(n.path);
+    out[sec].push(nodeToMenu(n));
+  }
+
+  return out;
 }
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
-  if(!a.ok) return a.res;
+  if (!a.ok) return a.res;
 
-  // Find role IDs for current user roles
-  const roles = (a.roles || []).map(String);
-  if (!roles.length) return json(200,"ok",{ tree:[], sections:{ core:[], integrations:[], system:[] } });
+  const roles = Array.isArray(a.roles) ? a.roles.map(String) : [];
 
-  const ph = roles.map(()=>"?").join(",");
-  const roleRows = await env.DB.prepare(`SELECT id,name FROM roles WHERE name IN (${ph})`).bind(...roles).all();
-  const roleIds = (roleRows.results||[]).map(x=>x.id);
+  let rows = [];
+  if (hasRole(roles, ["super_admin"])) {
+    const r = await env.DB.prepare(`
+      SELECT id,code,label,path,parent_id,sort_order,icon,created_at
+      FROM menus
+      ORDER BY sort_order ASC, created_at ASC
+    `).all();
+    rows = r.results || [];
+  } else {
+    if (!roles.length) {
+      return json(200, "ok", { menus:{core:[],integrations:[],system:[],config:[]}, tree:[], flat:[], roles });
+    }
 
-  const hasIcon = await menusHasIcon(env);
-
-  let menus = [];
-  if (roleIds.length){
-    const ph2 = roleIds.map(()=>"?").join(",");
-    const sql = hasIcon
-      ? `SELECT DISTINCT m.id,m.code,m.label,m.path,m.parent_id,m.sort_order,m.created_at,m.icon
-         FROM menus m
-         JOIN role_menus rm ON rm.menu_id=m.id
-         WHERE rm.role_id IN (${ph2})
-         ORDER BY m.sort_order ASC, m.created_at ASC`
-      : `SELECT DISTINCT m.id,m.code,m.label,m.path,m.parent_id,m.sort_order,m.created_at, NULL AS icon
-         FROM menus m
-         JOIN role_menus rm ON rm.menu_id=m.id
-         WHERE rm.role_id IN (${ph2})
-         ORDER BY m.sort_order ASC, m.created_at ASC`;
-
-    const r = await env.DB.prepare(sql).bind(...roleIds).all();
-    menus = (r.results||[]);
+    const ph = roles.map(()=>"?").join(",");
+    const r = await env.DB.prepare(`
+      SELECT DISTINCT m.id,m.code,m.label,m.path,m.parent_id,m.sort_order,m.icon,m.created_at
+      FROM role_menus rm
+      JOIN roles ro ON ro.id=rm.role_id
+      JOIN menus m ON m.id=rm.menu_id
+      WHERE ro.name IN (${ph})
+      ORDER BY m.sort_order ASC, m.created_at ASC
+    `).bind(...roles).all();
+    rows = r.results || [];
   }
 
-  // Fallback: if super_admin but role_menus empty, allow all menus
-  if ((!menus || menus.length===0) && roles.includes("super_admin")){
-    const sqlAll = hasIcon
-      ? `SELECT id,code,label,path,parent_id,sort_order,created_at,icon FROM menus ORDER BY sort_order ASC, created_at ASC`
-      : `SELECT id,code,label,path,parent_id,sort_order,created_at, NULL AS icon FROM menus ORDER BY sort_order ASC, created_at ASC`;
-    const r2 = await env.DB.prepare(sqlAll).all();
-    menus = (r2.results||[]);
+  // picked map by db id
+  const picked = new Map();
+  for (const r of rows) picked.set(String(r.id), r);
+
+  // backfill parents (by db id)
+  for (let loop = 0; loop < 8; loop++){
+    const needParents = [];
+    for (const m of picked.values()){
+      if (m.parent_id && !picked.has(String(m.parent_id))){
+        needParents.push(String(m.parent_id));
+      }
+    }
+    const uniq = Array.from(new Set(needParents));
+    if (!uniq.length) break;
+
+    const ph = uniq.map(()=>"?").join(",");
+    const pr = await env.DB.prepare(`
+      SELECT id,code,label,path,parent_id,sort_order,icon,created_at
+      FROM menus
+      WHERE id IN (${ph})
+    `).bind(...uniq).all();
+
+    for (const p of (pr.results || [])){
+      picked.set(String(p.id), p);
+    }
   }
 
-  const tree = buildTree(menus).map(cloneWithoutChildren);
+  const flat = Array.from(picked.values()).map(toNode);
+  const tree = buildTree(flat);
+  const menus = toAlpineMenus(tree);
 
-  // Build sections from top-level nodes
-  const sections = { core:[], integrations:[], system:[] };
-  for (const top of tree){
-    const k = sectionKeyFor(top.code);
-    sections[k].push(top);
-  }
-
-  return json(200,"ok",{ tree, sections });
+  return json(200, "ok", { menus, tree, flat, roles });
 }
