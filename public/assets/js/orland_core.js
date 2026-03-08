@@ -87,35 +87,70 @@ async function loadModuleByPath(path){
   if(!host) return;
 
   const reg = window.Orland.registry || { routes:{} };
-  const p = String(path||"").replace(/\/+$/,"") || "/";
-  const r = reg.routes[p];
+  const clean = String(path||"").replace(/\/+$/,"") || "/dashboard";
+  const r = reg.routes[clean];
 
+  // ✅ Fallback: route not registered => go placeholder (no loop)
   if(!r){
+    // if placeholder exists in registry, navigate there
+    if (clean !== "/placeholder" && reg.routes["/placeholder"]) {
+      // IMPORTANT: use replace=true so back button isn't polluted
+      return window.Orland.navigate("/placeholder", true);
+    }
+
+    // last-resort: render inline placeholder
     host.innerHTML = `
-      <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
-        <div class="text-sm font-bold mb-1">Module not found</div>
-        <div class="text-xs text-slate-500">No registry route for <code>${p}</code>.</div>
+      <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-5">
+        <div class="text-sm font-bold mb-1">Coming soon</div>
+        <div class="text-xs text-slate-500 mb-3">
+          Module untuk <code>${clean}</code> belum tersedia / belum terdaftar di registry.
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button id="btnGoDash" class="px-3 py-2 rounded-lg bg-primary text-white text-xs font-bold">
+            Kembali ke Dashboard
+          </button>
+          <button id="btnReloadNav" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-darkBorder text-xs font-bold">
+            Reload Menu
+          </button>
+        </div>
       </div>
     `;
+    document.title = "ORLAND | Coming soon";
+    setBreadcrumb(clean);
+
+    qs("btnGoDash")?.addEventListener("click", ()=> window.Orland.navigate("/dashboard", false));
+    qs("btnReloadNav")?.addEventListener("click", async ()=>{
+      const nav = await api("/api/nav");
+      if(nav.status==="ok"){
+        window.Orland.state.nav = nav.data;
+        window.Orland.renderNav(window.Orland.state.path || "/dashboard");
+      }
+    });
     return;
   }
 
-  host.innerHTML = `<div class="text-xs text-slate-500">Loading module: ${p} ...</div>`;
+  host.innerHTML = `<div class="text-xs text-slate-500">Loading module: ${clean} ...</div>`;
 
   const mod = await import(r.module);
   const factory = (r.export && mod[r.export]) ? mod[r.export] : (mod.default || null);
 
   if(!factory){
-    host.innerHTML = `<div class="text-xs text-red-400">Invalid module export: ${r.export}</div>`;
+    host.innerHTML = `
+      <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
+        <div class="text-sm font-bold mb-1">Invalid module export</div>
+        <div class="text-xs text-slate-500">
+          Export <code>${r.export}</code> tidak ditemukan pada module <code>${r.module}</code>.
+        </div>
+      </div>
+    `;
     return;
   }
 
   const inst = factory(window.Orland);
   document.title = inst.title ? `ORLAND | ${inst.title}` : "ORLAND | Enterprise Operations";
-  setBreadcrumb(p);
+  setBreadcrumb(clean);
   await inst.mount(host);
 }
-
 window.Orland = {
   api,
   registry: { routes:{} },
