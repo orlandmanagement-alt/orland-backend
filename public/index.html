@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>ORLAND | Enterprise Operations</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode:'class',
+      theme:{ extend:{
+        colors:{
+          dark:'#0f1115', darkLighter:'#16181d', darkBorder:'#2b2d31',
+          primary:'#3b82f6', success:'#10b981', danger:'#ef4444', warning:'#f59e0b', info:'#0ea5e9', blogger:'#f57c00'
+        },
+        fontFamily:{ sans:['Inter','sans-serif'] }
+      }}
+    };
+  </script>
+
+  <style>
+    [x-cloak]{display:none!important}
+    .sidebar-active{background-color:rgba(59,130,246,.1);color:#3b82f6!important;border-right:3px solid #3b82f6}
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
+  <div id="toast-host"></div>
+
+  <!-- overlay -->
+  <div id="sidebarOverlay" class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm hidden"></div>
+
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col -translate-x-full lg:translate-x-0">
+      <div class="h-16 flex items-center px-6 border-b border-slate-200 dark:border-darkBorder justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-md">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div><h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</h1></div>
+        </div>
+        <button id="btnSidebarClose" class="lg:hidden text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <nav class="flex-1 overflow-y-auto py-4">
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Core Operations</p>
+        <div id="nav-core"></div>
+
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Integrations</p>
+        <div id="nav-integrations"></div>
+
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">System & Ops</p>
+        <div id="nav-system"></div>
+
+        <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Configuration</p>
+        <div id="nav-config"></div>
+      </nav>
+
+      <div class="p-4 border-t border-slate-200 dark:border-darkBorder shrink-0">
+        <div class="flex items-center gap-3 mb-3">
+          <img id="meAvatar" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder bg-slate-100" alt="avatar">
+          <div class="min-w-0">
+            <div id="meName" class="text-xs font-bold truncate">—</div>
+            <div id="meEmail" class="text-[10px] text-slate-500 truncate">—</div>
+          </div>
+        </div>
+
+        <!-- Profile submenu -->
+        <div class="relative mb-2">
+          <button id="btnProfileMenu" class="w-full flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-id-badge text-primary"></i>
+              <span class="text-xs font-bold">Profile</span>
+            </div>
+            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+          </button>
+          <div id="profileMenu" class="hidden mt-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter overflow-hidden">
+            <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5" data-profile-action="my_profile">
+              <i class="fa-solid fa-user me-2"></i> My Profile
+            </button>
+            <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5" data-profile-action="security_password">
+              <i class="fa-solid fa-shield-halved me-2"></i> Security & Password
+            </button>
+            <button class="w-full text-left px-4 py-2 text-xs text-danger hover:bg-danger/10" data-profile-action="logout">
+              <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
+            </button>
+          </div>
+        </div>
+
+        <button id="btnLogout" class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-danger/10 text-slate-800 dark:text-white hover:text-danger transition group">
+          <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30 group-hover:bg-danger/20 group-hover:text-danger group-hover:border-danger/30 transition">
+            <i class="fa-solid fa-power-off"></i>
+          </div>
+          <div class="text-left flex-1 overflow-hidden">
+            <p class="text-xs font-bold truncate">Logout</p>
+            <p class="text-[10px] text-slate-500 truncate group-hover:text-danger transition">End session</p>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-dark">
+      <header class="h-16 bg-white dark:bg-darkLighter border-b border-slate-200 dark:border-darkBorder flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
+        <div class="flex items-center gap-3">
+          <button id="btnSidebarOpen" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="text-xs text-slate-500 dark:text-slate-400">
+            <i class="fa-solid fa-house mr-2"></i>
+            <span id="breadcrumb">/</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btnTheme" class="w-8 h-8 flex items-center justify-content-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i class="fa-solid fa-moon"></i>
+          </button>
+          <button class="relative w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i class="fa-solid fa-bell"></i>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full ring-2 ring-white dark:ring-darkLighter"></span>
+          </button>
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-auto">
+        <div class="p-6 max-w-[1600px] mx-auto space-y-6">
+          <div id="module-host"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Core router+nav+module loader -->
+  <script src="/assets/js/orland_core.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      // theme init
+      if(localStorage.getItem("theme") !== "dark") document.documentElement.classList.remove("dark");
+
+      // boot (will redirect to /login.html if unauthorized)
+      await window.Orland.bootDashboard();
+
+      // sidebar overlay logic
+      const overlay = document.getElementById("sidebarOverlay");
+      const sidebar = document.getElementById("sidebar");
+      const openBtn = document.getElementById("btnSidebarOpen");
+      const closeBtn = document.getElementById("btnSidebarClose");
+
+      function showOverlay(){ overlay?.classList.remove("hidden"); }
+      function hideOverlay(){ overlay?.classList.add("hidden"); }
+
+      openBtn?.addEventListener("click", ()=>{
+        sidebar?.classList.remove("-translate-x-full");
+        showOverlay();
+      });
+      closeBtn?.addEventListener("click", ()=>{
+        sidebar?.classList.add("-translate-x-full");
+        hideOverlay();
+      });
+      overlay?.addEventListener("click", ()=>{
+        sidebar?.classList.add("-translate-x-full");
+        hideOverlay();
+      });
+
+      // profile submenu
+      const btnProfile = document.getElementById("btnProfileMenu");
+      const menu = document.getElementById("profileMenu");
+
+      btnProfile?.addEventListener("click", ()=> menu?.classList.toggle("hidden"));
+
+      document.addEventListener("click", (e)=>{
+        if(!menu || menu.classList.contains("hidden")) return;
+        const inside = e.target.closest("#btnProfileMenu") || e.target.closest("#profileMenu");
+        if(!inside) menu.classList.add("hidden");
+      });
+
+      document.querySelectorAll("[data-profile-action]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const act = btn.getAttribute("data-profile-action");
+          if(act==="my_profile") return window.Orland.navigate("/profile", false);
+          if(act==="security_password") return window.Orland.navigate("/profile/security", false);
+          if(act==="logout"){
+            await window.Orland.api("/api/logout",{ method:"POST", body:"{}" });
+            location.href="/login.html";
+          }
+        });
+      });
+
+      // theme toggle
+      document.getElementById("btnTheme")?.addEventListener("click", ()=>{
+        const isDark = document.documentElement.classList.toggle("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+      });
+    });
+  </script>
+</body>
+</html>

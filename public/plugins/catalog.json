@@ -1,0 +1,43 @@
+{
+  "generated_at": 1772972897,
+  "plugins": [
+    {
+      "id": "blogspot",
+      "name": "Blogspot Integration",
+      "version": "1.0.0",
+      "description": "Manage Blogspot API settings + sync posts/pages/widgets.",
+      "folder": "blogspot",
+      "paths": {
+        "base": "/functions/api/plugins/blogspot",
+        "install": "/api/plugins/blogspot/install",
+        "uninstall": "/api/plugins/blogspot/uninstall",
+        "reconcile": "/api/plugins/blogspot/reconcile"
+      },
+      "capabilities": {
+        "install": true,
+        "uninstall": true,
+        "reconcile": true
+      },
+      "updated_at": 1772972896
+    },
+    {
+      "id": "cron",
+      "name": "Cron Jobs",
+      "version": "1.0.0",
+      "description": "Scheduled tasks runner + manual trigger.",
+      "folder": "cron",
+      "paths": {
+        "base": "/functions/api/plugins/cron",
+        "install": "/api/plugins/cron/install",
+        "uninstall": "/api/plugins/cron/uninstall",
+        "reconcile": "/api/plugins/cron/reconcile"
+      },
+      "capabilities": {
+        "install": true,
+        "uninstall": true,
+        "reconcile": true
+      },
+      "updated_at": 1772972896
+    }
+  ]
+}
