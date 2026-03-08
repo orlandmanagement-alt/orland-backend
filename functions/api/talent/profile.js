@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../_lib.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
 function normLoc(s){
   return String(s||"")
