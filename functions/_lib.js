@@ -71,31 +71,27 @@ export async function pbkdf2Hash(password, saltB64, iterations){
 }
 
 /**
- * Cookie builder
- * Defaults:
+ * Cookie builder (HOST-ONLY by default)
+ * - No Domain by default (paling stabil untuk Pages + custom domain + preview)
  * - HttpOnly, Secure, SameSite=Lax
- * - Domain default: ".orlandmanagement.com" (ubah kalau perlu)
  *
- * NOTE: Secure cookie wajib HTTPS. Untuk dev localhost, set opt.secure=false.
+ * Kalau kamu butuh share antar subdomain:
+ *   cookie("sid", sid, { domain: ".orlandmanagement.com" })
  */
 export function cookie(name, value, opt={}){
   const parts = [`${name}=${value}`];
-
   parts.push(`Path=${opt.path || "/"}`);
 
-  // Share across subdomains by default (bisa override)
-  // contoh override: cookie("sid", sid, { domain:"dashboard.orlandmanagement.com" })
-  const domain = (opt.domain !== undefined) ? opt.domain : ".orlandmanagement.com";
-  if(domain) parts.push(`Domain=${domain}`);
+  // HOST-ONLY default (jangan set Domain)
+  if(opt.domain) parts.push(`Domain=${opt.domain}`);
 
   if(opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
   if(opt.httpOnly !== false) parts.push("HttpOnly");
 
-  // default secure true (prod), bisa matiin utk localhost
+  // default secure true (prod). Untuk localhost bisa: secure:false
   if(opt.secure !== false) parts.push("Secure");
 
   parts.push(`SameSite=${opt.sameSite || "Lax"}`);
-
   return parts.join("; ");
 }
 
@@ -107,12 +103,6 @@ export function parseCookies(request){
     if(i>0) out[kv.slice(0,i)] = kv.slice(i+1);
   });
   return out;
-}
-
-export function requireEnv(env, keys){
-  const miss = [];
-  for(const k of keys) if(!env[k]) miss.push(k);
-  return miss;
 }
 
 export function hasRole(roles, allowed){
@@ -128,18 +118,6 @@ export async function getRolesForUser(env, user_id){
     WHERE ur.user_id=?
   `).bind(user_id).all();
   return (r.results||[]).map(x=>x.name);
-}
-
-let MENUS_HAS_ICON = null;
-export async function menusHasIcon(env){
-  if(MENUS_HAS_ICON !== null) return MENUS_HAS_ICON;
-  try{
-    const r = await env.DB.prepare(`PRAGMA table_info('menus')`).all();
-    MENUS_HAS_ICON = (r.results||[]).some(x=>String(x.name)==="icon");
-  }catch{
-    MENUS_HAS_ICON = false;
-  }
-  return MENUS_HAS_ICON;
 }
 
 export async function audit(env, { actor_user_id, action, route, http_status, meta }){
@@ -177,7 +155,6 @@ export async function createSession(env, user_id, roles){
   const now = nowSec();
   const r = (roles||[]).map(String);
 
-  // TTL per role (minutes)
   let ttlMin = Number(env.SESSION_TTL_MIN_STAFF || 240);
   if (r.includes("super_admin")) ttlMin = Number(env.SESSION_TTL_MIN_SUPER_ADMIN || 60);
   if (r.includes("admin")) ttlMin = Number(env.SESSION_TTL_MIN_ADMIN || 120);
@@ -186,7 +163,7 @@ export async function createSession(env, user_id, roles){
   const exp = now + ttl;
 
   const sid = crypto.randomUUID();
-  const token_hash = sid; // keep schema compatible
+  const token_hash = sid;
   const role_snapshot = JSON.stringify(r);
 
   await env.DB.prepare(`
@@ -230,7 +207,6 @@ export async function requireAuth(env, request){
     return { ok:false, res: json(401,"unauthorized",null) };
   }
 
-  // keep session alive (last_seen_at only; TTL tidak diperpanjang otomatis)
   try{
     await env.DB.prepare(`UPDATE sessions SET last_seen_at=? WHERE id=?`).bind(now, row.id).run();
   }catch{}

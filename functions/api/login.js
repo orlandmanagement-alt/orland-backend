@@ -1,4 +1,9 @@
-import { json, readJson, cookie, pbkdf2Hash, timingSafeEqual, normEmail, getRolesForUser, createSession, requireEnv } from "../_lib.js";
+import {
+  json, readJson, cookie,
+  pbkdf2Hash, timingSafeEqual,
+  normEmail, getRolesForUser,
+  createSession, requireEnv
+} from "../_lib.js";
 
 export async function onRequestPost({ request, env }) {
   const miss = requireEnv(env, ["HASH_PEPPER"]);
@@ -8,14 +13,19 @@ export async function onRequestPost({ request, env }) {
   const email = normEmail(body.email);
   const password = String(body.password || "");
 
-  if (!email.includes("@") || password.length < 6) return json(400, "invalid_input", null);
+  if (!email.includes("@") || password.length < 6) {
+    return json(400, "invalid_input", { message: "email_or_password_invalid" });
+  }
 
-  const u = await env.DB.prepare(
-    "SELECT id,email_norm,display_name,status,password_hash,password_salt,password_iter FROM users WHERE email_norm=? LIMIT 1"
-  ).bind(email).first();
+  const u = await env.DB.prepare(`
+    SELECT id,email_norm,display_name,status,password_hash,password_salt,password_iter
+    FROM users
+    WHERE email_norm=?
+    LIMIT 1
+  `).bind(email).first();
 
   if (!u) return json(403, "user_belum_terdaftar", null);
-  if (String(u.status) !== "active") return json(403, "forbidden", null);
+  if (String(u.status) !== "active") return json(403, "forbidden", { message: "user_not_active" });
   if (!u.password_hash || !u.password_salt) return json(403, "password_invalid", { message: "password_not_set" });
 
   const iter = Math.min(100000, Number(u.password_iter || env.PBKDF2_ITER || 100000));
@@ -27,7 +37,16 @@ export async function onRequestPost({ request, env }) {
   if (!allowed) return json(403, "forbidden", { message: "role_not_allowed_for_dashboard" });
 
   const sess = await createSession(env, u.id, roles);
-  const res = json(200, "ok", { id: u.id, email_norm: u.email_norm, display_name: u.display_name, roles, exp: sess.exp });
+
+  const res = json(200, "ok", {
+    id: u.id,
+    email_norm: u.email_norm,
+    display_name: u.display_name,
+    roles,
+    exp: sess.exp
+  });
+
+  // HOST-ONLY cookie (domain not set)
   res.headers.append("set-cookie", cookie("sid", sess.sid, { maxAge: sess.ttl }));
   return res;
 }
