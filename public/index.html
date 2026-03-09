@@ -266,21 +266,3 @@
   </script>
 </body>
 </html>
-ere:
-      window.Orland.uiCloseSidebar = window.Orland.uiCloseSidebar || function(){
-        sidebar?.classList.add("-translate-x-full");
-        hideOverlay();
-      };
-
-      // Auto close sidebar on any navigation click (mobile)
-      // Capture clicks from nav buttons
-      document.getElementById("sidebar")?.addEventListener("click", (e)=>{
-        const btn = e.target.closest("button");
-        if(!btn) return;
-        // after Orland.navigate runs, close on mobile
-        setTimeout(()=>{ if(window.innerWidth < 1024) window.Orland.uiCloseSidebar(); }, 50);
-      });
-    });
-  </script>
-</body>
-</html>

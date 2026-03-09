@@ -204,39 +204,3 @@ window.addEventListener("popstate", async ()=>{
   const p = location.pathname || "/dashboard";
   await window.Orland.navigate(p, true);
 });
-nderNav(activePath){
-    const m = this.state.nav?.menus || { core:[], integrations:[], system:[], config:[] };
-    mkGroup("nav-core", m.core, activePath);
-    mkGroup("nav-integrations", m.integrations, activePath);
-    mkGroup("nav-system", m.system, activePath);
-    mkGroup("nav-config", m.config, activePath);
-  },
-
-  async navigate(path, replace=false){
-    let p = (path || "/dashboard").replace(/\/+$/,"") || "/";
-    if(p==="/") p="/dashboard";
-
-    // parent to first child
-    const reg = this.registry?.routes || {};
-    if(!reg[p]){
-      const ch = resolveParentToFirstChild(p);
-      if(ch) p = ch;
-    }
-
-    this.state.path = p;
-    if(replace) history.replaceState({}, "", p);
-    else history.pushState({}, "", p);
-
-    this.renderNav(p);
-
-    // auto-close sidebar on mobile after navigate
-    closeSidebarMobile();
-
-    await loadModuleByPath(p);
-  }
-};
-
-window.addEventListener("popstate", async ()=>{
-  const p = location.pathname || "/dashboard";
-  await window.Orland.navigate(p, true);
-});
