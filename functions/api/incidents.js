@@ -26,8 +26,8 @@ export async function onRequestPost({ request, env }){
   if(!allowed(a)) return json(403,"forbidden",null);
 
   const b = await readJson(request) || {};
-  const severity = String(b.severity||"low").trim();
-  const type = String(b.type||"general").trim();
+  const severity = String(b.severity||"low");
+  const type = String(b.type||"general");
   const summary = String(b.summary||"").trim();
   if(!summary) return json(400,"invalid_input",{message:"summary_required"});
 
@@ -47,23 +47,18 @@ export async function onRequestPut({ request, env }){
   if(!allowed(a)) return json(403,"forbidden",null);
 
   const b = await readJson(request) || {};
-  const id = String(b.id||"").trim();
-  const action = String(b.action||"").trim();
+  const id = String(b.id||"");
+  const action = String(b.action||"");
   if(!id) return json(400,"invalid_input",{message:"id_required"});
 
   const now = nowSec();
-
   if(action==="ack"){
-    await env.DB.prepare(`UPDATE incidents SET status='ack', acknowledged_by_user_id=?, updated_at=? WHERE id=?`)
-      .bind(a.uid, now, id).run();
+    await env.DB.prepare(`UPDATE incidents SET status='ack', acknowledged_by_user_id=?, updated_at=? WHERE id=?`).bind(a.uid,now,id).run();
     return json(200,"ok",{ updated:true });
   }
-
   if(action==="close"){
-    await env.DB.prepare(`UPDATE incidents SET status='closed', closed_by_user_id=?, updated_at=? WHERE id=?`)
-      .bind(a.uid, now, id).run();
+    await env.DB.prepare(`UPDATE incidents SET status='closed', closed_by_user_id=?, updated_at=? WHERE id=?`).bind(a.uid,now,id).run();
     return json(200,"ok",{ updated:true });
   }
-
   return json(400,"invalid_input",{message:"unknown_action"});
 }

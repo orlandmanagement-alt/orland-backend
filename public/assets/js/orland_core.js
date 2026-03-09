@@ -26,34 +26,25 @@ function setBreadcrumb(path){
   if(el) el.textContent = path || "/";
 }
 
-// ---------- sidebar dropdown state ----------
-function loadOpenState(){
-  try{
-    const j = localStorage.getItem("orland_nav_open") || "{}";
-    const o = JSON.parse(j);
-    return (o && typeof o === "object") ? o : {};
-  }catch{ return {}; }
-}
-function saveOpenState(state){
-  try{ localStorage.setItem("orland_nav_open", JSON.stringify(state||{})); }catch{}
-}
-function isPathActive(activePath, itemPath){
-  return String(activePath||"") === String(itemPath||"");
-}
-function isAnyChildActive(activePath, submenus){
-  for(const s of (submenus||[])){
-    if(isPathActive(activePath, s.path)) return true;
-  }
-  return false;
-}
-
 function mkBtn(item, active){
   const a = document.createElement("button");
-  a.type = "button";
-  a.className = "w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5";
+  a.className = "w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5";
   if(active) a.classList.add("sidebar-active");
   a.innerHTML = `<i class="${item.icon||"fa-solid fa-circle-dot"} w-5 text-center"></i><span class="font-medium">${item.label||item.id}</span>`;
+  a.onclick = () => window.Orland.navigate(item.path || "/dashboard");
   return a;
+}
+
+function mkSubBtn(s, activePath){
+  const b = document.createElement("button");
+  b.className = "w-full flex items-center pl-14 pr-6 py-2 text-xs font-semibold border-l-2 transition-colors duration-150 text-slate-500 hover:text-slate-900 dark:text-slate-300/80 dark:hover:text-white border-transparent";
+  if((activePath||"") === (s.path||"")){
+    b.classList.add("text-primary");
+    b.style.borderLeftColor = "#3b82f6";
+  }
+  b.innerHTML = `<span class="truncate">${s.label || s.id}</span>`;
+  b.onclick = ()=> window.Orland.navigate(s.path || "/dashboard");
+  return b;
 }
 
 function mkGroup(sectionId, items, activePath){
@@ -61,7 +52,6 @@ function mkGroup(sectionId, items, activePath){
   if(!root) return;
   root.innerHTML = "";
 
-  // dedupe
   const seen = new Set();
   const uniq = [];
   for(const it of (items||[])){
@@ -71,98 +61,45 @@ function mkGroup(sectionId, items, activePath){
     uniq.push(it);
   }
 
-  const openState = window.Orland?.state?.navOpen || {};
-
   for(const it of uniq){
-    const hasSub = !!(it.submenus && it.submenus.length);
+    if(it.submenus && it.submenus.length){
+      const wrap = document.createElement("div");
+      wrap.className = "mb-1";
 
-    if(!hasSub){
-      const btn = mkBtn(it, isPathActive(activePath, it.path));
-      btn.onclick = () => window.Orland.navigate(it.path || "/dashboard");
-      root.appendChild(btn);
-      continue;
+      const head = document.createElement("button");
+      head.className = "w-full flex items-center justify-between gap-3 px-6 py-2.5 transition-colors duration-150 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5";
+      const isActiveParent = (activePath||"") === (it.path||"");
+      if(isActiveParent) head.classList.add("sidebar-active");
+      head.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          <i class="${it.icon||"fa-solid fa-circle-dot"} w-5 text-center"></i>
+          <span class="font-medium truncate">${it.label||it.id}</span>
+        </div>
+        <i class="fa-solid fa-chevron-down text-[10px] opacity-70"></i>
+      `;
+
+      // dropdown state (open jika salah satu child aktif)
+      const anyChildActive = it.submenus.some(s => (s.path||"") === (activePath||""));
+      const keyOpen = "orland_nav_open_" + String(it.id||it.path||"group");
+      let open = (localStorage.getItem(keyOpen)==="1") || anyChildActive;
+
+      const sub = document.createElement("div");
+      sub.className = "bg-slate-50/60 dark:bg-black/20 py-1";
+      if(!open) sub.style.display = "none";
+      for(const s of it.submenus) sub.appendChild(mkSubBtn(s, activePath));
+
+      head.onclick = ()=>{
+        open = !open;
+        localStorage.setItem(keyOpen, open ? "1" : "0");
+        sub.style.display = open ? "block" : "none";
+      };
+
+      wrap.appendChild(head);
+      wrap.appendChild(sub);
+      root.appendChild(wrap);
+    } else {
+      root.appendChild(mkBtn(it, (activePath||"") === (it.path||"")));
     }
-
-    // parent dropdown
-    const wrap = document.createElement("div");
-    wrap.className = "select-none";
-
-    const row = document.createElement("div");
-    row.className = "w-full flex items-center justify-between px-6 py-2.5 transition-colors duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5";
-
-    const left = document.createElement("button");
-    left.type = "button";
-    left.className = "flex items-center gap-3 flex-1 text-left";
-    const parentActive = isPathActive(activePath, it.path) || isAnyChildActive(activePath, it.submenus);
-    if(parentActive) row.classList.add("sidebar-active");
-    left.innerHTML = `<i class="${it.icon||"fa-solid fa-circle-dot"} w-5 text-center"></i><span class="font-medium">${it.label||it.id}</span>`;
-
-    const caret = document.createElement("button");
-    caret.type = "button";
-    caret.className = "ml-2 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-200/40 dark:hover:bg-white/10";
-    caret.innerHTML = `<i class="fa-solid fa-chevron-down text-[11px]"></i>`;
-
-    // auto-open if a child active
-    const key = String(it.id || it.path || it.label);
-    if(isAnyChildActive(activePath, it.submenus)) openState[key] = true;
-
-    const sub = document.createElement("div");
-    sub.className = "bg-slate-50/50 dark:bg-black/20 py-1";
-    const isOpen = !!openState[key];
-    if(!isOpen) sub.classList.add("hidden");
-
-    // children
-    for(const s of it.submenus){
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "w-full flex items-center pl-14 pr-6 py-2 text-xs font-medium border-l-2 transition-colors duration-150 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-transparent";
-      if(isPathActive(activePath, s.path)){
-        b.classList.add("text-primary");
-        b.style.borderLeftColor = "#3b82f6";
-      }
-      b.textContent = s.label || s.id;
-      b.onclick = ()=> window.Orland.navigate(s.path || "/dashboard");
-      sub.appendChild(b);
-    }
-
-    function toggle(){
-      const now = sub.classList.toggle("hidden") ? false : true;
-      openState[key] = now;
-      window.Orland.state.navOpen = openState;
-      saveOpenState(openState);
-      // rotate caret icon
-      const ico = caret.querySelector("i");
-      if(ico){
-        ico.className = now ? "fa-solid fa-chevron-up text-[11px]" : "fa-solid fa-chevron-down text-[11px]";
-      }
-    }
-
-    // parent click behavior:
-    // - kalau parent punya route/module => navigate
-    // - kalau tidak ada route => toggle dropdown (tidak navigate)
-    left.onclick = ()=>{
-      const reg = window.Orland?.registry?.routes || {};
-      const p = String(it.path||"").replace(/\/+$/,"") || "/";
-      if(reg[p]){
-        window.Orland.navigate(p);
-      }else{
-        toggle();
-      }
-    };
-    caret.onclick = (e)=>{ e.stopPropagation(); toggle(); };
-
-    // initial caret
-    const ico = caret.querySelector("i");
-    if(ico){
-      ico.className = isOpen ? "fa-solid fa-chevron-up text-[11px]" : "fa-solid fa-chevron-down text-[11px]";
-    }
-
-    row.appendChild(left);
-    row.appendChild(caret);
-
-    wrap.appendChild(row);
-    wrap.appendChild(sub);
-    root.appendChild(wrap);
   }
 }
 
@@ -229,29 +166,25 @@ window.Orland = {
   diceBear,
   api,
   registry: { routes:{} },
-  state: { me:null, nav:null, path:"/dashboard", navOpen: loadOpenState() },
+  state: { me:null, nav:null, path:"/dashboard" },
 
   async bootDashboard(){
     const me = await api("/api/me");
     if(me.status !== "ok"){ location.href="/login.html"; return; }
     this.state.me = me.data;
 
-    // registry
     try{ this.registry = await getRegistry(); }catch{ this.registry = { routes:{} }; }
 
-    // header profile (index.html expects hdrName/hdrEmail/hdrAvatar)
     const nm = qs("hdrName"); if(nm) nm.textContent = me.data.display_name || me.data.email_norm || me.data.id;
     const em = qs("hdrEmail"); if(em) em.textContent = me.data.email_norm || "";
     const av = qs("hdrAvatar"); if(av) av.src = diceBear(me.data.email_norm || me.data.id);
 
-    // nav
     const nav = await api("/api/nav");
     if(nav.status==="ok"){
       this.state.nav = nav.data;
       this.renderNav(location.pathname || "/dashboard");
     }
 
-    // initial route
     const p = (location.pathname === "/" ? "/dashboard" : location.pathname);
     await this.navigate(p, true);
   },
@@ -268,7 +201,6 @@ window.Orland = {
     let p = (path || "/dashboard").replace(/\/+$/,"") || "/";
     if(p==="/") p="/dashboard";
 
-    // if missing module for parent, redirect to submenu first
     const reg = this.registry?.routes || {};
     if(!reg[p]){
       const ch = resolveParentToFirstChild(p);
@@ -281,8 +213,8 @@ window.Orland = {
 
     this.renderNav(p);
 
-    // close sidebar on mobile (index.html defines window.__orlandCloseSidebar)
-    if (window.__orlandCloseSidebar) window.__orlandCloseSidebar();
+    // auto close sidebar on mobile (index.html define window.__orlandCloseSidebar)
+    if(window.__orlandCloseSidebar && window.innerWidth < 1024) window.__orlandCloseSidebar();
 
     await loadModuleByPath(p);
   }

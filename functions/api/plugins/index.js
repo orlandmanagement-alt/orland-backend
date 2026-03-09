@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole } from "../../_lib.js";
+import { json, readJson, requireAuth, hasRole } from "../_lib.js";
 
 /**
  * Compatible ops:
