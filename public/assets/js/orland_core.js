@@ -190,6 +190,7 @@ window.Orland = {
     else history.pushState({}, "", p);
 
     this.renderNav(p);
+    if (window.__orlandCloseSidebar) window.__orlandCloseSidebar();
     await loadModuleByPath(p);
 
     // auto close sidebar on mobile
@@ -203,11 +204,7 @@ window.addEventListener("popstate", async ()=>{
   const p = location.pathname || "/dashboard";
   await window.Orland.navigate(p, true);
 });
-" : location.pathname);
-    await this.navigate(p, true);
-  },
-
-  renderNav(activePath){
+nderNav(activePath){
     const m = this.state.nav?.menus || { core:[], integrations:[], system:[], config:[] };
     mkGroup("nav-core", m.core, activePath);
     mkGroup("nav-integrations", m.integrations, activePath);

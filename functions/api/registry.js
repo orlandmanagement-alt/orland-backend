@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole } from "./_lib.js";
+import { json, requireAuth, hasRole } from "../_lib.js";
 
 function normPath(p){
   p = String(p || "/").trim();
@@ -10,15 +10,14 @@ function normPath(p){
 function safeCodeToModule(code){
   const c = String(code || "").trim();
 
-  // --- special aliases (menu.code may not equal real module file)
-  // parents
+  // parents (menu root)
   if (c === "users") return "/modules/mod_users.js";
   if (c === "ops") return "/modules/mod_ops.js";
   if (c === "data") return "/modules/mod_data.js";
   if (c === "config") return "/modules/mod_config.js";
   if (c === "blogspot") return "/modules/mod_blogspot.js";
 
-  // config children
+  // config children aliases (DB code -> module)
   if (c === "cfg_plugins") return "/modules/mod_cfg_plugins.js";
   if (c === "cfg_bulk_tools") return "/modules/mod_cfg_bulk_tools.js";
   if (c === "cfg_sec_policy") return "/modules/mod_cfg_sec_policy.js";
@@ -29,13 +28,13 @@ function safeCodeToModule(code){
   if (c === "menu_builder" || c === "cfg_menubuilder") return "/modules/mod_menu_builder.js";
   if (c === "rbac_manager") return "/modules/mod_rbac_manager.js";
 
-  // integrations children keep direct
+  // blogspot leaf codes
   if (c === "blogspot_settings") return "/modules/mod_blogspot_settings.js";
   if (c === "blogspot_posts") return "/modules/mod_blogspot_posts.js";
   if (c === "blogspot_pages") return "/modules/mod_blogspot_pages.js";
   if (c === "blogspot_widgets") return "/modules/mod_blogspot_widgets.js";
 
-  // common known codes map to existing modules
+  // common known codes
   if (c === "dashboard") return "/modules/mod_dashboard.js";
   if (c === "audit") return "/modules/mod_audit.js";
   if (c === "security") return "/modules/mod_security.js";
@@ -48,7 +47,7 @@ function safeCodeToModule(code){
   return "/modules/mod_" + c.replace(/[^a-zA-Z0-9_]/g, "_") + ".js";
 }
 
-async function getRoles(env, request){
+async function getSessionRoles(env, request){
   const a = await requireAuth(env, request);
   if (!a.ok) return { ok:false, res:a.res, roles:[] };
   const roles = Array.isArray(a.roles) ? a.roles.map(String) : [];
@@ -81,8 +80,13 @@ async function getAllowedMenus(env, roles){
   return r.results || [];
 }
 
+/**
+ * /api/registry
+ * Source of truth: D1 menus (+ role_menus)
+ * Convention: menu.code => module resolver safeCodeToModule(code)
+ */
 export async function onRequestGet({ request, env }){
-  const s = await getRoles(env, request);
+  const s = await getSessionRoles(env, request);
   if (!s.ok) return s.res;
 
   if (!hasRole(s.roles, ["super_admin","admin","staff"])) {
@@ -90,8 +94,8 @@ export async function onRequestGet({ request, env }){
   }
 
   const menus = await getAllowedMenus(env, s.roles);
-  const routes = {};
 
+  const routes = {};
   for (const m of (menus || [])){
     const code = String(m.code || "").trim();
     const path = normPath(m.path || "/");
@@ -106,13 +110,23 @@ export async function onRequestGet({ request, env }){
 
   // virtual routes (optional)
   if (routes["/profile"] && !routes["/profile/security"]) {
-    routes["/profile/security"] = { module: "/modules/mod_profile_security.js", export:"default", title:"Security & Password" };
+    routes["/profile/security"] = {
+      module: "/modules/mod_profile_security.js",
+      export: "default",
+      title: "Security & Password"
+    };
   }
   if (routes["/security"] && !routes["/security/policy"]) {
-    routes["/security/policy"] = { module: "/modules/mod_security_policy.js", export:"default", title:"Security Policy" };
+    routes["/security/policy"] = {
+      module: "/modules/mod_security_policy.js",
+      export: "default",
+      title: "Security Policy"
+    };
   }
 
-  return json(200, "ok", { routes, roles: s.roles, count: Object.keys(routes).length });
-}
-n(200, "ok", { routes, roles, count: Object.keys(routes).length });
+  return json(200, "ok", {
+    routes,
+    roles: s.roles,
+    count: Object.keys(routes).length
+  });
 }
