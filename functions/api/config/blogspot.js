@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../_lib.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 import { getBlogspotConfig, maskedConfig } from "../blogspot/_service.js";
 
 async function setSetting(env, k, v, is_secret){
