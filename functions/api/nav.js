@@ -12,14 +12,17 @@ function bucketOf(path){
 function sortMenus(a,b){
   const sa = Number(a.sort_order ?? 9999);
   const sb = Number(b.sort_order ?? 9999);
-  if(sa!==sb) return sa-sb;
+  if(sa !== sb) return sa - sb;
   return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
 }
 
 function buildBucket(menus){
   const byId = new Map();
   const roots = [];
-  for(const m of menus) byId.set(String(m.id), { ...m, submenus: [] });
+
+  for(const m of menus){
+    byId.set(String(m.id), { ...m, submenus: [] });
+  }
 
   for(const m of byId.values()){
     if(m.parent_id && byId.has(String(m.parent_id))){
@@ -79,8 +82,7 @@ export async function onRequestGet({ request, env }){
   };
 
   for(const m of rows){
-    const b = bucketOf(m.path);
-    grouped[b].push(m);
+    grouped[bucketOf(m.path)].push(m);
   }
 
   return json(200,"ok",{
