@@ -6,22 +6,27 @@ export async function onRequestGet({ request, env }){
   if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403,"forbidden",null);
 
   const url = new URL(request.url);
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")||"80")));
   const q = String(url.searchParams.get("q")||"").trim();
-  const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit")||80)));
-  const like = q ? `%${q}%` : null;
 
-  const r = await env.DB.prepare(`
-    SELECT
-      l.id, l.created_at, l.action, l.route, l.http_status,
-      l.actor_user_id,
-      u.display_name AS actor_name,
-      u.email_norm AS actor_email
-    FROM audit_logs l
-    LEFT JOIN users u ON u.id=l.actor_user_id
-    WHERE ( ? IS NULL OR l.action LIKE ? OR l.route LIKE ? OR l.actor_user_id LIKE ? )
-    ORDER BY l.created_at DESC
-    LIMIT ?
-  `).bind(like, like, like, like, limit).all();
+  let rows;
+  if(q){
+    const like = `%${q}%`;
+    rows = await env.DB.prepare(`
+      SELECT id, actor_user_id, action, route, http_status, meta_json, created_at
+      FROM audit_logs
+      WHERE action LIKE ? OR route LIKE ? OR meta_json LIKE ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).bind(like, like, like, limit).all();
+  }else{
+    rows = await env.DB.prepare(`
+      SELECT id, actor_user_id, action, route, http_status, meta_json, created_at
+      FROM audit_logs
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).bind(limit).all();
+  }
 
-  return json(200,"ok",{ logs: r.results||[] });
+  return json(200,"ok",{ logs: rows.results||[] });
 }
