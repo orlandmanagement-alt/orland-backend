@@ -27,28 +27,45 @@
 
   <style>
     [x-cloak]{display:none!important}
-    .sidebar-active{background-color:rgba(59,130,246,.1);color:#3b82f6!important;border-right:3px solid #3b82f6}
+    .sidebar-active{
+      background-color:rgba(59,130,246,.12);
+      color:#60a5fa!important;
+      border-right:3px solid #3b82f6
+    }
+    .glass{
+      background: rgba(15,17,21,.72);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
   </style>
 </head>
 
-<body class="bg-slate-50 text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
-  <div id="toast-host" class="fixed right-3 bottom-3 z-[9999] flex flex-col gap-2"></div>
+<body class="font-sans bg-slate-50 text-slate-800 dark:bg-dark dark:text-slate-200 transition-colors duration-200 text-sm overflow-hidden">
+  <div id="toast-host"></div>
 
-  <!-- overlay -->
-  <div id="sidebarOverlay" class="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm hidden"></div>
+  <!-- overlay (IMPORTANT: pointer-events-none when hidden) -->
+  <div id="sidebarOverlay"
+       class="fixed inset-0 z-40 bg-black/55 lg:hidden backdrop-blur-sm hidden pointer-events-none"></div>
 
   <div class="flex h-screen overflow-hidden">
 
     <!-- SIDEBAR -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-darkLighter shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col -translate-x-full lg:translate-x-0">
-      <div class="h-16 flex items-center px-6 border-b border-slate-200 dark:border-darkBorder justify-between shrink-0">
+    <aside id="sidebar"
+      class="fixed inset-y-0 left-0 z-50 w-72 bg-white/95 dark:bg-darkLighter/95 shadow-xl transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 border-r border-slate-200 dark:border-darkBorder flex flex-col -translate-x-full lg:translate-x-0">
+
+      <div class="h-16 flex items-center px-5 border-b border-slate-200 dark:border-darkBorder justify-between shrink-0">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-md">
+          <div class="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white shadow-md">
             <i class="fa-solid fa-shield-halved"></i>
           </div>
-          <div><h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ORLAND</h1></div>
+          <div>
+            <h1 class="text-base font-bold tracking-tight text-slate-900 dark:text-white leading-tight">ORLAND</h1>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400 -mt-[2px]">Enterprise Admin</div>
+          </div>
         </div>
-        <button id="btnSidebarClose" class="lg:hidden text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+        <button id="btnSidebarClose" class="lg:hidden text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
       <nav class="flex-1 overflow-y-auto py-4">
@@ -64,49 +81,73 @@
         <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Configuration</p>
         <div id="nav-config"></div>
       </nav>
+
+      <div class="p-4 border-t border-slate-200 dark:border-darkBorder shrink-0">
+        <button id="btnLogout"
+          class="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-danger/10 text-slate-800 dark:text-white hover:text-danger transition group">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center text-primary border border-primary/25 group-hover:bg-danger/15 group-hover:text-danger group-hover:border-danger/25 transition">
+            <i class="fa-solid fa-power-off"></i>
+          </div>
+          <div class="text-left flex-1 overflow-hidden">
+            <p class="text-xs font-bold truncate">Logout</p>
+            <p class="text-[10px] text-slate-500 truncate group-hover:text-danger transition">End session</p>
+          </div>
+        </button>
+      </div>
     </aside>
 
     <!-- MAIN -->
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-dark">
-      <header class="h-16 bg-white dark:bg-darkLighter border-b border-slate-200 dark:border-darkBorder flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
+
+      <!-- TOPBAR -->
+      <header class="h-16 glass border-b border-slate-200/60 dark:border-darkBorder flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
         <div class="flex items-center gap-3">
-          <button id="btnSidebarOpen" class="lg:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+          <button id="btnSidebarOpen" class="lg:hidden text-slate-200/80 hover:text-white">
             <i class="fa-solid fa-bars"></i>
           </button>
-          <div class="text-xs text-slate-500 dark:text-slate-400">
-            <i class="fa-solid fa-house mr-2"></i>
+
+          <div class="flex items-center gap-2 text-xs text-slate-200/70">
+            <i class="fa-solid fa-house"></i>
             <span id="breadcrumb">/</span>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
-          <!-- Theme -->
-          <button id="btnTheme" class="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Toggle theme">
-            <i id="themeIcon" class="fa-solid fa-moon"></i>
+
+          <!-- Theme toggle -->
+          <button id="btnTheme"
+            class="w-10 h-10 flex items-center justify-center rounded-xl text-slate-200/70 hover:bg-white/10 transition"
+            title="Toggle theme">
+            <i id="icoThemeMoon" class="fa-solid fa-moon"></i>
+            <i id="icoThemeSun" class="fa-solid fa-sun text-warning hidden"></i>
           </button>
 
-          <!-- Notification -->
+          <!-- Notifications -->
           <div class="relative">
-            <button id="btnNotif" class="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Notifications">
+            <button id="btnNotif"
+              class="relative w-10 h-10 flex items-center justify-center rounded-xl text-slate-200/70 hover:bg-white/10 transition"
+              title="Notifications">
               <i class="fa-solid fa-bell"></i>
-              <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-white dark:ring-darkLighter"></span>
+              <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-black/40"></span>
             </button>
-            <div id="notifPop" class="hidden absolute right-0 mt-2 w-72 bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl shadow-xl overflow-hidden z-50">
-              <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder">
-                <div class="text-xs font-extrabold">Notifications</div>
-                <div class="text-[10px] opacity-70 mt-1">Ops alerts, security, audit summary.</div>
+
+            <div id="notifMenu"
+              class="hidden absolute right-0 mt-2 w-72 rounded-2xl border border-white/10 bg-black/80 backdrop-blur text-white overflow-hidden z-50">
+              <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                <div class="text-sm font-bold">Notifications</div>
+                <div class="text-[10px] opacity-70">demo</div>
               </div>
-              <div class="p-3 space-y-2 text-xs">
-                <div class="p-2 rounded-xl border border-slate-200 dark:border-darkBorder">
-                  <div class="font-bold">✅ System OK</div>
-                  <div class="text-[10px] opacity-70 mt-1">No critical incidents.</div>
+              <div class="p-2 space-y-2">
+                <div class="px-3 py-2 rounded-xl bg-white/5">
+                  <div class="text-xs font-semibold">System</div>
+                  <div class="text-[11px] opacity-70">No new alerts.</div>
                 </div>
-                <div class="p-2 rounded-xl border border-slate-200 dark:border-darkBorder">
-                  <div class="font-bold">🛡 Security</div>
-                  <div class="text-[10px] opacity-70 mt-1">Review policy & rate limit settings.</div>
+                <div class="px-3 py-2 rounded-xl bg-white/5">
+                  <div class="text-xs font-semibold">Security</div>
+                  <div class="text-[11px] opacity-70">All checks OK.</div>
                 </div>
               </div>
-              <button class="w-full px-4 py-2 text-xs font-bold border-t border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5" id="btnNotifClose">
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-white/10 border-t border-white/10" id="btnNotifClose">
                 Close
               </button>
             </div>
@@ -114,33 +155,34 @@
 
           <!-- Profile -->
           <div class="relative">
-            <button id="btnProfile" class="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-              <img id="hdrAvatar" class="w-8 h-8 rounded-full border border-slate-200 dark:border-darkBorder bg-slate-100" alt="avatar">
-              <div class="hidden sm:block text-left leading-tight">
-                <div id="hdrName" class="text-xs font-extrabold max-w-[160px] truncate">—</div>
-                <div id="hdrEmail" class="text-[10px] opacity-70 max-w-[160px] truncate">—</div>
-              </div>
-              <i class="fa-solid fa-chevron-down text-[10px] opacity-60"></i>
+            <button id="btnHdrProfile"
+              class="w-10 h-10 rounded-xl overflow-hidden border border-white/10 bg-white/5 hover:bg-white/10 transition"
+              title="Profile menu">
+              <img id="hdrAvatar" class="w-full h-full object-cover" alt="me">
             </button>
 
-            <div id="profilePop" class="hidden absolute right-0 mt-2 w-60 bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl shadow-xl overflow-hidden z-50">
-              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5" data-profile-action="profile">
+            <div id="hdrProfileMenu"
+              class="hidden absolute right-0 mt-2 w-60 rounded-2xl border border-white/10 bg-black/80 backdrop-blur text-white overflow-hidden z-50">
+              <div class="px-4 py-3 border-b border-white/10">
+                <div id="hdrName" class="text-sm font-bold truncate">—</div>
+                <div id="hdrEmail" class="text-xs opacity-70 truncate">—</div>
+              </div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-white/10" data-profile-action="profile">
                 <i class="fa-solid fa-user me-2"></i> My Profile
               </button>
-              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5" data-profile-action="security">
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-white/10" data-profile-action="security">
                 <i class="fa-solid fa-shield-halved me-2"></i> Security & Password
               </button>
-              <button class="w-full text-left px-4 py-2 text-xs text-danger hover:bg-danger/10" data-profile-action="logout">
+              <button class="w-full text-left px-4 py-2 text-sm text-red-300 hover:bg-red-500/10" data-profile-action="logout">
                 <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
               </button>
             </div>
           </div>
 
-          <!-- hidden logout for core -->
-          <button id="btnLogout" class="hidden"></button>
         </div>
       </header>
 
+      <!-- CONTENT -->
       <div class="flex-1 overflow-auto">
         <div class="p-6 max-w-[1600px] mx-auto space-y-6">
           <div id="module-host"></div>
@@ -152,18 +194,43 @@
   <script src="/assets/js/orland_core.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", async ()=>{
-      // theme
-      window.Orland.applyThemeFromStorage();
-      document.getElementById("btnTheme")?.addEventListener("click", ()=> window.Orland.toggleTheme());
+      // ===== Theme init =====
+      const theme = localStorage.getItem("theme") || "dark";
+      if(theme === "dark") document.documentElement.classList.add("dark");
+      else document.documentElement.classList.remove("dark");
 
-      // sidebar overlay
+      const icoMoon = document.getElementById("icoThemeMoon");
+      const icoSun  = document.getElementById("icoThemeSun");
+      function syncThemeIcons(){
+        const isDark = document.documentElement.classList.contains("dark");
+        icoMoon?.classList.toggle("hidden", isDark);
+        icoSun?.classList.toggle("hidden", !isDark);
+      }
+      syncThemeIcons();
+
+      document.getElementById("btnTheme")?.addEventListener("click", ()=>{
+        const isDark = document.documentElement.classList.toggle("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        syncThemeIcons();
+      });
+
+      // ===== Boot Orland core =====
+      await window.Orland.bootDashboard();
+
+      // ===== Sidebar overlay safe click =====
       const overlay = document.getElementById("sidebarOverlay");
       const sidebar = document.getElementById("sidebar");
       const openBtn = document.getElementById("btnSidebarOpen");
       const closeBtn = document.getElementById("btnSidebarClose");
 
-      function showOverlay(){ overlay?.classList.remove("hidden"); }
-      function hideOverlay(){ overlay?.classList.add("hidden"); }
+      function showOverlay(){
+        overlay?.classList.remove("hidden");
+        overlay?.classList.remove("pointer-events-none");
+      }
+      function hideOverlay(){
+        overlay?.classList.add("hidden");
+        overlay?.classList.add("pointer-events-none");
+      }
 
       openBtn?.addEventListener("click", ()=>{
         sidebar?.classList.remove("-translate-x-full");
@@ -178,34 +245,36 @@
         hideOverlay();
       });
 
-      // notif popup
+      // ===== Notifications popup =====
       const btnNotif = document.getElementById("btnNotif");
-      const notifPop = document.getElementById("notifPop");
+      const notifMenu = document.getElementById("notifMenu");
       const btnNotifClose = document.getElementById("btnNotifClose");
-      btnNotif?.addEventListener("click", (e)=>{
-        e.stopPropagation();
-        notifPop?.classList.toggle("hidden");
-        document.getElementById("profilePop")?.classList.add("hidden");
-      });
-      btnNotifClose?.addEventListener("click", ()=> notifPop?.classList.add("hidden"));
+      btnNotif?.addEventListener("click", ()=> notifMenu?.classList.toggle("hidden"));
+      btnNotifClose?.addEventListener("click", ()=> notifMenu?.classList.add("hidden"));
 
-      // profile popup
-      const btnProfile = document.getElementById("btnProfile");
-      const profilePop = document.getElementById("profilePop");
-      btnProfile?.addEventListener("click",(e)=>{
-        e.stopPropagation();
-        profilePop?.classList.toggle("hidden");
-        notifPop?.classList.add("hidden");
-      });
+      // ===== Profile dropdown =====
+      const btnHdrProfile = document.getElementById("btnHdrProfile");
+      const hdrMenu = document.getElementById("hdrProfileMenu");
 
-      document.addEventListener("click", ()=>{
-        notifPop?.classList.add("hidden");
-        profilePop?.classList.add("hidden");
+      btnHdrProfile?.addEventListener("click", ()=> hdrMenu?.classList.toggle("hidden"));
+
+      document.addEventListener("click", (e)=>{
+        // close notif if click outside
+        if(notifMenu && !notifMenu.classList.contains("hidden")){
+          const insideNotif = e.target.closest("#btnNotif") || e.target.closest("#notifMenu");
+          if(!insideNotif) notifMenu.classList.add("hidden");
+        }
+        // close profile if click outside
+        if(hdrMenu && !hdrMenu.classList.contains("hidden")){
+          const insideProfile = e.target.closest("#btnHdrProfile") || e.target.closest("#hdrProfileMenu");
+          if(!insideProfile) hdrMenu.classList.add("hidden");
+        }
       });
 
       document.querySelectorAll("[data-profile-action]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const act = btn.getAttribute("data-profile-action");
+          hdrMenu?.classList.add("hidden");
           if(act==="profile") return window.Orland.navigate("/profile", false);
           if(act==="security") return window.Orland.navigate("/profile/security", false);
           if(act==="logout"){
@@ -215,8 +284,26 @@
         });
       });
 
-      // boot
-      await window.Orland.bootDashboard();
+      // logout in sidebar
+      document.getElementById("btnLogout")?.addEventListener("click", async ()=>{
+        await window.Orland.api("/api/logout",{ method:"POST", body:"{}" });
+        location.href="/login.html";
+      });
+
+      // If Orland core supports uiCloseSidebar, wire it; else fallback here:
+      window.Orland.uiCloseSidebar = window.Orland.uiCloseSidebar || function(){
+        sidebar?.classList.add("-translate-x-full");
+        hideOverlay();
+      };
+
+      // Auto close sidebar on any navigation click (mobile)
+      // Capture clicks from nav buttons
+      document.getElementById("sidebar")?.addEventListener("click", (e)=>{
+        const btn = e.target.closest("button");
+        if(!btn) return;
+        // after Orland.navigate runs, close on mobile
+        setTimeout(()=>{ if(window.innerWidth < 1024) window.Orland.uiCloseSidebar(); }, 50);
+      });
     });
   </script>
 </body>
