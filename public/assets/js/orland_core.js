@@ -26,18 +26,6 @@ function setBreadcrumb(path){
   if(el) el.textContent = path || "/";
 }
 
-function isMobile(){
-  return window.matchMedia && window.matchMedia("(max-width: 1023px)").matches;
-}
-
-function closeSidebarMobile(){
-  if(!isMobile()) return;
-  const sidebar = qs("sidebar");
-  const overlay = qs("sidebarOverlay");
-  sidebar?.classList.add("-translate-x-full");
-  overlay?.classList.add("hidden");
-}
-
 function mkBtn(item, active){
   const a = document.createElement("button");
   a.className = "w-full flex items-center gap-3 px-6 py-2.5 transition-colors duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5";
@@ -51,7 +39,6 @@ function mkGroup(sectionId, items, activePath){
   const root = qs(sectionId);
   if(!root) return;
   root.innerHTML = "";
-
   const seen = new Set();
   const uniq = [];
   for(const it of (items||[])){
@@ -60,7 +47,6 @@ function mkGroup(sectionId, items, activePath){
     seen.add(key);
     uniq.push(it);
   }
-
   for(const it of uniq){
     if(it.submenus && it.submenus.length){
       const wrap = document.createElement("div");
@@ -103,27 +89,13 @@ async function loadModuleByPath(path){
   const reg = window.Orland.registry || { routes:{} };
   const r = reg.routes[path];
 
-  const showError = (title, errText) => {
-    host.innerHTML = `
-      <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-        <div class="text-sm font-extrabold text-red-500">${title}</div>
-        <pre class="text-[11px] mt-2 opacity-80 whitespace-pre-wrap">${errText}</pre>
-        <div class="text-[11px] opacity-70 mt-3">Path: <code>${path}</code></div>
-      </div>
-    `;
-  };
-
   if(!r){
-    try{
-      const mod = await import("/modules/mod_placeholder.js");
-      const inst = mod.default(window.Orland);
-      document.title = inst.title ? `ORLAND | ${inst.title}` : "ORLAND | Enterprise Operations";
-      setBreadcrumb(path);
-      await inst.mount(host);
-      return;
-    }catch(e){
-      return showError("Missing route + placeholder failed", String(e?.stack||e));
-    }
+    const mod = await import("/modules/mod_placeholder.js");
+    const inst = mod.default(window.Orland);
+    document.title = inst.title ? `ORLAND | ${inst.title}` : "ORLAND | Enterprise Operations";
+    setBreadcrumb(path);
+    await inst.mount(host);
+    return;
   }
 
   host.innerHTML = `<div class="text-xs text-slate-500">Loading module: ${path} ...</div>`;
@@ -131,14 +103,23 @@ async function loadModuleByPath(path){
   try{
     const mod = await import(r.module);
     const factory = (r.export && mod[r.export]) ? mod[r.export] : (mod.default || null);
-    if(!factory) return showError("Invalid module export", `module=${r.module}\nexport=${r.export}`);
-
+    if(!factory){
+      host.innerHTML = `<div class="text-xs text-red-400">Invalid module export: ${r.export}</div>`;
+      return;
+    }
     const inst = factory(window.Orland);
     document.title = inst.title ? `ORLAND | ${inst.title}` : "ORLAND | Enterprise Operations";
     setBreadcrumb(path);
     await inst.mount(host);
   }catch(e){
-    showError("Module import error", `module=${r.module}\n\n${String(e?.stack||e)}`);
+    host.innerHTML = `
+      <div class="rounded-2xl border border-red-300 bg-white p-4 text-red-600">
+        <div class="text-sm font-extrabold">Module import error</div>
+        <div class="text-xs mt-2">module=<code>${r.module}</code></div>
+        <div class="text-xs mt-1">Path: <code>${path}</code></div>
+        <pre class="text-[11px] mt-3 whitespace-pre-wrap">${String(e?.message||e)}</pre>
+      </div>
+    `;
   }
 }
 
@@ -154,27 +135,11 @@ function resolveParentToFirstChild(path){
   return null;
 }
 
-function applyThemeFromStorage(){
-  const t = localStorage.getItem("theme") || "dark";
-  const isDark = (t === "dark");
-  document.documentElement.classList.toggle("dark", isDark);
-  const ic = qs("themeIcon");
-  if(ic) ic.className = isDark ? "fa-solid fa-moon" : "fa-solid fa-sun text-warning";
-}
-
 window.Orland = {
-  api,
   diceBear,
+  api,
   registry: { routes:{} },
   state: { me:null, nav:null, path:"/dashboard" },
-
-  applyThemeFromStorage,
-
-  toggleTheme(){
-    const cur = (localStorage.getItem("theme")||"dark");
-    localStorage.setItem("theme", cur==="dark" ? "light" : "dark");
-    applyThemeFromStorage();
-  },
 
   async bootDashboard(){
     const me = await api("/api/me");
@@ -196,15 +161,49 @@ window.Orland = {
       this.renderNav(location.pathname || "/dashboard");
     }
 
-    // logout
-    const lo = qs("btnLogout");
-    lo && (lo.onclick = async ()=>{
-      await api("/api/logout",{ method:"POST", body:"{}" });
-      location.href="/login.html";
-    });
-
     // initial route
     const p = (location.pathname === "/" ? "/dashboard" : location.pathname);
+    await this.navigate(p, true);
+  },
+
+  renderNav(activePath){
+    const m = this.state.nav?.menus || { core:[], integrations:[], system:[], config:[] };
+    mkGroup("nav-core", m.core, activePath);
+    mkGroup("nav-integrations", m.integrations, activePath);
+    mkGroup("nav-system", m.system, activePath);
+    mkGroup("nav-config", m.config, activePath);
+  },
+
+  async navigate(path, replace=false){
+    let p = (path || "/dashboard").replace(/\/+$/,"") || "/";
+    if(p==="/") p="/dashboard";
+
+    // if missing module for parent, redirect to submenu first
+    const reg = this.registry?.routes || {};
+    if(!reg[p]){
+      const ch = resolveParentToFirstChild(p);
+      if(ch) p = ch;
+    }
+
+    this.state.path = p;
+    if(replace) history.replaceState({}, "", p);
+    else history.pushState({}, "", p);
+
+    this.renderNav(p);
+    await loadModuleByPath(p);
+
+    // auto close sidebar on mobile
+    if (window.innerWidth < 1024 && typeof window.Orland._closeSidebar === "function") {
+      window.Orland._closeSidebar();
+    }
+  }
+};
+
+window.addEventListener("popstate", async ()=>{
+  const p = location.pathname || "/dashboard";
+  await window.Orland.navigate(p, true);
+});
+" : location.pathname);
     await this.navigate(p, true);
   },
 

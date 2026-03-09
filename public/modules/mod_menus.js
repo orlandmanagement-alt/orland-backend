@@ -142,7 +142,7 @@ export default function MenuBuilder(Orland){
                 <input id="q" class="px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="filter label/path...">
               </div>
               <div class="mt-3 overflow-auto" style="max-height:520px">
-                <table class="w-full text-xs">
+                <div class="data-orland-table-wrap" style="overflow-x:auto; -webkit-overflow-scrolling:touch;"><table class="w-full text-xs">
                   <thead class="sticky top-0 bg-white dark:bg-darkLighter">
                     <tr class="text-[10px] uppercase opacity-70">
                       <th class="text-left py-2">Menu</th>
@@ -152,7 +152,7 @@ export default function MenuBuilder(Orland){
                     </tr>
                   </thead>
                   <tbody id="rows"></tbody>
-                </table>
+                </table></div><!--data-orland-table-wrap-end-->
               </div>
               <div class="text-[10px] opacity-60 mt-2">
                 Reorder (Up/Down) berlaku di dalam group parent yang sama.
