@@ -49,7 +49,7 @@ export async function sha256Base64(str){
 }
 
 /**
- * PBKDF2 limit: beberapa runtime Pages/Workers membatasi iter <= 100000
+ * PBKDF2 (cap iter <= 100000 for CF runtime)
  */
 export async function pbkdf2Hash(password, saltB64, iterations){
   const iter = Math.min(100000, Math.max(1000, Number(iterations||100000)));
@@ -71,26 +71,21 @@ export async function pbkdf2Hash(password, saltB64, iterations){
 }
 
 /**
- * Cookie builder (HOST-ONLY by default)
- * - No Domain by default (paling stabil untuk Pages + custom domain + preview)
- * - HttpOnly, Secure, SameSite=Lax
- *
- * Kalau kamu butuh share antar subdomain:
- *   cookie("sid", sid, { domain: ".orlandmanagement.com" })
+ * Cookie builder
+ * Default: HttpOnly, Secure, SameSite=Lax, Path=/
+ * NOTE: Secure cookie needs HTTPS. For localhost dev set opt.secure=false.
  */
 export function cookie(name, value, opt={}){
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opt.path || "/"}`);
 
-  // HOST-ONLY default (jangan set Domain)
+  // optional domain (recommended blank unless you really need cross-subdomain)
+  // if you want cross-subdomain: opt.domain=".orlandmanagement.com"
   if(opt.domain) parts.push(`Domain=${opt.domain}`);
 
   if(opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
   if(opt.httpOnly !== false) parts.push("HttpOnly");
-
-  // default secure true (prod). Untuk localhost bisa: secure:false
   if(opt.secure !== false) parts.push("Secure");
-
   parts.push(`SameSite=${opt.sameSite || "Lax"}`);
   return parts.join("; ");
 }
@@ -105,9 +100,19 @@ export function parseCookies(request){
   return out;
 }
 
+/**
+ * ✅ REQUIRED BY login.js build
+ * returns missing env keys
+ */
+export function requireEnv(env, keys){
+  const miss = [];
+  for(const k of (keys||[])) if(!env[k]) miss.push(k);
+  return miss;
+}
+
 export function hasRole(roles, allowed){
   const s = new Set((roles||[]).map(String));
-  return allowed.some(r=>s.has(r));
+  return (allowed||[]).some(r=>s.has(r));
 }
 
 export async function getRolesForUser(env, user_id){
@@ -149,7 +154,7 @@ export async function audit(env, { actor_user_id, action, route, http_status, me
 /**
  * Sessions (SID cookie):
  * - Cookie "sid" = sessions.id (UUID)
- * - sessions.token_hash kept for schema compatibility
+ * - token_hash kept for schema compatibility
  */
 export async function createSession(env, user_id, roles){
   const now = nowSec();
@@ -213,6 +218,5 @@ export async function requireAuth(env, request){
 
   let roles = [];
   try{ roles = JSON.parse(row.roles_json||"[]") || []; }catch{ roles = []; }
-
   return { ok:true, uid: row.user_id, roles, token: sid };
 }

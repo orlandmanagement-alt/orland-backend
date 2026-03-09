@@ -1,420 +1,411 @@
-export default function MenuBuilder(Orland){
-  const esc = (s)=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+export default function(Orland){
+  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  const fmtPath = (p)=>String(p||"/").startsWith("/")?String(p):("/"+String(p));
+  const pick = (o,k,d="")=> (o && o[k]!=null)?o[k]:d;
 
-  function toast(msg){
-    const host = document.getElementById("toast-host");
-    if(!host){ alert(msg); return; }
-    const el = document.createElement("div");
-    el.className = "bg-white/90 dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl px-3 py-2 text-xs shadow";
-    el.innerHTML = `<div class="font-bold">Menu Builder</div><div class="opacity-70 mt-1">${esc(msg)}</div>`;
-    host.appendChild(el);
-    setTimeout(()=>{ el.style.opacity="0"; }, 2200);
-    setTimeout(()=>el.remove(), 2800);
+  async function apiList(){ return await Orland.api("/api/menus"); }
+  async function apiCreate(payload){ return await Orland.api("/api/menus",{ method:"POST", body: JSON.stringify(payload) }); }
+  async function apiDel(id){ return await Orland.api("/api/menus?id="+encodeURIComponent(id),{ method:"DELETE" }); }
+
+  function sortByOrder(a,b){
+    const sa = Number(a.sort_order ?? 9999);
+    const sb = Number(b.sort_order ?? 9999);
+    if(sa!==sb) return sa-sb;
+    return String(a.created_at||0).localeCompare(String(b.created_at||0));
   }
 
-  function normPath(p){
-    p = String(p||"").trim();
-    if(!p.startsWith("/")) p = "/" + p;
-    p = p.replace(/\s+/g,"");
-    p = p.replace(/\/+$/,"");
-    return p || "/";
-  }
-
-  async function loadMenus(){
-    return await Orland.api("/api/menus");
-  }
-
-  async function createMenu(payload){
-    return await Orland.api("/api/menus", { method:"POST", body: JSON.stringify(payload) });
-  }
-
-  async function updateMenu(payload){
-    return await Orland.api("/api/menus", { method:"PUT", body: JSON.stringify({ action:"update", ...payload }) });
-  }
-
-  async function reorder(id, dir){
-    return await Orland.api("/api/menus", { method:"PUT", body: JSON.stringify({ action:"reorder", id, dir }) });
-  }
-
-  async function delMenu(id){
-    return await Orland.api("/api/menus?id="+encodeURIComponent(id), { method:"DELETE" });
-  }
-
-  function buildTree(rows){
+  function buildTree(flat){
     const byId = new Map();
-    const list = (rows||[]).map(x=>({ ...x, children:[] }));
-    for(const x of list) byId.set(x.id, x);
-
     const roots = [];
-    for(const x of list){
-      if(x.parent_id && byId.has(x.parent_id)) byId.get(x.parent_id).children.push(x);
-      else roots.push(x);
+    for(const m of flat){ byId.set(String(m.id), {...m, children:[]}); }
+    for(const m of byId.values()){
+      if(m.parent_id && byId.has(String(m.parent_id))) byId.get(String(m.parent_id)).children.push(m);
+      else roots.push(m);
     }
-
-    const sortFn=(a,b)=>{
-      const sa=Number(a.sort_order??9999), sb=Number(b.sort_order??9999);
-      if(sa!==sb) return sa-sb;
-      return Number(a.created_at??0)-Number(b.created_at??0);
-    };
-    const walk=(arr)=>{ arr.sort(sortFn); arr.forEach(n=>walk(n.children||[])); };
+    const walk = (arr)=>{ arr.sort(sortByOrder); for(const x of arr) walk(x.children); };
     walk(roots);
-    return roots;
+    return { roots, byId };
   }
 
-  function flattenTree(tree){
+  function flattenTree(roots){
     const out=[];
-    const walk=(n, depth)=>{
-      out.push({ node:n, depth });
-      (n.children||[]).forEach(ch=>walk(ch, depth+1));
+    const walk=(node, depth)=>{
+      out.push({ ...node, __depth: depth });
+      for(const c of (node.children||[])) walk(c, depth+1);
     };
-    tree.forEach(n=>walk(n,0));
+    for(const r of roots) walk(r, 0);
     return out;
   }
 
-  function optionParents(rows, currentId){
-    // prevent self-parenting; allow null
-    const opts = [`<option value="">(no parent)</option>`];
-    for(const r of (rows||[])){
-      if(String(r.id) === String(currentId)) continue;
-      opts.push(`<option value="${esc(r.id)}">${esc(r.label)} — ${esc(r.path)}</option>`);
+  function optParents(flat){
+    const opts = [{ id:"", label:"(no parent)" }];
+    for(const m of flat){
+      opts.push({ id: m.id, label: `${"— ".repeat(m.__depth)}${m.label} (${m.code})` });
     }
-    return opts.join("");
+    return opts;
+  }
+
+  function tinyBtn(html, cls){
+    return `<button type="button" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark hover:bg-slate-50 dark:hover:bg-white/5 ${cls||""}">${html}</button>`;
+  }
+
+  function modalHtml(state){
+    const parents = optParents(state.flatAll);
+    const m = state.editing || {};
+    return `
+<div class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/40 p-3">
+  <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-xl overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
+      <div>
+        <div class="text-sm font-extrabold">${state.mode==="create"?"Create Menu":"Edit Menu"}</div>
+        <div class="text-[11px] text-slate-500">ID harus unik. Path wajib diawali <code>/</code>.</div>
+      </div>
+      <button id="mbClose" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="p-4 space-y-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">ID</label>
+          <input id="f_id" ${state.mode==="edit"?"disabled":""} value="${esc(pick(m,"id",""))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder ${state.mode==="edit"?"opacity-60":""}"
+            placeholder="m_core_dashboard">
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">CODE</label>
+          <input id="f_code" value="${esc(pick(m,"code",""))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
+            placeholder="dashboard">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">LABEL</label>
+          <input id="f_label" value="${esc(pick(m,"label",""))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
+            placeholder="Dashboard">
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">PATH</label>
+          <input id="f_path" value="${esc(pick(m,"path",""))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
+            placeholder="/dashboard">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">PARENT</label>
+          <select id="f_parent" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+            ${parents.map(o=>`<option value="${esc(o.id)}" ${String(o.id)===String(pick(m,"parent_id",""))?"selected":""}>${esc(o.label)}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">SORT</label>
+          <input id="f_sort" type="number" value="${esc(String(pick(m,"sort_order",50)))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">ICON (FA)</label>
+          <input id="f_icon" value="${esc(pick(m,"icon",""))}"
+            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
+            placeholder="fa-solid fa-gauge-high">
+        </div>
+      </div>
+
+      <div id="mbErr" class="hidden text-xs text-red-500 font-semibold"></div>
+    </div>
+
+    <div class="px-4 py-3 border-t border-slate-200 dark:border-darkBorder flex items-center justify-between gap-2">
+      <button id="mbDelete" class="px-3 py-2 rounded-xl text-xs font-black border border-red-200 text-red-600 hover:bg-red-50 ${state.mode==="create"?"hidden":""}">
+        Delete
+      </button>
+      <div class="flex gap-2 ml-auto">
+        <button id="mbCancel" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
+          Cancel
+        </button>
+        <button id="mbSave" class="px-3 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-95">
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>`;
+  }
+
+  function render(host, state){
+    const rows = state.filtered;
+
+    host.innerHTML = `
+<div class="space-y-4">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <div class="text-xl font-extrabold text-slate-900 dark:text-white">Menu Builder</div>
+      <div class="text-sm text-slate-500">CRUD menus + reorder. Mobile-friendly.</div>
+    </div>
+    <div class="flex gap-2">
+      <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
+        <i class="fa-solid fa-rotate-right mr-2"></i>Reload
+      </button>
+      <button id="btnCreate" class="px-3 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-95">
+        <i class="fa-solid fa-plus mr-2"></i>Create
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-3">
+    <div class="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+      <div class="relative w-full sm:max-w-md">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+        <input id="q" value="${esc(state.q)}" placeholder="filter label/path/code..."
+          class="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+      </div>
+      <div class="text-[11px] text-slate-500">
+        Total: <span class="font-black">${rows.length}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl overflow-hidden">
+    <div class="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_160px] gap-2 px-4 py-3 text-[11px] font-extrabold text-slate-500 bg-slate-50 dark:bg-dark">
+      <div>MENU</div>
+      <div class="text-right">ACTIONS</div>
+    </div>
+
+    <div class="divide-y divide-slate-100 dark:divide-darkBorder">
+      ${rows.map(m=>{
+        const indent = Math.min(5, m.__depth||0);
+        const pad = 12 + indent*14;
+        const active = "";
+        return `
+        <div class="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_160px] gap-2 px-4 py-3 items-center">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2" style="padding-left:${pad}px">
+              <i class="${esc(m.icon||"fa-solid fa-circle-dot")} text-slate-400 w-5 text-center"></i>
+              <div class="min-w-0">
+                <div class="text-sm font-extrabold truncate">${esc(m.label||m.code||m.id)}</div>
+                <div class="text-[11px] text-slate-500 truncate">
+                  <span class="font-bold">${esc(m.code)}</span>
+                  <span class="opacity-60">•</span>
+                  <span class="opacity-80">${esc(m.id)}</span>
+                  <span class="opacity-60">•</span>
+                  <span class="opacity-80">${esc(m.path)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-1">
+            ${tinyBtn('<i class="fa-solid fa-arrow-up"></i>',"btnUp")}
+            ${tinyBtn('<i class="fa-solid fa-arrow-down"></i>',"btnDown")}
+            ${tinyBtn('<span class="font-black">Edit</span>',"btnEdit")}
+          </div>
+
+          <div class="hidden meta"
+            data-id="${esc(m.id)}"
+            data-code="${esc(m.code)}"
+            data-label="${esc(m.label)}"
+            data-path="${esc(m.path)}"
+            data-parent_id="${esc(m.parent_id||"")}"
+            data-sort_order="${esc(String(m.sort_order||50))}"
+            data-icon="${esc(m.icon||"")}"
+          ></div>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>
+
+  <div class="text-[11px] text-slate-500">
+    Reorder (Up/Down) berlaku dalam group parent yang sama.
+  </div>
+</div>
+
+${state.modalOpen ? modalHtml(state) : ""}
+`;
+
+    // bindings
+    host.querySelector("#q")?.addEventListener("input",(e)=>{
+      state.q = e.target.value || "";
+      applyFilter(state);
+      render(host,state);
+      bindRowButtons(host,state);
+    });
+
+    host.querySelector("#btnReload")?.addEventListener("click",()=>state.reload());
+    host.querySelector("#btnCreate")?.addEventListener("click",()=>openCreate(host,state));
+
+    if(state.modalOpen){
+      host.querySelector("#mbClose")?.addEventListener("click",()=>closeModal(host,state));
+      host.querySelector("#mbCancel")?.addEventListener("click",()=>closeModal(host,state));
+      host.querySelector("#mbSave")?.addEventListener("click",()=>saveModal(host,state));
+      host.querySelector("#mbDelete")?.addEventListener("click",()=>deleteModal(host,state));
+    }
+
+    bindRowButtons(host,state);
+  }
+
+  function bindRowButtons(host,state){
+    const rows = host.querySelectorAll(".divide-y > div");
+    rows.forEach(row=>{
+      const meta = row.querySelector(".meta");
+      if(!meta) return;
+      const m = {
+        id: meta.dataset.id,
+        code: meta.dataset.code,
+        label: meta.dataset.label,
+        path: meta.dataset.path,
+        parent_id: meta.dataset.parent_id || null,
+        sort_order: Number(meta.dataset.sort_order||50),
+        icon: meta.dataset.icon || null
+      };
+
+      row.querySelector(".btnEdit")?.addEventListener("click",()=>openEdit(host,state,m));
+      row.querySelector(".btnUp")?.addEventListener("click",()=>reorder(host,state,m,"up"));
+      row.querySelector(".btnDown")?.addEventListener("click",()=>reorder(host,state,m,"down"));
+    });
+  }
+
+  function applyFilter(state){
+    const q = String(state.q||"").trim().toLowerCase();
+    if(!q){
+      state.filtered = state.flatAll;
+      return;
+    }
+    state.filtered = state.flatAll.filter(m=>{
+      const hay = `${m.label} ${m.code} ${m.path} ${m.id}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  function openCreate(host,state){
+    state.mode = "create";
+    state.editing = { id:"", code:"", label:"", path:"/", parent_id:"", sort_order:50, icon:"" };
+    state.modalOpen = true;
+    render(host,state);
+  }
+
+  function openEdit(host,state,m){
+    state.mode = "edit";
+    state.editing = { ...m, parent_id: m.parent_id || "" };
+    state.modalOpen = true;
+    render(host,state);
+  }
+
+  function closeModal(host,state){
+    state.modalOpen = false;
+    state.mode = "create";
+    state.editing = null;
+    render(host,state);
+  }
+
+  function showErr(host,msg){
+    const el = host.querySelector("#mbErr");
+    if(!el) return;
+    el.classList.remove("hidden");
+    el.textContent = msg;
+  }
+
+  async function saveModal(host,state){
+    const id = String(host.querySelector("#f_id")?.value||"").trim();
+    const code = String(host.querySelector("#f_code")?.value||"").trim();
+    const label = String(host.querySelector("#f_label")?.value||"").trim();
+    const path = fmtPath(host.querySelector("#f_path")?.value||"/");
+    const parent_id = String(host.querySelector("#f_parent")?.value||"").trim() || null;
+    const sort_order = Number(host.querySelector("#f_sort")?.value||50);
+    const icon = String(host.querySelector("#f_icon")?.value||"").trim() || null;
+
+    if(!id && state.mode==="create") return showErr(host,"id_required");
+    if(!code || !label || !path) return showErr(host,"code/label/path_required");
+
+    const payload = { id, code, label, path, parent_id, sort_order, icon };
+
+    const r = await apiCreate(payload);
+    if(r.status!=="ok"){
+      return showErr(host, r.status || "server_error");
+    }
+
+    closeModal(host,state);
+    await state.reload(true);
+  }
+
+  async function deleteModal(host,state){
+    const id = String(state.editing?.id||"").trim();
+    if(!id) return;
+    if(!confirm("Delete menu: "+id+" ?")) return;
+    const r = await apiDel(id);
+    if(r.status!=="ok"){
+      return showErr(host, r.status || "server_error");
+    }
+    closeModal(host,state);
+    await state.reload(true);
+  }
+
+  async function reorder(host,state, item, dir){
+    // reorder within same parent group: swap sort_order with nearest sibling
+    const sibs = state.flatAll.filter(x=>String(x.parent_id||"")===String(item.parent_id||"")).sort(sortByOrder);
+    const idx = sibs.findIndex(x=>x.id===item.id);
+    if(idx<0) return;
+
+    const j = dir==="up" ? idx-1 : idx+1;
+    if(j<0 || j>=sibs.length) return;
+
+    const a = sibs[idx];
+    const b = sibs[j];
+
+    // swap sort_order (keep integers)
+    const sa = Number(a.sort_order||50);
+    const sb = Number(b.sort_order||50);
+
+    const ra = await apiCreate({ id:a.id, code:a.code, label:a.label, path:a.path, parent_id:a.parent_id, sort_order:sb, icon:a.icon||null });
+    if(ra.status!=="ok") return;
+
+    const rb = await apiCreate({ id:b.id, code:b.code, label:b.label, path:b.path, parent_id:b.parent_id, sort_order:sa, icon:b.icon||null });
+    if(rb.status!=="ok") return;
+
+    await state.reload(true);
   }
 
   return {
     title: "Menu Builder",
     async mount(host){
-      host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-          <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div class="text-sm font-extrabold">Menu Builder</div>
-              <div class="text-xs opacity-70 mt-1">CRUD menu sidebar (D1 table: <code>menus</code>). Tidak drop data, aman untuk legacy.</div>
-            </div>
-            <div class="flex gap-2">
-              <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900">Reload</button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-            <div class="border border-slate-200 dark:border-darkBorder rounded-2xl p-3">
-              <div class="text-xs font-bold mb-2">Create Menu</div>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="col-span-2">
-                  <label class="text-[10px] font-bold opacity-70">Label</label>
-                  <input id="f_label" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="Menu name">
-                </div>
-                <div>
-                  <label class="text-[10px] font-bold opacity-70">Code</label>
-                  <input id="f_code" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="menu_code">
-                </div>
-                <div>
-                  <label class="text-[10px] font-bold opacity-70">Path</label>
-                  <input id="f_path" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="/users/admin">
-                </div>
-                <div>
-                  <label class="text-[10px] font-bold opacity-70">Parent</label>
-                  <select id="f_parent" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"></select>
-                </div>
-                <div>
-                  <label class="text-[10px] font-bold opacity-70">Sort</label>
-                  <input id="f_sort" type="number" value="50" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-                </div>
-                <div class="col-span-2">
-                  <label class="text-[10px] font-bold opacity-70">Icon (FontAwesome class)</label>
-                  <div class="flex gap-2 items-center mt-1">
-                    <input id="f_icon" class="flex-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="fa-solid fa-sitemap">
-                    <span id="iconPreview" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-darkBorder flex items-center justify-center">
-                      <i class="fa-solid fa-circle-dot"></i>
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button id="btnCreate" class="mt-3 w-full px-3 py-2 rounded-xl text-xs font-extrabold bg-primary text-white">Create</button>
-              <div class="text-[10px] opacity-60 mt-2">
-                Tips: Path harus unik. Parent menu boleh kosong. Code disarankan unik.
-              </div>
-            </div>
-
-            <div class="border border-slate-200 dark:border-darkBorder rounded-2xl p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-xs font-bold">Menus</div>
-                <input id="q" class="px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="filter label/path...">
-              </div>
-              <div class="mt-3 overflow-auto" style="max-height:520px">
-                <div class="data-orland-table-wrap" style="overflow-x:auto; -webkit-overflow-scrolling:touch;"><table class="w-full text-xs">
-                  <thead class="sticky top-0 bg-white dark:bg-darkLighter">
-                    <tr class="text-[10px] uppercase opacity-70">
-                      <th class="text-left py-2">Menu</th>
-                      <th class="text-left py-2">Path</th>
-                      <th class="text-right py-2">Sort</th>
-                      <th class="text-right py-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="rows"></tbody>
-                </table></div><!--data-orland-table-wrap-end-->
-              </div>
-              <div class="text-[10px] opacity-60 mt-2">
-                Reorder (Up/Down) berlaku di dalam group parent yang sama.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Edit Modal -->
-        <div id="modal" class="fixed inset-0 z-[200] hidden">
-          <div class="absolute inset-0 bg-black/60"></div>
-          <div class="relative mx-auto mt-16 w-[94%] max-w-xl bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <div class="text-sm font-extrabold">Edit Menu</div>
-                <div class="text-xs opacity-70 mt-1" id="m_hint">—</div>
-              </div>
-              <button id="m_close" class="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-darkBorder">Close</button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 mt-3">
-              <div class="col-span-2">
-                <label class="text-[10px] font-bold opacity-70">Label</label>
-                <input id="m_label" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-              </div>
-              <div>
-                <label class="text-[10px] font-bold opacity-70">Code</label>
-                <input id="m_code" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-              </div>
-              <div>
-                <label class="text-[10px] font-bold opacity-70">Path</label>
-                <input id="m_path" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-              </div>
-              <div>
-                <label class="text-[10px] font-bold opacity-70">Parent</label>
-                <select id="m_parent" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"></select>
-              </div>
-              <div>
-                <label class="text-[10px] font-bold opacity-70">Sort</label>
-                <input id="m_sort" type="number" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-              </div>
-              <div class="col-span-2">
-                <label class="text-[10px] font-bold opacity-70">Icon</label>
-                <input id="m_icon" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-              </div>
-            </div>
-
-            <div class="flex gap-2 mt-4">
-              <button id="m_save" class="flex-1 px-3 py-2 rounded-xl text-xs font-extrabold bg-primary text-white">Save</button>
-              <button id="m_delete" class="px-3 py-2 rounded-xl text-xs font-extrabold bg-danger text-white">Delete</button>
-            </div>
-
-            <div class="text-[10px] opacity-60 mt-2">
-              Delete akan ditolak jika menu masih punya children.
-            </div>
-          </div>
-        </div>
-      `;
-
-      const $ = (id)=>host.querySelector(id);
-      const rowsEl = $("#rows");
-      const modal = $("#modal");
-
-      let allMenus = [];
-      let flat = [];
-      let editId = null;
-
-      function renderParents(){
-        $("#f_parent").innerHTML = optionParents(allMenus, null);
-      }
-
-      function renderIconPreview(){
-        const ic = ($("#f_icon").value||"").trim() || "fa-solid fa-circle-dot";
-        $("#iconPreview").innerHTML = `<i class="${esc(ic)}"></i>`;
-      }
-
-      function applyFilter(){
-        const q = ($("#q").value||"").trim().toLowerCase();
-        if(!q) return flat;
-        return flat.filter(x=>{
-          const n = (x.node.label||"").toLowerCase();
-          const p = (x.node.path||"").toLowerCase();
-          const c = (x.node.code||"").toLowerCase();
-          return n.includes(q) || p.includes(q) || c.includes(q);
-        });
-      }
-
-      function pad(depth){
-        return 12 + depth*14;
-      }
-
-      function renderTable(){
-        const list = applyFilter();
-        rowsEl.innerHTML = list.map(({node, depth})=>{
-          const icon = node.icon || "fa-solid fa-circle-dot";
-          return `
-            <tr class="border-t border-slate-100 dark:border-darkBorder hover:bg-slate-50/60 dark:hover:bg-white/5">
-              <td class="py-2">
-                <div style="padding-left:${pad(depth)}px" class="flex items-center gap-2">
-                  <i class="${esc(icon)} w-5 text-center"></i>
-                  <div class="min-w-0">
-                    <div class="font-bold truncate">${esc(node.label)}</div>
-                    <div class="text-[10px] opacity-60 truncate">${esc(node.code)} • ${esc(node.id)}</div>
-                  </div>
-                </div>
-              </td>
-              <td class="py-2">
-                <div class="font-mono text-[11px] opacity-80">${esc(node.path)}</div>
-              </td>
-              <td class="py-2 text-right">
-                <span class="px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder text-[10px]">${esc(node.sort_order ?? 50)}</span>
-              </td>
-              <td class="py-2 text-right">
-                <button data-act="up" data-id="${esc(node.id)}" class="px-2 py-1 rounded-lg text-[10px] border border-slate-200 dark:border-darkBorder hover:bg-slate-100 dark:hover:bg-white/5">↑</button>
-                <button data-act="down" data-id="${esc(node.id)}" class="px-2 py-1 rounded-lg text-[10px] border border-slate-200 dark:border-darkBorder hover:bg-slate-100 dark:hover:bg-white/5">↓</button>
-                <button data-act="edit" data-id="${esc(node.id)}" class="px-2 py-1 rounded-lg text-[10px] bg-slate-900 text-white dark:bg-white dark:text-slate-900">Edit</button>
-              </td>
-            </tr>
-          `;
-        }).join("");
-
-        rowsEl.querySelectorAll("button[data-act]").forEach(btn=>{
-          btn.addEventListener("click", async ()=>{
-            const act = btn.getAttribute("data-act");
-            const id = btn.getAttribute("data-id");
-
-            if(act==="up" || act==="down"){
-              const r = await reorder(id, act);
-              if(r.status!=="ok") return toast("Reorder failed: "+r.status);
-              await refresh();
-              return;
-            }
-
-            if(act==="edit"){
-              openEdit(id);
-            }
-          });
-        });
-      }
-
-      function openEdit(id){
-        const m = allMenus.find(x=>String(x.id)===String(id));
-        if(!m) return;
-
-        editId = id;
-        $("#m_hint").textContent = m.path || "/";
-        $("#m_label").value = m.label || "";
-        $("#m_code").value = m.code || "";
-        $("#m_path").value = m.path || "";
-        $("#m_sort").value = Number(m.sort_order ?? 50);
-        $("#m_icon").value = m.icon || "";
-        $("#m_parent").innerHTML = optionParents(allMenus, id);
-
-        // set selected
-        const pid = m.parent_id ? String(m.parent_id) : "";
-        $("#m_parent").value = pid;
-
-        modal.classList.remove("hidden");
-      }
-
-      function closeEdit(){
-        modal.classList.add("hidden");
-        editId = null;
-      }
-
-      async function refresh(){
-        const r = await loadMenus();
-        if(r.status!=="ok"){
-          rowsEl.innerHTML = `<tr><td class="py-3 text-red-400 text-xs" colspan="4">Failed: ${esc(r.status)}</td></tr>`;
-          return;
+      const state = {
+        q:"",
+        modalOpen:false,
+        mode:"create",
+        editing:null,
+        flatAll:[],
+        filtered:[],
+        async reload(keepQuery){
+          const r = await apiList();
+          if(r.status!=="ok"){
+            host.innerHTML = `<div class="text-red-500 font-bold">Failed: ${esc(r.status||"server_error")}</div>`;
+            return;
+          }
+          const flat = (r.data?.flat || r.data?.menus || r.data || []);
+          // API /api/menus di project kamu biasanya return {menus:[...]} atau {flat:[...]}
+          // fallback: kalau ada field "menus"
+          const raw = Array.isArray(flat) ? flat : (Array.isArray(r.data?.menus)?r.data.menus:[]);
+          const { roots } = buildTree(raw.map(x=>({
+            id:String(x.id),
+            code:String(x.code),
+            label:String(x.label),
+            path:String(x.path),
+            parent_id: x.parent_id ? String(x.parent_id) : null,
+            sort_order: Number(x.sort_order ?? 50),
+            icon: x.icon ? String(x.icon) : null,
+            created_at: Number(x.created_at ?? 0)
+          })));
+          state.flatAll = flattenTree(roots);
+          if(!keepQuery) state.q = "";
+          applyFilter(state);
+          render(host,state);
         }
-        allMenus = r.data.menus || [];
-        const tree = buildTree(allMenus);
-        flat = flattenTree(tree);
-
-        renderParents();
-        renderTable();
-      }
-
-      // events
-      $("#btnReload").onclick = refresh;
-      $("#q").addEventListener("input", renderTable);
-
-      $("#f_icon").addEventListener("input", renderIconPreview);
-      renderIconPreview();
-
-      $("#btnCreate").onclick = async ()=>{
-        const label = ($("#f_label").value||"").trim();
-        const code = ($("#f_code").value||"").trim();
-        const path = normPath($("#f_path").value||"");
-        const parent_id = ($("#f_parent").value||"").trim() || null;
-        const sort_order = Number($("#f_sort").value||50);
-        const icon = ($("#f_icon").value||"").trim() || null;
-
-        if(label.length<2) return toast("Label minimal 2 karakter");
-        if(code.length<2) return toast("Code minimal 2 karakter");
-        if(!path.startsWith("/")) return toast("Path harus diawali /");
-
-        const r = await createMenu({ label, code, path, parent_id, sort_order, icon });
-        if(r.status!=="ok") return toast("Create failed: "+r.status+(r.data?.message?(" ("+r.data.message+")"):""));
-        toast("Created");
-        $("#f_label").value=""; $("#f_code").value=""; $("#f_path").value=""; $("#f_parent").value=""; $("#f_sort").value=50; $("#f_icon").value="";
-        renderIconPreview();
-        await refresh();
-
-        // refresh nav in memory
-        try{
-          const nav = await Orland.api("/api/nav");
-          if(nav.status==="ok"){ Orland.state.nav = nav.data; Orland.renderNav(Orland.state.path||"/dashboard"); }
-        }catch{}
       };
 
-      $("#m_close").onclick = closeEdit;
-
-      $("#m_save").onclick = async ()=>{
-        if(!editId) return;
-        const payload = {
-          id: editId,
-          label: ($("#m_label").value||"").trim(),
-          code: ($("#m_code").value||"").trim(),
-          path: normPath($("#m_path").value||""),
-          parent_id: ($("#m_parent").value||"").trim(),
-          sort_order: Number($("#m_sort").value||50),
-          icon: ($("#m_icon").value||"").trim()
-        };
-        if(!payload.label) return toast("Label required");
-        if(!payload.code) return toast("Code required");
-        if(!payload.path.startsWith("/")) return toast("Path invalid");
-
-        if(payload.parent_id==="") payload.parent_id = null;
-        if(payload.icon==="") payload.icon = null;
-
-        const r = await updateMenu(payload);
-        if(r.status!=="ok") return toast("Save failed: "+r.status+(r.data?.message?(" ("+r.data.message+")"):""));
-        toast("Saved");
-        closeEdit();
-        await refresh();
-
-        try{
-          const nav = await Orland.api("/api/nav");
-          if(nav.status==="ok"){ Orland.state.nav = nav.data; Orland.renderNav(Orland.state.path||"/dashboard"); }
-        }catch{}
-      };
-
-      $("#m_delete").onclick = async ()=>{
-        if(!editId) return;
-        if(!confirm("Delete menu ini? (Jika punya children akan ditolak)")) return;
-
-        const r = await delMenu(editId);
-        if(r.status!=="ok") return toast("Delete failed: "+r.status+(r.data?.message?(" ("+r.data.message+")"):""));
-        toast("Deleted");
-        closeEdit();
-        await refresh();
-
-        try{
-          const nav = await Orland.api("/api/nav");
-          if(nav.status==="ok"){ Orland.state.nav = nav.data; Orland.renderNav(Orland.state.path||"/dashboard"); }
-        }catch{}
-      };
-
-      // initial
-      await refresh();
+      await state.reload(false);
     }
   };
 }

@@ -1,112 +1,109 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-
-  function toast(msg, type="info"){
-    const host = document.getElementById("toast-host");
-    if(!host){ alert(msg); return; }
-    const div = document.createElement("div");
-    div.className = "fixed right-4 top-4 z-[300] rounded-xl px-4 py-3 text-xs shadow-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter";
-    div.innerHTML = `<div class="font-bold">${esc(type.toUpperCase())}</div><div class="text-slate-500 mt-1">${esc(msg)}</div>`;
-    host.appendChild(div);
-    setTimeout(()=>div.remove(), 2800);
-  }
-
-  async function loadBundle(){
-    return await Orland.api("/api/rbac/bundle");
+  const esc = (s)=>String(s??"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  async function bundle(){ return await Orland.api("/api/rbac/bundle"); }
+  async function save(role_id, menu_ids){
+    return await Orland.api("/api/role-menus/set", { method:"POST", body: JSON.stringify({ role_id, menu_ids }) });
   }
 
   return {
     title: "RBAC Manager",
     async mount(host){
       host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-5">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div class="text-base font-bold">RBAC Manager</div>
-              <div class="text-xs text-slate-500 mt-1">Assign menus ke role (role_menus).</div>
-            </div>
-            <div class="flex gap-2 flex-wrap">
-              <button id="btnSave" class="px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90">
-                <i class="fa-solid fa-floppy-disk mr-2"></i>Save
-              </button>
-              <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-                <i class="fa-solid fa-rotate mr-2"></i>Reload
-              </button>
-            </div>
+        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
+          <div class="text-lg font-black">RBAC Manager</div>
+          <div class="text-xs text-slate-500 mt-1">Assign menus ke role (role_menus).</div>
+
+          <div class="mt-4 flex gap-2">
+            <button id="btnSave" class="px-4 py-2 rounded-xl bg-primary text-white text-xs font-black">Save</button>
+            <button id="btnReload" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reload</button>
           </div>
 
-          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div class="md:col-span-1">
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Role</div>
-              <select id="roleSelect" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs"></select>
-            </div>
-            <div class="md:col-span-2">
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Info</div>
-              <div class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs text-slate-500">
-                Checklist menu → Save untuk set menu_ids.
-              </div>
-            </div>
+          <div class="mt-4">
+            <div class="text-[11px] font-black text-slate-500 mb-2">ROLE</div>
+            <select id="roleSel" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-xs"></select>
           </div>
 
-          <div class="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3" id="checks"></div>
+          <div class="mt-4">
+            <div class="text-[11px] font-black text-slate-500 mb-2">MENUS</div>
+            <div id="menuList" class="space-y-2"></div>
+          </div>
+
+          <div class="mt-4 text-xs text-red-500" id="msg"></div>
         </div>
       `;
 
-      const sel = host.querySelector("#roleSelect");
-      const checks = host.querySelector("#checks");
+      const roleSel = host.querySelector("#roleSel");
+      const menuList = host.querySelector("#menuList");
+      const msg = host.querySelector("#msg");
 
-      let roles = [];
-      let menus = [];
-      let role_menus = [];
-
-      function renderChecks(){
-        const rid = sel.value;
-        const set = new Set(role_menus.filter(x=>String(x.role_id)===String(rid)).map(x=>String(x.menu_id)));
-        checks.innerHTML = (menus||[]).map(m=>{
-          const checked = set.has(String(m.id)) ? "checked" : "";
-          const icon = m.icon ? `<i class="${esc(m.icon)} mr-2"></i>` : `<i class="fa-solid fa-circle-dot mr-2 opacity-60"></i>`;
-          return `
-            <label class="rounded-xl border border-slate-200 dark:border-darkBorder p-3 flex gap-3 items-start hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">
-              <input type="checkbox" class="mt-1" data-mid="${esc(m.id)}" ${checked}>
-              <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-900 dark:text-white">${icon}${esc(m.label||m.code||"menu")}</div>
-                <div class="text-[10px] text-slate-500 mt-1"><code>${esc(m.path||"")}</code> • <code>${esc(m.code||"")}</code></div>
-              </div>
-            </label>
-          `;
-        }).join("");
-      }
+      let data = null;
+      let picked = new Set();
 
       async function load(){
-        checks.innerHTML = `<div class="text-slate-500 text-xs">Loading…</div>`;
-        const r = await loadBundle();
-        if(r.status !== "ok"){
-          checks.innerHTML = `<div class="text-red-400 text-xs">Failed: ${esc(r.status)}</div>`;
+        msg.textContent = "";
+        menuList.innerHTML = "Loading…";
+        const r = await bundle();
+        if(r.status!=="ok"){
+          msg.textContent = "Failed: " + r.status;
+          menuList.innerHTML = `<pre class="text-[11px] whitespace-pre-wrap">${esc(JSON.stringify(r.data||{},null,2))}</pre>`;
           return;
         }
-        roles = r.data?.roles || [];
-        menus = r.data?.menus || [];
-        role_menus = r.data?.role_menus || [];
+        data = r.data;
+        const roles = data.roles||[];
+        const menus = data.menus||[];
+        const rm = data.role_menus||[];
 
-        sel.innerHTML = roles.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
-        renderChecks();
+        roleSel.innerHTML = roles.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
+        const currentRole = roleSel.value;
+
+        function selectedMenuIdsFor(role_id){
+          return new Set(rm.filter(x=>String(x.role_id)===String(role_id)).map(x=>String(x.menu_id)));
+        }
+
+        function renderMenus(role_id){
+          picked = selectedMenuIdsFor(role_id);
+          menuList.innerHTML = menus.map(m=>{
+            const on = picked.has(String(m.id));
+            return `
+              <label class="flex items-center gap-3 p-2 rounded-xl border border-slate-200 dark:border-darkBorder">
+                <input type="checkbox" data-mid="${esc(m.id)}" ${on?"checked":""} />
+                <div class="min-w-0">
+                  <div class="text-xs font-black truncate">${esc(m.label||m.code||m.id)}</div>
+                  <div class="text-[11px] text-slate-500 truncate">${esc(m.path||"/")}</div>
+                </div>
+              </label>
+            `;
+          }).join("");
+
+          menuList.querySelectorAll("input[type=checkbox]").forEach(ch=>{
+            ch.onchange = ()=>{
+              const mid = ch.getAttribute("data-mid");
+              if(ch.checked) picked.add(mid);
+              else picked.delete(mid);
+            };
+          });
+        }
+
+        roleSel.onchange = ()=> renderMenus(roleSel.value);
+        renderMenus(currentRole);
       }
 
-      sel.addEventListener("change", renderChecks);
+      host.querySelector("#btnReload").onclick = load;
 
-      host.querySelector("#btnReload")?.addEventListener("click", load);
-
-      host.querySelector("#btnSave")?.addEventListener("click", async ()=>{
-        const rid = sel.value;
-        const menu_ids = Array.from(checks.querySelectorAll("input[type=checkbox]"))
-          .filter(cb=>cb.checked)
-          .map(cb=>cb.getAttribute("data-mid"))
-          .filter(Boolean);
-
-        const rr = await Orland.api("/api/role-menus/set", { method:"POST", body: JSON.stringify({ role_id: rid, menu_ids }) });
-        toast(rr.status, rr.status==="ok"?"success":"error");
-        if(rr.status==="ok") await load();
-      });
+      host.querySelector("#btnSave").onclick = async ()=>{
+        msg.textContent = "";
+        const role_id = roleSel.value;
+        const menu_ids = Array.from(picked);
+        const r = await save(role_id, menu_ids);
+        if(r.status!=="ok"){
+          msg.textContent = "Failed: " + r.status;
+          return;
+        }
+        msg.style.color = "#10b981";
+        msg.textContent = "Saved.";
+        setTimeout(()=>{ msg.textContent=""; msg.style.color=""; }, 1200);
+        await load();
+      };
 
       await load();
     }

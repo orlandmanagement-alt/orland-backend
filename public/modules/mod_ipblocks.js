@@ -1,98 +1,185 @@
 export default function(Orland){
-  const esc=(s)=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-  function toast(msg,type="info"){
-    const host=document.getElementById("toast-host");
-    if(!host){alert(msg);return;}
-    const d=document.createElement("div");
-    d.className="fixed right-4 top-4 z-[300] rounded-xl px-4 py-3 text-xs shadow-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter";
-    d.innerHTML=`<div class="font-bold">${esc(type.toUpperCase())}</div><div class="text-slate-500 mt-1">${esc(msg)}</div>`;
-    host.appendChild(d); setTimeout(()=>d.remove(),2800);
-  }
+  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  const nfmt = (n)=> {
+    try{ return new Intl.DateTimeFormat("id-ID",{ dateStyle:"short", timeStyle:"short" }).format(new Date(Number(n||0)*1000)); }
+    catch{ return String(n||""); }
+  };
 
-  async function list(){ return await Orland.api("/api/ip-blocks?active=1&limit=100"); }
-  async function unblock(id){ return await Orland.api("/api/ip-blocks/unblock",{method:"POST",body:JSON.stringify({id})}); }
-  async function block(ip_hash, ttl_sec, reason){
-    return await Orland.api("/api/ip-blocks/block",{method:"POST",body:JSON.stringify({ip_hash,ttl_sec,reason})});
+  async function list(active=1){
+    return await Orland.api("/api/ip-blocks?active="+encodeURIComponent(active)+"&limit=100");
   }
-  async function purge(){ return await Orland.api("/api/ip-blocks/purge",{method:"POST",body:"{}"}); }
+  async function block(ip, ttl_sec, reason){
+    return await Orland.api("/api/ip-blocks",{
+      method:"POST",
+      body: JSON.stringify({ action:"block", ip, ttl_sec, reason })
+    });
+  }
+  async function unblock(id){
+    return await Orland.api("/api/ip-blocks",{
+      method:"POST",
+      body: JSON.stringify({ action:"unblock", id })
+    });
+  }
+  async function purge(){
+    return await Orland.api("/api/ip-blocks",{
+      method:"POST",
+      body: JSON.stringify({ action:"purge" })
+    });
+  }
 
   return {
     title:"Banned / IP Blocks",
     async mount(host){
-      host.innerHTML=`
-      <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div class="text-base font-bold">Banned / IP Blocks</div>
-            <div class="text-xs text-slate-500 mt-1">Unblock / manual block (by ip_hash).</div>
+      host.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-xl font-extrabold text-slate-900 dark:text-white">Banned / IP Blocks</div>
+              <div class="text-sm text-slate-500">Block manual, unblock, dan purge expired IP hashes.</div>
+            </div>
+            <div class="flex gap-2">
+              <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
+                Reload
+              </button>
+              <button id="btnPurge" class="px-3 py-2 rounded-xl text-xs font-black border border-amber-200 text-amber-700 hover:bg-amber-50">
+                Purge
+              </button>
+            </div>
           </div>
-          <div class="flex gap-2 flex-wrap">
-            <button id="btnBlock" class="px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90">
-              <i class="fa-solid fa-ban mr-2"></i>Block
-            </button>
-            <button id="btnPurge" class="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-              <i class="fa-solid fa-broom mr-2"></i>Purge Expired
-            </button>
-            <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-              <i class="fa-solid fa-rotate mr-2"></i>Reload
-            </button>
+
+          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div class="md:col-span-2">
+                <label class="text-[11px] font-bold text-slate-500">IP Address</label>
+                <input id="f_ip" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="203.0.113.10">
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-slate-500">TTL (sec)</label>
+                <input id="f_ttl" type="number" value="86400" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-slate-500">Reason</label>
+                <input id="f_reason" value="manual_block" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+              </div>
+            </div>
+            <div class="mt-3 flex justify-end">
+              <button id="btnBlock" class="px-4 py-2 rounded-xl text-xs font-black bg-danger text-white hover:opacity-95">
+                Block IP
+              </button>
+            </div>
+            <div id="msg" class="mt-2 text-xs"></div>
+          </div>
+
+          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
+              <div class="text-sm font-extrabold">Active blocks</div>
+              <button id="btnShowAll" class="text-xs font-black text-primary">Toggle active/all</button>
+            </div>
+            <div id="listBox" class="divide-y divide-slate-100 dark:divide-darkBorder"></div>
           </div>
         </div>
+      `;
 
-        <div class="mt-4 overflow-x-auto">
-          <table class="w-full text-left text-xs whitespace-nowrap">
-            <thead class="text-slate-500 border-b border-slate-200 dark:border-darkBorder">
-              <tr><th class="py-3 pr-3">Reason</th><th class="py-3 pr-3">Expires</th><th class="py-3 pr-3">ip_hash</th><th class="py-3 text-right">Action</th></tr>
-            </thead>
-            <tbody id="tb" class="divide-y divide-slate-100 dark:divide-darkBorder"></tbody>
-          </table>
-        </div>
-      </div>`;
+      const msg = host.querySelector("#msg");
+      const listBox = host.querySelector("#listBox");
+      let activeOnly = 1;
 
-      const tb=host.querySelector("#tb");
+      async function reload(){
+        msg.textContent = "";
+        const r = await list(activeOnly);
+        if(r.status!=="ok"){
+          listBox.innerHTML = `<div class="p-4 text-red-500 text-sm font-bold">Failed: ${esc(r.status)}</div>`;
+          return;
+        }
+        const items = r.data?.items || [];
+        if(!items.length){
+          listBox.innerHTML = `<div class="p-4 text-xs text-slate-500">No data.</div>`;
+          return;
+        }
 
-      async function render(){
-        tb.innerHTML=`<tr><td class="py-4 text-slate-500" colspan="4">Loading…</td></tr>`;
-        const r=await list();
-        if(r.status!=="ok"){ tb.innerHTML=`<tr><td class="py-4 text-red-400" colspan="4">Failed: ${esc(r.status)}</td></tr>`; return; }
-        const rows=r.data?.blocks||[];
-        if(!rows.length){ tb.innerHTML=`<tr><td class="py-4 text-slate-500" colspan="4">No active blocks</td></tr>`; return; }
-        tb.innerHTML=rows.map(b=>`
-          <tr>
-            <td class="py-3 pr-3">${esc(b.reason||"")}</td>
-            <td class="py-3 pr-3 text-slate-500">${esc(String(b.expires_at||""))}</td>
-            <td class="py-3 pr-3"><code>${esc(b.ip_hash||"")}</code></td>
-            <td class="py-3 text-right"><button class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5" data-id="${esc(b.id)}">Unblock</button></td>
-          </tr>
+        listBox.innerHTML = items.map(x=>`
+          <div class="p-4 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-extrabold truncate">${esc(x.reason || "—")}</div>
+              <div class="text-[11px] text-slate-500 break-all mt-1">hash: ${esc(x.ip_hash)}</div>
+              <div class="text-[11px] text-slate-500 mt-1">
+                created: ${esc(nfmt(x.created_at))}
+                ${x.expires_at ? ` • expires: ${esc(nfmt(x.expires_at))}` : ``}
+                ${x.revoked_at ? ` • revoked: ${esc(nfmt(x.revoked_at))}` : ``}
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              ${x.revoked_at ? `` : `
+              <button class="btnUnblock px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5" data-id="${esc(x.id)}">
+                Unblock
+              </button>`}
+            </div>
+          </div>
         `).join("");
 
-        tb.querySelectorAll("button[data-id]").forEach(btn=>{
-          btn.onclick=async ()=>{
-            const id=btn.getAttribute("data-id");
-            const rr=await unblock(id);
-            toast(rr.status, rr.status==="ok"?"success":"error");
-            if(rr.status==="ok") render();
-          };
+        listBox.querySelectorAll(".btnUnblock").forEach(btn=>{
+          btn.addEventListener("click", async ()=>{
+            const id = btn.getAttribute("data-id");
+            if(!id) return;
+            if(!confirm("Unblock this entry?")) return;
+            const rr = await unblock(id);
+            if(rr.status!=="ok"){
+              msg.className = "mt-2 text-xs text-red-500";
+              msg.textContent = "Failed: " + rr.status;
+              return;
+            }
+            msg.className = "mt-2 text-xs text-emerald-600";
+            msg.textContent = "Unblocked.";
+            await reload();
+          });
         });
       }
 
-      host.querySelector("#btnReload").onclick=render;
-      host.querySelector("#btnPurge").onclick=async ()=>{
-        const rr=await purge();
-        toast(rr.status==="ok" ? ("Purged "+String(rr.data?.revoked||0)) : rr.status, rr.status==="ok"?"success":"error");
-        render();
-      };
-      host.querySelector("#btnBlock").onclick=async ()=>{
-        const ip_hash=prompt("ip_hash:", "");
-        if(!ip_hash) return;
-        const ttl_sec=Number(prompt("ttl_sec:", "3600")||"3600");
-        const reason=prompt("reason:", "manual_block")||"manual_block";
-        const rr=await block(ip_hash, ttl_sec, reason);
-        toast(rr.status, rr.status==="ok"?"success":"error");
-        if(rr.status==="ok") render();
-      };
+      host.querySelector("#btnReload")?.addEventListener("click", reload);
 
-      await render();
+      host.querySelector("#btnShowAll")?.addEventListener("click", async ()=>{
+        activeOnly = activeOnly ? 0 : 1;
+        await reload();
+      });
+
+      host.querySelector("#btnPurge")?.addEventListener("click", async ()=>{
+        if(!confirm("Purge expired/revoked entries?")) return;
+        const r = await purge();
+        if(r.status!=="ok"){
+          msg.className = "mt-2 text-xs text-red-500";
+          msg.textContent = "Failed: " + r.status;
+          return;
+        }
+        msg.className = "mt-2 text-xs text-emerald-600";
+        msg.textContent = "Purged.";
+        await reload();
+      });
+
+      host.querySelector("#btnBlock")?.addEventListener("click", async ()=>{
+        const ip = host.querySelector("#f_ip")?.value || "";
+        const ttl = Number(host.querySelector("#f_ttl")?.value || 86400);
+        const reason = host.querySelector("#f_reason")?.value || "manual_block";
+
+        if(!ip.trim()){
+          msg.className = "mt-2 text-xs text-red-500";
+          msg.textContent = "IP required.";
+          return;
+        }
+
+        const r = await block(ip.trim(), ttl, reason.trim());
+        if(r.status!=="ok"){
+          msg.className = "mt-2 text-xs text-red-500";
+          msg.textContent = "Failed: " + r.status;
+          return;
+        }
+
+        msg.className = "mt-2 text-xs text-emerald-600";
+        msg.textContent = "Blocked.";
+        host.querySelector("#f_ip").value = "";
+        await reload();
+      });
+
+      await reload();
     }
   };
 }
