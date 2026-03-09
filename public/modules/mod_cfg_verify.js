@@ -1,1 +1,2 @@
-export { default } from "./mod_profile_security.js";
+import mod from "./mod_cfg_verify.js";
+export default mod;

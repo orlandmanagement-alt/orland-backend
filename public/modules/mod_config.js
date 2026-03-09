@@ -1,15 +1,18 @@
-export default function ConfigHub(Orland){
+export default function(Orland){
   return {
     title: "Configuration",
     async mount(host){
-      const nav = Orland.state?.nav?.menus || {};
-      const cfg = nav.config || [];
-      const root = cfg.find(x => (x.path||"") === "/config");
-      const children = root?.submenus || [];
-      const first = children[0]?.path || "/config/plugins";
-
       host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
+        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
+          <div class="text-sm font-bold">Configuration</div>
+          <div class="text-xs opacity-70 mt-1">Redirecting to Plugins...</div>
+        </div>
+      `;
+      setTimeout(()=> Orland.navigate("/config/plugins", true), 50);
+    }
+  };
+}
+ rounded-2xl p-4">
           <div class="text-lg font-extrabold">Configuration</div>
           <div class="text-xs opacity-70 mt-1">Plugins, OTP, Verification, Security Policy, Bulk Tools.</div>
 

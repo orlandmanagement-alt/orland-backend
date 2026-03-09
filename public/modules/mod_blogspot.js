@@ -1,15 +1,18 @@
-export default function BlogspotHub(Orland){
+export default function(Orland){
   return {
     title: "Blogspot CMS",
     async mount(host){
-      const nav = Orland.state?.nav?.menus || {};
-      const integ = nav.integrations || [];
-      const root = integ.find(x => (x.path||"") === "/integrations/blogspot");
-      const children = root?.submenus || [];
-      const first = children[0]?.path || "/integrations/blogspot/settings";
-
       host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
+        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
+          <div class="text-sm font-bold">Blogspot CMS</div>
+          <div class="text-xs opacity-70 mt-1">Redirecting to Blogspot Settings...</div>
+        </div>
+      `;
+      setTimeout(()=> Orland.navigate("/integrations/blogspot/settings", true), 50);
+    }
+  };
+}
+:border-darkBorder rounded-2xl p-4">
           <div class="text-lg font-extrabold">Blogspot CMS</div>
           <div class="text-xs opacity-70 mt-1">Settings, Posts, Pages, Widgets.</div>
 

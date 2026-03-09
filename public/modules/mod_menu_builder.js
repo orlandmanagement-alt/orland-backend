@@ -1,1 +1,2 @@
-export { default } from "./mod_menus.js";
+import mod from "./mod_menus.js";
+export default mod;

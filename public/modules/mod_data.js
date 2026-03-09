@@ -1,15 +1,18 @@
-export default function DataHub(Orland){
+export default function(Orland){
   return {
     title: "Data Management",
     async mount(host){
-      const nav = Orland.state?.nav?.menus || {};
-      const sys = nav.system || [];
-      const data = sys.find(x => (x.path||"") === "/data");
-      const children = data?.submenus || [];
-      const first = children[0]?.path || "/data/export";
-
       host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
+        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
+          <div class="text-sm font-bold">Data Management</div>
+          <div class="text-xs opacity-70 mt-1">Redirecting to Export Data...</div>
+        </div>
+      `;
+      setTimeout(()=> Orland.navigate("/data/export", true), 50);
+    }
+  };
+}
+xl p-4">
           <div class="text-lg font-extrabold">Data Management</div>
           <div class="text-xs opacity-70 mt-1">Export & Import.</div>
 

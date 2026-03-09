@@ -1,1 +1,2 @@
-export { default } from "./mod_rbac.js";
+import mod from "./mod_rbac.js";
+export default mod;

@@ -1,16 +1,18 @@
-export default function OpsHub(Orland){
+export default function(Orland){
   return {
     title: "OPS Management",
     async mount(host){
-      const nav = Orland.state?.nav?.menus || {};
-      const sys = nav.system || [];
-      const ops = sys.find(x => (x.path||"") === "/ops");
-      const children = ops?.submenus || [];
-      const first = children[0]?.path || "/ops/incidents";
-
       host.innerHTML = `
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-          <div class="text-lg font-extrabold">OPS Management</div>
+        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-4">
+          <div class="text-sm font-bold">OPS Management</div>
+          <div class="text-xs opacity-70 mt-1">Redirecting to Incidents & Alerts...</div>
+        </div>
+      `;
+      setTimeout(()=> Orland.navigate("/ops/incidents", true), 50);
+    }
+  };
+}
+         <div class="text-lg font-extrabold">OPS Management</div>
           <div class="text-xs opacity-70 mt-1">Incidents, On-Call, Maintenance.</div>
 
           <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="cards"></div>
