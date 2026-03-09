@@ -48,6 +48,9 @@ export async function sha256Base64(str){
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
+/**
+ * PBKDF2 (cap iter <= 100000 for CF runtime)
+ */
 export async function pbkdf2Hash(password, saltB64, iterations){
   const iter = Math.min(100000, Math.max(1000, Number(iterations||100000)));
   const salt = Uint8Array.from(atob(String(saltB64)), c => c.charCodeAt(0));
@@ -69,15 +72,16 @@ export async function pbkdf2Hash(password, saltB64, iterations){
 
 /**
  * Cookie builder
- * Default: HttpOnly + Secure + SameSite=Lax
+ * Default: HttpOnly, Secure, SameSite=Lax, Path=/
+ * NOTE: Secure cookie needs HTTPS. For localhost dev set opt.secure=false.
  */
 export function cookie(name, value, opt={}){
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opt.path || "/"}`);
 
-  // default share across subdomains (ubah bila perlu)
-  const domain = (opt.domain !== undefined) ? opt.domain : ".orlandmanagement.com";
-  if(domain) parts.push(`Domain=${domain}`);
+  // optional domain (recommended blank unless you really need cross-subdomain)
+  // if you want cross-subdomain: opt.domain=".orlandmanagement.com"
+  if(opt.domain) parts.push(`Domain=${opt.domain}`);
 
   if(opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
   if(opt.httpOnly !== false) parts.push("HttpOnly");
@@ -97,7 +101,8 @@ export function parseCookies(request){
 }
 
 /**
- * REQUIRED BY login.js (fix build):
+ * ✅ REQUIRED BY login.js build
+ * returns missing env keys
  */
 export function requireEnv(env, keys){
   const miss = [];
@@ -132,10 +137,25 @@ export async function audit(env, { actor_user_id, action, route, http_status, me
     await env.DB.prepare(`
       INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, meta_json, created_at)
       VALUES (?,?,?,?,?,?,?)
-    `).bind(id, actor_user_id||null, String(action||"event"), "http", route||null, meta_json, created_at).run();
-  }catch{}
+    `).bind(
+      id,
+      actor_user_id||null,
+      String(action||"event"),
+      "http",
+      route||null,
+      meta_json,
+      created_at
+    ).run();
+  }catch{
+    // never block
+  }
 }
 
+/**
+ * Sessions (SID cookie):
+ * - Cookie "sid" = sessions.id (UUID)
+ * - token_hash kept for schema compatibility
+ */
 export async function createSession(env, user_id, roles){
   const now = nowSec();
   const r = (roles||[]).map(String);
@@ -149,6 +169,7 @@ export async function createSession(env, user_id, roles){
 
   const sid = crypto.randomUUID();
   const token_hash = sid;
+  const role_snapshot = JSON.stringify(r);
 
   await env.DB.prepare(`
     INSERT INTO sessions (
@@ -161,7 +182,7 @@ export async function createSession(env, user_id, roles){
   `).bind(
     sid, user_id, token_hash,
     now, exp, null,
-    null, null, JSON.stringify(r), null,
+    null, null, role_snapshot, null,
     now, JSON.stringify(r)
   ).run();
 
@@ -169,7 +190,9 @@ export async function createSession(env, user_id, roles){
 }
 
 export async function revokeSessionBySid(env, sid){
-  try{ await env.DB.prepare(`UPDATE sessions SET revoked_at=? WHERE id=?`).bind(nowSec(), sid).run(); }catch{}
+  try{
+    await env.DB.prepare(`UPDATE sessions SET revoked_at=? WHERE id=?`).bind(nowSec(), sid).run();
+  }catch{}
 }
 
 export async function requireAuth(env, request){
@@ -189,10 +212,11 @@ export async function requireAuth(env, request){
     return { ok:false, res: json(401,"unauthorized",null) };
   }
 
-  try{ await env.DB.prepare(`UPDATE sessions SET last_seen_at=? WHERE id=?`).bind(now, row.id).run(); }catch{}
+  try{
+    await env.DB.prepare(`UPDATE sessions SET last_seen_at=? WHERE id=?`).bind(now, row.id).run();
+  }catch{}
 
   let roles = [];
   try{ roles = JSON.parse(row.roles_json||"[]") || []; }catch{ roles = []; }
-
   return { ok:true, uid: row.user_id, roles, token: sid };
 }
