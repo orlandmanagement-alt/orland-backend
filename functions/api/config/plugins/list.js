@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole } from "../../_lib.js";
+import { json, requireAuth, hasRole } from "../../../_lib.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
