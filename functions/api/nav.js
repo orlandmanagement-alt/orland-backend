@@ -9,62 +9,101 @@ function normPath(p){
 }
 
 function sortMenus(a, b){
-  const sa = Number(a.sort_order ?? 9999);
-  const sb = Number(b.sort_order ?? 9999);
+  const sa = Number(a.sort_order ?? 999999);
+  const sb = Number(b.sort_order ?? 999999);
   if(sa !== sb) return sa - sb;
-  return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
+
+  const ca = Number(a.created_at ?? 0);
+  const cb = Number(b.created_at ?? 0);
+  if(ca !== cb) return ca - cb;
+
+  return String(a.label || "").localeCompare(String(b.label || ""));
 }
 
-function bucketOf(path){
-  const p = normPath(path);
+function bucketOf(item){
+  const code = String(item?.code || "").trim().toLowerCase();
+  const path = normPath(item?.path || "/");
 
-  if (p.startsWith("/integrations") || p.startsWith("/plugins")) return "integrations";
+  if(code.startsWith("cfg_blogspot") || path.startsWith("/integrations")){
+    return "integrations";
+  }
 
-  if (
-    p.startsWith("/ops") ||
-    p.startsWith("/security") ||
-    p.startsWith("/audit") ||
-    p.startsWith("/data")
-  ) return "system";
+  if(
+    code.startsWith("security") ||
+    code.startsWith("ops") ||
+    code.startsWith("audit") ||
+    code.startsWith("data") ||
+    path.startsWith("/security") ||
+    path.startsWith("/ops") ||
+    path.startsWith("/audit") ||
+    path.startsWith("/data")
+  ){
+    return "system";
+  }
 
-  if (
-    p.startsWith("/config") ||
-    p.startsWith("/rbac") ||
-    p.startsWith("/menus") ||
-    p.startsWith("/menu-builder") ||
-    p.startsWith("/ipblocks") ||
-    p.startsWith("/profile") ||
-    p.startsWith("/users")
-  ) return "config";
+  if(
+    code.startsWith("config") ||
+    code.startsWith("menu_builder") ||
+    code.startsWith("menus") ||
+    code.startsWith("rbac") ||
+    code.startsWith("ipblocks") ||
+    code.startsWith("plugins") ||
+    path.startsWith("/config") ||
+    path.startsWith("/menu-builder") ||
+    path.startsWith("/menus") ||
+    path.startsWith("/rbac") ||
+    path.startsWith("/ipblocks")
+  ){
+    return "config";
+  }
 
   return "core";
 }
 
+async function getAllMenus(env){
+  const r = await env.DB.prepare(`
+    SELECT id, code, label, path, parent_id, sort_order, icon, created_at
+    FROM menus
+    ORDER BY sort_order ASC, created_at ASC
+  `).all();
+  return r.results || [];
+}
+
 async function getMenusForRoles(env, roles){
+  const allMenus = await getAllMenus(env);
+
   if(hasRole(roles, ["super_admin"])){
-    const r = await env.DB.prepare(`
-      SELECT id, code, label, path, parent_id, sort_order, icon, created_at
-      FROM menus
-      ORDER BY sort_order ASC, created_at ASC
-    `).all();
-    return r.results || [];
+    return allMenus;
   }
 
   const cleanRoles = (roles || []).map(String).filter(Boolean);
   if(!cleanRoles.length) return [];
 
   const ph = cleanRoles.map(() => "?").join(",");
-  const r = await env.DB.prepare(`
-    SELECT DISTINCT
-      m.id, m.code, m.label, m.path, m.parent_id, m.sort_order, m.icon, m.created_at
+  const allowed = await env.DB.prepare(`
+    SELECT DISTINCT m.id
     FROM role_menus rm
     JOIN roles r ON r.id = rm.role_id
     JOIN menus m ON m.id = rm.menu_id
     WHERE r.name IN (${ph})
-    ORDER BY m.sort_order ASC, m.created_at ASC
   `).bind(...cleanRoles).all();
 
-  return r.results || [];
+  const allowedIds = new Set((allowed.results || []).map(x => String(x.id)));
+  if(!allowedIds.size) return [];
+
+  const byId = new Map(allMenus.map(row => [String(row.id), row]));
+
+  for(const id of Array.from(allowedIds)){
+    let cur = byId.get(id);
+    while(cur && cur.parent_id){
+      const pid = String(cur.parent_id);
+      if(allowedIds.has(pid)) break;
+      allowedIds.add(pid);
+      cur = byId.get(pid);
+    }
+  }
+
+  return allMenus.filter(row => allowedIds.has(String(row.id)));
 }
 
 function buildTree(rows){
@@ -78,7 +117,7 @@ function buildTree(rows){
       path: normPath(row.path || "/"),
       icon: row.icon || "fa-solid fa-circle-dot",
       parent_id: row.parent_id || null,
-      sort_order: Number(row.sort_order ?? 9999),
+      sort_order: Number(row.sort_order ?? 999999),
       created_at: Number(row.created_at ?? 0),
       submenus: []
     });
@@ -102,8 +141,8 @@ function buildTree(rows){
       }
     }
   };
-  walk(roots);
 
+  walk(roots);
   return roots;
 }
 
@@ -144,7 +183,7 @@ export async function onRequestGet({ request, env }){
   };
 
   for(const item of tree){
-    const bucket = bucketOf(item.path);
+    const bucket = bucketOf(item);
     grouped[bucket].push(item);
   }
 
