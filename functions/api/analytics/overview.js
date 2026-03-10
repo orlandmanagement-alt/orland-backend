@@ -1,5 +1,5 @@
 import { json, requireAuth, hasRole } from "../../_lib.js";
-import { cfQuery, getCfConfig } from "_cf.js";
+import { cfQuery, getCfConfig } from "./_cf.js";
 
 async function tryQuery(env, zoneTag, query){
   const data = await cfQuery(env, query, { zoneTag });

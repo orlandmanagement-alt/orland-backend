@@ -1,5 +1,5 @@
 import { json, requireAuth, hasRole } from "../../_lib.js";
-import { getCfConfig } from "_cf.js";
+import { getCfConfig } from "./_cf.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
