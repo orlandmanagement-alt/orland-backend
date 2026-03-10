@@ -1,70 +1,147 @@
 import { json, requireAuth, hasRole } from "../_lib.js";
 
 function normPath(p){
-  p = String(p || "/").trim();
-  if (!p.startsWith("/")) p = "/" + p;
+  p = String(p || "").trim();
+  if(!p) return "/";
+  if(!p.startsWith("/")) p = "/" + p;
+  p = p.replace(/\/+/g, "/");
   p = p.replace(/\/+$/,"");
   return p || "/";
 }
 
-function moduleForCode(code){
-  const c = String(code || "").trim();
+function mapCodeToModule(code, path){
+  const c = String(code || "").trim().toLowerCase();
+  const p = normPath(path);
 
-  // root aliases
-  if (c === "dashboard") return "/modules/mod_dashboard.js";
-  if (c === "users") return "/modules/mod_users.js";
-  if (c === "ops") return "/modules/mod_ops.js";
-  if (c === "data") return "/modules/mod_data.js";
-  if (c === "config") return "/modules/mod_config.js";
-  if (c === "profile") return "/modules/mod_profile.js";
-  if (c === "menus" || c === "menu_builder" || c === "cfg_menubuilder") return "/modules/mod_menu_builder.js";
-  if (c === "rbac" || c === "rbac_manager") return "/modules/mod_rbac_manager.js";
-  if (c === "audit") return "/modules/mod_audit.js";
-  if (c === "ipblocks") return "/modules/mod_ipblocks.js";
-  if (c === "security") return "/modules/mod_security.js";
+  // explicit by code
+  const CODE_MAP = {
+    dashboard: "/modules/mod_dashboard.js",
 
-  // config aliases
-  if (c === "cfg_plugins") return "/modules/mod_cfg_plugins.js";
-  if (c === "cfg_bulk_tools") return "/modules/mod_cfg_bulk_tools.js";
-  if (c === "cfg_sec_policy") return "/modules/mod_cfg_sec_policy.js";
-  if (c === "cfg_otp") return "/modules/mod_cfg_otp.js";
-  if (c === "cfg_verify") return "/modules/mod_cfg_verify.js";
-  if (c === "cfg_analytics") return "/modules/mod_cfg_analytics.js";
-  if (c === "cfg_blogspot") return "/modules/mod_cfg_blogspot.js";
+    users: "/modules/mod_users.js",
+    users_admin: "/modules/mod_users_admin.js",
+    users_client: "/modules/mod_users_client.js",
+    users_talent: "/modules/mod_users_talent.js",
+    users_tenant: "/modules/mod_users_tenant.js",
 
-  // blogspot aliases
-  if (c === "blogspot") return "/modules/mod_blogspot.js";
-  if (c === "blogspot_posts") return "/modules/mod_blogspot_posts.js";
-  if (c === "blogspot_pages") return "/modules/mod_blogspot_pages.js";
-  if (c === "blogspot_widgets") return "/modules/mod_blogspot_widgets.js";
+    ops: "/modules/mod_ops.js",
+    ops_incidents: "/modules/mod_ops_incidents.js",
+    ops_oncall: "/modules/mod_ops_oncall.js",
 
-  // other known leaves
-  if (c === "blogspot_settings") return "/modules/mod_blogspot_settings.js";
-  if (c === "profile_security") return "/modules/mod_profile_security.js";
-  if (c === "security_policy") return "/modules/mod_security_policy.js";
+    audit: "/modules/mod_audit.js",
+    ipblocks: "/modules/mod_ipblocks.js",
 
-  return "/modules/mod_" + c.replace(/[^a-zA-Z0-9_]/g, "_") + ".js";
+    rbac: "/modules/mod_rbac.js",
+    rbac_manager: "/modules/mod_rbac_manager.js",
+
+    security: "/modules/mod_security.js",
+    security_policy: "/modules/mod_security_policy.js",
+
+    menus: "/modules/mod_menus.js",
+    menu_builder: "/modules/mod_menu_builder.js",
+
+    profile: "/modules/mod_profile.js",
+    profile_security: "/modules/mod_profile_security.js",
+
+    config: "/modules/mod_config.js",
+    cfg_plugins: "/modules/mod_cfg_plugins.js",
+    cfg_bulk_tools: "/modules/mod_cfg_bulk_tools.js",
+    cfg_sec_policy: "/modules/mod_cfg_sec_policy.js",
+    cfg_otp: "/modules/mod_cfg_otp.js",
+    cfg_verify: "/modules/mod_cfg_verify.js",
+    cfg_analytics: "/modules/mod_cfg_analytics.js",
+    cfg_blogspot: "/modules/mod_cfg_blogspot.js",
+
+    blogspot: "/modules/mod_blogspot.js",
+    blogspot_posts: "/modules/mod_blogspot_posts.js",
+    blogspot_pages: "/modules/mod_blogspot_pages.js",
+    blogspot_widgets: "/modules/mod_blogspot_widgets.js",
+    blogspot_settings: "/modules/mod_cfg_blogspot.js",
+
+    data: "/modules/mod_data.js",
+    plugins: "/modules/mod_plugins.js"
+  };
+
+  if(CODE_MAP[c]) return CODE_MAP[c];
+
+  // explicit by path
+  const PATH_MAP = {
+    "/": "/modules/mod_dashboard.js",
+    "/dashboard": "/modules/mod_dashboard.js",
+
+    "/users": "/modules/mod_users.js",
+    "/users/admin": "/modules/mod_users_admin.js",
+    "/users/client": "/modules/mod_users_client.js",
+    "/users/talent": "/modules/mod_users_talent.js",
+    "/users/tenant": "/modules/mod_users_tenant.js",
+
+    "/ops": "/modules/mod_ops.js",
+    "/ops/incidents": "/modules/mod_ops_incidents.js",
+    "/ops/oncall": "/modules/mod_ops_oncall.js",
+
+    "/audit": "/modules/mod_audit.js",
+    "/ipblocks": "/modules/mod_ipblocks.js",
+
+    "/rbac": "/modules/mod_rbac.js",
+    "/rbac/manager": "/modules/mod_rbac_manager.js",
+
+    "/security": "/modules/mod_security.js",
+    "/security/policy": "/modules/mod_security_policy.js",
+
+    "/menus": "/modules/mod_menus.js",
+    "/menu-builder": "/modules/mod_menu_builder.js",
+
+    "/profile": "/modules/mod_profile.js",
+    "/profile/security": "/modules/mod_profile_security.js",
+
+    "/config": "/modules/mod_config.js",
+    "/config/plugins": "/modules/mod_cfg_plugins.js",
+    "/config/bulk-tools": "/modules/mod_cfg_bulk_tools.js",
+    "/config/security-policy": "/modules/mod_cfg_sec_policy.js",
+    "/config/otp": "/modules/mod_cfg_otp.js",
+    "/config/verify": "/modules/mod_cfg_verify.js",
+    "/config/analytics": "/modules/mod_cfg_analytics.js",
+    "/integrations/blogspot/settings": "/modules/mod_cfg_blogspot.js",
+
+    "/integrations/blogspot": "/modules/mod_blogspot.js",
+    "/integrations/blogspot/posts": "/modules/mod_blogspot_posts.js",
+    "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
+    "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
+
+    "/data": "/modules/mod_data.js",
+    "/plugins": "/modules/mod_plugins.js"
+  };
+
+  if(PATH_MAP[p]) return PATH_MAP[p];
+
+  // heuristic fallback by path tail
+  const tail = p.split("/").filter(Boolean).pop() || "";
+  const safeTail = tail.replace(/[^a-z0-9_]/gi, "_");
+
+  if(safeTail) return "/modules/mod_" + safeTail + ".js";
+
+  return "/modules/mod_placeholder.js";
 }
 
 async function getAllowedMenus(env, roles){
-  if (hasRole(roles, ["super_admin"])) {
+  if(hasRole(roles, ["super_admin"])){
     const r = await env.DB.prepare(`
-      SELECT id,code,label,path,parent_id,sort_order,icon,created_at
+      SELECT id, code, label, path, parent_id, sort_order, icon, created_at
       FROM menus
       ORDER BY sort_order ASC, created_at ASC
     `).all();
     return r.results || [];
   }
 
-  if (!roles.length) return [];
-
   const ph = roles.map(()=>"?").join(",");
+  if(!ph) return [];
+
   const r = await env.DB.prepare(`
-    SELECT DISTINCT m.id,m.code,m.label,m.path,m.parent_id,m.sort_order,m.icon,m.created_at
+    SELECT DISTINCT
+      m.id, m.code, m.label, m.path, m.parent_id, m.sort_order, m.icon, m.created_at
     FROM role_menus rm
-    JOIN roles ro ON ro.id=rm.role_id
-    JOIN menus m ON m.id=rm.menu_id
-    WHERE ro.name IN (${ph})
+    JOIN roles r ON r.id = rm.role_id
+    JOIN menus m ON m.id = rm.menu_id
+    WHERE r.name IN (${ph})
     ORDER BY m.sort_order ASC, m.created_at ASC
   `).bind(...roles).all();
 
@@ -73,46 +150,50 @@ async function getAllowedMenus(env, roles){
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
-  if (!a.ok) return a.res;
+  if(!a.ok) return a.res;
+  if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403,"forbidden",null);
 
-  const roles = Array.isArray(a.roles) ? a.roles.map(String) : [];
-  if (!hasRole(roles, ["super_admin","admin","staff"])) return json(403, "forbidden", null);
-
-  const menus = await getAllowedMenus(env, roles);
+  const rows = await getAllowedMenus(env, a.roles || []);
   const routes = {};
 
-  for (const m of menus){
-    const code = String(m.code || "").trim();
-    const path = normPath(m.path || "/");
-    if (!code || !path) continue;
-
+  for(const row of rows){
+    const path = normPath(row.path || "/");
     routes[path] = {
-      module: moduleForCode(code),
+      module: mapCodeToModule(row.code, path),
       export: "default",
-      title: String(m.label || code)
+      title: String(row.label || row.code || path)
     };
   }
 
-  // helper virtual routes
-  if (routes["/profile"] && !routes["/profile/security"]) {
-    routes["/profile/security"] = {
-      module: "/modules/mod_profile_security.js",
-      export: "default",
-      title: "Security & Password"
-    };
+  // force important routes available if menu exists only as parent/inconsistent
+  const ensured = {
+    "/dashboard": "/modules/mod_dashboard.js",
+    "/ops": "/modules/mod_ops.js",
+    "/ops/incidents": "/modules/mod_ops_incidents.js",
+    "/ops/oncall": "/modules/mod_ops_oncall.js",
+    "/security": "/modules/mod_security.js",
+    "/security/policy": "/modules/mod_security_policy.js",
+    "/rbac": "/modules/mod_rbac.js",
+    "/audit": "/modules/mod_audit.js",
+    "/ipblocks": "/modules/mod_ipblocks.js",
+    "/config/analytics": "/modules/mod_cfg_analytics.js",
+    "/integrations/blogspot": "/modules/mod_blogspot.js",
+    "/integrations/blogspot/settings": "/modules/mod_cfg_blogspot.js",
+    "/integrations/blogspot/posts": "/modules/mod_blogspot_posts.js",
+    "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
+    "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
+    "/profile": "/modules/mod_profile.js",
+    "/profile/security": "/modules/mod_profile_security.js"
+  };
+
+  for(const [path, module] of Object.entries(ensured)){
+    if(!routes[path]){
+      routes[path] = { module, export: "default", title: path };
+    }
   }
 
-  if (routes["/security"] && !routes["/security/policy"]) {
-    routes["/security/policy"] = {
-      module: "/modules/mod_security_policy.js",
-      export: "default",
-      title: "Security Policy"
-    };
-  }
-
-  return json(200, "ok", {
+  return json(200,"ok",{
     routes,
-    roles,
-    count: Object.keys(routes).length
+    total: Object.keys(routes).length
   });
 }

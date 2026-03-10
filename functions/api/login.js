@@ -3,7 +3,7 @@ import {
   pbkdf2Hash, timingSafeEqual,
   normEmail, getRolesForUser,
   createSession, requireEnv,
-  nowSec, sha256Base64, audit
+  nowSec, sha256Base64, auditEvent
 } from "../_lib.js";
 
 function getClientIp(request){
@@ -14,9 +14,17 @@ function getClientIp(request){
   );
 }
 
+function getUa(request){
+  return request.headers.get("user-agent") || "";
+}
+
+async function sha(v){
+  return await sha256Base64(String(v || ""));
+}
+
 async function hashIp(env, ip){
   const pepper = String(env.HASH_PEPPER || "");
-  return await sha256Base64(String(ip||"") + "|" + pepper);
+  return await sha256Base64(String(ip || "") + "|" + pepper);
 }
 
 async function getCounter(env, key){
@@ -58,9 +66,6 @@ async function bumpFailCounter(env, ipHash, windowSec, maxFail){
     if(now - ws <= windowSec){
       count = cnt + 1;
       window_start = ws;
-    }else{
-      count = 1;
-      window_start = now;
     }
   }
 
@@ -69,8 +74,7 @@ async function bumpFailCounter(env, ipHash, windowSec, maxFail){
 }
 
 async function resetFailCounter(env, ipHash){
-  const key = "login_fail:" + ipHash;
-  await delCounter(env, key);
+  await delCounter(env, "login_fail:" + ipHash);
 }
 
 async function autoBlockIp(env, actor_user_id, ipHash, ttlSec, reason){
@@ -83,18 +87,12 @@ async function autoBlockIp(env, actor_user_id, ipHash, ttlSec, reason){
     VALUES (?,?,?,?,?,?,?)
   `).bind(id, ipHash, reason, now, expires_at, null, actor_user_id || null).run();
 
-  await audit(env, {
-    actor_user_id: actor_user_id || null,
-    action: "ip_auto_block",
-    route: "/api/login",
-    http_status: 200,
-    meta: { reason, expires_at }
-  });
-
   return { id, expires_at };
 }
 
 export async function onRequestPost({ request, env }) {
+  const started = Date.now();
+
   const miss = requireEnv(env, ["HASH_PEPPER"]);
   if (miss.length) return json(500, "server_error", { message: "missing_env", missing: miss });
 
@@ -103,16 +101,37 @@ export async function onRequestPost({ request, env }) {
   const password = String(body.password || "");
 
   const ip = getClientIp(request);
+  const ua = getUa(request);
   const ipHash = await hashIp(env, ip);
+  const uaHash = await sha(ua);
+  const actorIdentifierHash = email ? await sha(email) : null;
 
-  const FAIL_WINDOW_SEC = Number(env.LOGIN_FAIL_WINDOW_SEC || 900);   // 15 menit
-  const FAIL_MAX = Number(env.LOGIN_FAIL_MAX || 8);                   // 8x gagal
-  const BLOCK_TTL_SEC = Number(env.LOGIN_FAIL_BLOCK_TTL_SEC || 3600); // 1 jam
+  const FAIL_WINDOW_SEC = Number(env.LOGIN_FAIL_WINDOW_SEC || 900);
+  const FAIL_MAX = Number(env.LOGIN_FAIL_MAX || 8);
+  const BLOCK_TTL_SEC = Number(env.LOGIN_FAIL_BLOCK_TTL_SEC || 3600);
 
   if (!email.includes("@") || password.length < 6) {
     const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
+    await auditEvent(env, request, {
+      actor_identifier_hash: actorIdentifierHash,
+      action: "password_fail",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 400,
+      duration_ms: Date.now() - started,
+      meta: { reason: "invalid_input", count: res.count }
+    });
     if(res.blocked){
       await autoBlockIp(env, null, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        action: "lockout",
+        actor_identifier_hash: actorIdentifierHash,
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
     return json(400, "invalid_input", null);
@@ -124,30 +143,76 @@ export async function onRequestPost({ request, env }) {
 
   if (!u){
     const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
+    await auditEvent(env, request, {
+      actor_identifier_hash: actorIdentifierHash,
+      action: "password_fail",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 403,
+      duration_ms: Date.now() - started,
+      meta: { reason: "user_not_found", count: res.count }
+    });
     if(res.blocked){
       await autoBlockIp(env, null, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        action: "lockout",
+        actor_identifier_hash: actorIdentifierHash,
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
     return json(403, "user_belum_terdaftar", null);
   }
 
-  if (String(u.status) !== "active") return json(403, "forbidden", null);
-  if (!u.password_hash || !u.password_salt) return json(403, "password_invalid", { message: "password_not_set" });
+  if (String(u.status) !== "active") {
+    await auditEvent(env, request, {
+      actor_user_id: u.id,
+      actor_identifier_hash: actorIdentifierHash,
+      action: "lockout",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 403,
+      duration_ms: Date.now() - started,
+      meta: { reason: "user_inactive" }
+    });
+    return json(403, "forbidden", null);
+  }
+
+  if (!u.password_hash || !u.password_salt) {
+    return json(403, "password_invalid", { message: "password_not_set" });
+  }
 
   const iter = Math.min(100000, Number(u.password_iter || env.PBKDF2_ITER || 100000));
   const calc = await pbkdf2Hash(password, u.password_salt, iter);
 
   if (!timingSafeEqual(calc, u.password_hash)) {
     const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
-    await audit(env, {
+    await auditEvent(env, request, {
       actor_user_id: u.id,
-      action: "login_fail",
-      route: "/api/login",
+      actor_identifier_hash: actorIdentifierHash,
+      action: "password_fail",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
       http_status: 403,
-      meta: { count: res.count, blocked: res.blocked }
+      duration_ms: Date.now() - started,
+      meta: { reason: "wrong_password", count: res.count, blocked: res.blocked }
     });
     if(res.blocked){
       await autoBlockIp(env, u.id, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        actor_user_id: u.id,
+        actor_identifier_hash: actorIdentifierHash,
+        action: "lockout",
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
     return json(403, "password_invalid", null);
@@ -155,13 +220,30 @@ export async function onRequestPost({ request, env }) {
 
   const roles = await getRolesForUser(env, u.id);
   const allowed = roles.includes("super_admin") || roles.includes("admin") || roles.includes("staff");
-  if (!allowed) return json(403, "forbidden", { message: "role_not_allowed_for_dashboard" });
+  if (!allowed) {
+    await auditEvent(env, request, {
+      actor_user_id: u.id,
+      actor_identifier_hash: actorIdentifierHash,
+      action: "lockout",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 403,
+      duration_ms: Date.now() - started,
+      meta: { reason: "role_not_allowed_for_dashboard" }
+    });
+    return json(403, "forbidden", { message: "role_not_allowed_for_dashboard" });
+  }
 
-  // success -> reset fail counter
   await resetFailCounter(env, ipHash);
 
   const sess = await createSession(env, u.id, roles);
-  const res = json(200, "ok", { id: u.id, email_norm: u.email_norm, display_name: u.display_name, roles, exp: sess.exp });
+  const res = json(200, "ok", {
+    id: u.id,
+    email_norm: u.email_norm,
+    display_name: u.display_name,
+    roles,
+    exp: sess.exp
+  });
   res.headers.append("set-cookie", cookie("sid", sess.sid, { maxAge: sess.ttl }));
   return res;
 }
