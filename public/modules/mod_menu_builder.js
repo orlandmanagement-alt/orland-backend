@@ -8,16 +8,16 @@ export default function(Orland){
   }
 
   async function apiSave(payload){
-    return await Orland.api("/api/menus_save", {
+    return await Orland.api("/api/menus", {
       method: "POST",
       body: JSON.stringify(payload)
     });
   }
 
   async function apiDelete(payload){
-    return await Orland.api("/api/menus_delete", {
+    return await Orland.api("/api/menus", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ action: "delete", ...payload })
     });
   }
 
@@ -442,6 +442,7 @@ export default function(Orland){
         ev.preventDefault();
 
         const payload = {
+          action: String(form().mode.value || "create").trim(),
           mode: String(form().mode.value || "create").trim(),
           id: String(form().id.value || "").trim(),
           code: String(form().code.value || "").trim(),
@@ -465,13 +466,8 @@ export default function(Orland){
         setMsg("success", "Menu saved.");
         await load();
 
-        if(payload.mode === "create"){
-          const saved = MENUS.find(x => String(x.id) === String(payload.id));
-          if(saved) fillFormEdit(saved);
-        }else{
-          const saved = MENUS.find(x => String(x.id) === String(payload.id));
-          if(saved) fillFormEdit(saved);
-        }
+        const saved = MENUS.find(x => String(x.id) === String(payload.id));
+        if(saved) fillFormEdit(saved);
       };
 
       closeEditor();

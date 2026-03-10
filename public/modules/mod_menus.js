@@ -1,411 +1,571 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
-  const fmtPath = (p)=>String(p||"/").startsWith("/")?String(p):("/"+String(p));
-  const pick = (o,k,d="")=> (o && o[k]!=null)?o[k]:d;
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
 
-  async function apiList(){ return await Orland.api("/api/menus"); }
-  async function apiCreate(payload){ return await Orland.api("/api/menus",{ method:"POST", body: JSON.stringify(payload) }); }
-  async function apiDel(id){ return await Orland.api("/api/menus?id="+encodeURIComponent(id),{ method:"DELETE" }); }
-
-  function sortByOrder(a,b){
-    const sa = Number(a.sort_order ?? 9999);
-    const sb = Number(b.sort_order ?? 9999);
-    if(sa!==sb) return sa-sb;
-    return String(a.created_at||0).localeCompare(String(b.created_at||0));
+  async function apiLoad(){
+    return await Orland.api("/api/menus");
   }
 
-  function buildTree(flat){
+  async function apiSave(payload){
+    return await Orland.api("/api/menus", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function apiDelete(payload){
+    return await Orland.api("/api/menus", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete", ...payload })
+    });
+  }
+
+  function bySort(a, b){
+    const sa = Number(a.sort_order ?? 999999);
+    const sb = Number(b.sort_order ?? 999999);
+    if(sa !== sb) return sa - sb;
+
+    const ca = Number(a.created_at ?? 0);
+    const cb = Number(b.created_at ?? 0);
+    if(ca !== cb) return ca - cb;
+
+    return String(a.label || "").localeCompare(String(b.label || ""));
+  }
+
+  function normPath(p){
+    p = String(p || "").trim();
+    if(!p) return "/";
+    if(!p.startsWith("/")) p = "/" + p;
+    p = p.replace(/\/+/g, "/").replace(/\/+$/,"");
+    return p || "/";
+  }
+
+  function buildTree(items){
     const byId = new Map();
     const roots = [];
-    for(const m of flat){ byId.set(String(m.id), {...m, children:[]}); }
-    for(const m of byId.values()){
-      if(m.parent_id && byId.has(String(m.parent_id))) byId.get(String(m.parent_id)).children.push(m);
-      else roots.push(m);
+
+    for(const row of (items || [])){
+      byId.set(String(row.id), {
+        id: String(row.id),
+        code: row.code || "",
+        label: row.label || row.code || row.path || "Menu",
+        path: row.path || "/",
+        parent_id: row.parent_id ? String(row.parent_id) : null,
+        icon: row.icon || "fa-solid fa-circle-dot",
+        sort_order: Number(row.sort_order ?? 50),
+        created_at: Number(row.created_at ?? 0),
+        role_names: Array.isArray(row.role_names) ? row.role_names : [],
+        children: []
+      });
     }
-    const walk = (arr)=>{ arr.sort(sortByOrder); for(const x of arr) walk(x.children); };
+
+    for(const item of byId.values()){
+      if(item.parent_id && byId.has(item.parent_id)){
+        byId.get(item.parent_id).children.push(item);
+      }else{
+        roots.push(item);
+      }
+    }
+
+    const walk = (arr)=>{
+      arr.sort(bySort);
+      for(const x of arr){
+        walk(x.children || []);
+      }
+    };
     walk(roots);
-    return { roots, byId };
+
+    return roots;
   }
 
-  function flattenTree(roots){
-    const out=[];
-    const walk=(node, depth)=>{
-      out.push({ ...node, __depth: depth });
-      for(const c of (node.children||[])) walk(c, depth+1);
-    };
-    for(const r of roots) walk(r, 0);
+  function flattenTree(nodes, depth = 0, out = []){
+    for(const n of (nodes || [])){
+      out.push({ ...n, _depth: depth });
+      flattenTree(n.children || [], depth + 1, out);
+    }
     return out;
   }
 
-  function optParents(flat){
-    const opts = [{ id:"", label:"(no parent)" }];
-    for(const m of flat){
-      opts.push({ id: m.id, label: `${"— ".repeat(m.__depth)}${m.label} (${m.code})` });
+  function countChildrenMap(items){
+    const map = new Map();
+    for(const row of (items || [])){
+      const pid = row.parent_id ? String(row.parent_id) : "";
+      if(!pid) continue;
+      map.set(pid, Number(map.get(pid) || 0) + 1);
     }
-    return opts;
+    return map;
   }
 
-  function tinyBtn(html, cls){
-    return `<button type="button" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark hover:bg-slate-50 dark:hover:bg-white/5 ${cls||""}">${html}</button>`;
+  function defaultNewId(){
+    return "menu_" + Date.now();
   }
 
-  function modalHtml(state){
-    const parents = optParents(state.flatAll);
-    const m = state.editing || {};
-    return `
-<div class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/40 p-3">
-  <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-xl overflow-hidden">
-    <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
-      <div>
-        <div class="text-sm font-extrabold">${state.mode==="create"?"Create Menu":"Edit Menu"}</div>
-        <div class="text-[11px] text-slate-500">ID harus unik. Path wajib diawali <code>/</code>.</div>
-      </div>
-      <button id="mbClose" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
+  return {
+    title: "Main Menu",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-4">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">Main Menu</div>
+                <div class="text-slate-500 mt-1">List manager untuk menu, parent-child, dan role mapping.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnOpenBuilder" class="px-5 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">
+                  <i class="fa-solid fa-sitemap mr-2"></i>Open Menu Builder
+                </button>
+                <button id="btnNew" class="px-5 py-3 rounded-2xl bg-primary text-white font-black">
+                  <i class="fa-solid fa-plus mr-2"></i>Create New
+                </button>
+                <button id="btnReload" class="px-5 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+              </div>
+            </div>
 
-    <div class="p-4 space-y-3">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">ID</label>
-          <input id="f_id" ${state.mode==="edit"?"disabled":""} value="${esc(pick(m,"id",""))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder ${state.mode==="edit"?"opacity-60":""}"
-            placeholder="m_core_dashboard">
-        </div>
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">CODE</label>
-          <input id="f_code" value="${esc(pick(m,"code",""))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
-            placeholder="dashboard">
-        </div>
-      </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">LABEL</label>
-          <input id="f_label" value="${esc(pick(m,"label",""))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
-            placeholder="Dashboard">
-        </div>
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">PATH</label>
-          <input id="f_path" value="${esc(pick(m,"path",""))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
-            placeholder="/dashboard">
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">PARENT</label>
-          <select id="f_parent" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-            ${parents.map(o=>`<option value="${esc(o.id)}" ${String(o.id)===String(pick(m,"parent_id",""))?"selected":""}>${esc(o.label)}</option>`).join("")}
-          </select>
-        </div>
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">SORT</label>
-          <input id="f_sort" type="number" value="${esc(String(pick(m,"sort_order",50)))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-        </div>
-        <div>
-          <label class="text-[11px] font-bold text-slate-500">ICON (FA)</label>
-          <input id="f_icon" value="${esc(pick(m,"icon",""))}"
-            class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"
-            placeholder="fa-solid fa-gauge-high">
-        </div>
-      </div>
-
-      <div id="mbErr" class="hidden text-xs text-red-500 font-semibold"></div>
-    </div>
-
-    <div class="px-4 py-3 border-t border-slate-200 dark:border-darkBorder flex items-center justify-between gap-2">
-      <button id="mbDelete" class="px-3 py-2 rounded-xl text-xs font-black border border-red-200 text-red-600 hover:bg-red-50 ${state.mode==="create"?"hidden":""}">
-        Delete
-      </button>
-      <div class="flex gap-2 ml-auto">
-        <button id="mbCancel" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-          Cancel
-        </button>
-        <button id="mbSave" class="px-3 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-95">
-          Save
-        </button>
-      </div>
-    </div>
-  </div>
-</div>`;
-  }
-
-  function render(host, state){
-    const rows = state.filtered;
-
-    host.innerHTML = `
-<div class="space-y-4">
-  <div class="flex items-start justify-between gap-3">
-    <div>
-      <div class="text-xl font-extrabold text-slate-900 dark:text-white">Menu Builder</div>
-      <div class="text-sm text-slate-500">CRUD menus + reorder. Mobile-friendly.</div>
-    </div>
-    <div class="flex gap-2">
-      <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-        <i class="fa-solid fa-rotate-right mr-2"></i>Reload
-      </button>
-      <button id="btnCreate" class="px-3 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-95">
-        <i class="fa-solid fa-plus mr-2"></i>Create
-      </button>
-    </div>
-  </div>
-
-  <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-3">
-    <div class="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-      <div class="relative w-full sm:max-w-md">
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-        <input id="q" value="${esc(state.q)}" placeholder="filter label/path/code..."
-          class="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-      </div>
-      <div class="text-[11px] text-slate-500">
-        Total: <span class="font-black">${rows.length}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl overflow-hidden">
-    <div class="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_160px] gap-2 px-4 py-3 text-[11px] font-extrabold text-slate-500 bg-slate-50 dark:bg-dark">
-      <div>MENU</div>
-      <div class="text-right">ACTIONS</div>
-    </div>
-
-    <div class="divide-y divide-slate-100 dark:divide-darkBorder">
-      ${rows.map(m=>{
-        const indent = Math.min(5, m.__depth||0);
-        const pad = 12 + indent*14;
-        const active = "";
-        return `
-        <div class="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_160px] gap-2 px-4 py-3 items-center">
-          <div class="min-w-0">
-            <div class="flex items-center gap-2" style="padding-left:${pad}px">
-              <i class="${esc(m.icon||"fa-solid fa-circle-dot")} text-slate-400 w-5 text-center"></i>
-              <div class="min-w-0">
-                <div class="text-sm font-extrabold truncate">${esc(m.label||m.code||m.id)}</div>
-                <div class="text-[11px] text-slate-500 truncate">
-                  <span class="font-bold">${esc(m.code)}</span>
-                  <span class="opacity-60">•</span>
-                  <span class="opacity-80">${esc(m.id)}</span>
-                  <span class="opacity-60">•</span>
-                  <span class="opacity-80">${esc(m.path)}</span>
-                </div>
+            <div class="grid md:grid-cols-4 gap-4 mt-5">
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-slate-500 text-xs font-bold">TOTAL MENUS</div>
+                <div id="statTotal" class="text-2xl font-extrabold mt-1">0</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-slate-500 text-xs font-bold">ROOT MENUS</div>
+                <div id="statRoots" class="text-2xl font-extrabold mt-1">0</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-slate-500 text-xs font-bold">CHILD MENUS</div>
+                <div id="statChildren" class="text-2xl font-extrabold mt-1">0</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-slate-500 text-xs font-bold">ROLES</div>
+                <div id="statRoles" class="text-2xl font-extrabold mt-1">0</div>
               </div>
             </div>
           </div>
 
-          <div class="flex items-center justify-end gap-1">
-            ${tinyBtn('<i class="fa-solid fa-arrow-up"></i>',"btnUp")}
-            ${tinyBtn('<i class="fa-solid fa-arrow-down"></i>',"btnDown")}
-            ${tinyBtn('<span class="font-black">Edit</span>',"btnEdit")}
+          <div id="editorWrap" class="hidden rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div id="editorTitle" class="text-xl font-extrabold">Menu Form</div>
+                <div class="text-slate-500 text-sm mt-1">Create atau update menu dengan role menus.</div>
+              </div>
+              <button id="btnCloseEditor" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-bold text-sm">
+                Close
+              </button>
+            </div>
+
+            <form id="menuForm" class="mt-5 space-y-4">
+              <input type="hidden" name="mode" value="create">
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+                  <input name="id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="menu_..." />
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
+                  <input name="code" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="users / rbac / menu_builder" />
+                </div>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
+                  <input name="label" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="Menu Label" />
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
+                  <input name="path" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="/menus" />
+                </div>
+              </div>
+
+              <div class="grid md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
+                  <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold"></select>
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
+                  <input name="sort_order" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" value="50" />
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
+                  <input name="icon" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="fa-solid fa-circle-dot" />
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between gap-3 flex-wrap mb-2">
+                  <label class="block text-sm font-bold text-slate-500">ROLE MENUS</label>
+                  <div class="flex gap-2 flex-wrap">
+                    <button type="button" id="btnRolesAll" class="px-3 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-bold text-xs">Check all</button>
+                    <button type="button" id="btnRolesNone" class="px-3 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-bold text-xs">Uncheck all</button>
+                  </div>
+                </div>
+                <div id="rolesBox" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 grid md:grid-cols-3 gap-3"></div>
+              </div>
+
+              <div class="flex gap-3 flex-wrap pt-2">
+                <button type="submit" class="px-5 py-3 rounded-2xl bg-primary text-white font-black">
+                  <i class="fa-solid fa-floppy-disk mr-2"></i>Save
+                </button>
+                <button type="button" id="btnResetForm" class="px-5 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">
+                  Reset
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div class="hidden meta"
-            data-id="${esc(m.id)}"
-            data-code="${esc(m.code)}"
-            data-label="${esc(m.label)}"
-            data-path="${esc(m.path)}"
-            data-parent_id="${esc(m.parent_id||"")}"
-            data-sort_order="${esc(String(m.sort_order||50))}"
-            data-icon="${esc(m.icon||"")}"
-          ></div>
-        </div>`;
-      }).join("")}
-    </div>
-  </div>
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-xl font-extrabold">Menu List</div>
+                <div class="text-slate-500 text-sm mt-1">Tabel menu terurut dari database.</div>
+              </div>
+              <div class="flex gap-3 flex-wrap">
+                <input id="qSearch" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold" placeholder="Search label / code / path / id" />
+                <select id="filterKind" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold">
+                  <option value="all">All</option>
+                  <option value="root">Root only</option>
+                  <option value="child">Child only</option>
+                </select>
+              </div>
+            </div>
 
-  <div class="text-[11px] text-slate-500">
-    Reorder (Up/Down) berlaku dalam group parent yang sama.
-  </div>
-</div>
+            <div id="tableWrap" class="mt-5 overflow-x-auto"></div>
+          </div>
+        </div>
+      `;
 
-${state.modalOpen ? modalHtml(state) : ""}
-`;
+      const q = (id)=>host.querySelector("#" + id);
+      const form = ()=>q("menuForm");
 
-    // bindings
-    host.querySelector("#q")?.addEventListener("input",(e)=>{
-      state.q = e.target.value || "";
-      applyFilter(state);
-      render(host,state);
-      bindRowButtons(host,state);
-    });
+      let ROLES = [];
+      let MENUS = [];
+      let TREE = [];
+      let FLAT = [];
+      let CHILD_COUNT = new Map();
 
-    host.querySelector("#btnReload")?.addEventListener("click",()=>state.reload());
-    host.querySelector("#btnCreate")?.addEventListener("click",()=>openCreate(host,state));
+      function setMsg(kind, text){
+        const el = q("msg");
+        el.className = "mt-4 text-sm";
+        if(kind === "error") el.classList.add("text-red-500");
+        else if(kind === "success") el.classList.add("text-emerald-600");
+        else el.classList.add("text-slate-500");
+        el.textContent = text;
+      }
 
-    if(state.modalOpen){
-      host.querySelector("#mbClose")?.addEventListener("click",()=>closeModal(host,state));
-      host.querySelector("#mbCancel")?.addEventListener("click",()=>closeModal(host,state));
-      host.querySelector("#mbSave")?.addEventListener("click",()=>saveModal(host,state));
-      host.querySelector("#mbDelete")?.addEventListener("click",()=>deleteModal(host,state));
-    }
+      function openEditor(){
+        q("editorWrap").classList.remove("hidden");
+      }
 
-    bindRowButtons(host,state);
-  }
+      function closeEditor(){
+        q("editorWrap").classList.add("hidden");
+      }
 
-  function bindRowButtons(host,state){
-    const rows = host.querySelectorAll(".divide-y > div");
-    rows.forEach(row=>{
-      const meta = row.querySelector(".meta");
-      if(!meta) return;
-      const m = {
-        id: meta.dataset.id,
-        code: meta.dataset.code,
-        label: meta.dataset.label,
-        path: meta.dataset.path,
-        parent_id: meta.dataset.parent_id || null,
-        sort_order: Number(meta.dataset.sort_order||50),
-        icon: meta.dataset.icon || null
-      };
+      function renderStats(){
+        const total = MENUS.length;
+        const roots = MENUS.filter(x => !x.parent_id).length;
+        const children = total - roots;
+        q("statTotal").textContent = String(total);
+        q("statRoots").textContent = String(roots);
+        q("statChildren").textContent = String(children);
+        q("statRoles").textContent = String(ROLES.length);
+      }
 
-      row.querySelector(".btnEdit")?.addEventListener("click",()=>openEdit(host,state,m));
-      row.querySelector(".btnUp")?.addEventListener("click",()=>reorder(host,state,m,"up"));
-      row.querySelector(".btnDown")?.addEventListener("click",()=>reorder(host,state,m,"down"));
-    });
-  }
+      function renderParentOptions(selectedId = "", selfId = ""){
+        const rows = FLAT.filter(x => String(x.id) !== String(selfId));
+        form().parent_id.innerHTML = `
+          <option value="">(root)</option>
+          ${rows.map(row => `
+            <option value="${esc(row.id)}" ${String(selectedId) === String(row.id) ? "selected" : ""}>
+              ${esc("— ".repeat(row._depth) + row.label)}
+            </option>
+          `).join("")}
+        `;
+      }
 
-  function applyFilter(state){
-    const q = String(state.q||"").trim().toLowerCase();
-    if(!q){
-      state.filtered = state.flatAll;
-      return;
-    }
-    state.filtered = state.flatAll.filter(m=>{
-      const hay = `${m.label} ${m.code} ${m.path} ${m.id}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
+      function renderRoles(selectedRoles){
+        const picked = new Set((selectedRoles || []).map(String));
+        q("rolesBox").innerHTML = (ROLES || []).map(r => `
+          <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <input type="checkbox" name="roles" value="${esc(r.name)}" ${picked.has(r.name) ? "checked" : ""}>
+            <div>
+              <div class="font-black text-sm">${esc(r.name)}</div>
+              <div class="text-xs text-slate-500">${esc(r.id)}</div>
+            </div>
+          </label>
+        `).join("") || `<div class="text-sm text-slate-500">No roles.</div>`;
+      }
 
-  function openCreate(host,state){
-    state.mode = "create";
-    state.editing = { id:"", code:"", label:"", path:"/", parent_id:"", sort_order:50, icon:"" };
-    state.modalOpen = true;
-    render(host,state);
-  }
+      function checkedRoles(){
+        return Array.from(host.querySelectorAll('input[name="roles"]:checked'))
+          .map(el => String(el.value || "").trim())
+          .filter(Boolean);
+      }
 
-  function openEdit(host,state,m){
-    state.mode = "edit";
-    state.editing = { ...m, parent_id: m.parent_id || "" };
-    state.modalOpen = true;
-    render(host,state);
-  }
+      function fillCreate(){
+        q("editorTitle").textContent = "Create Menu";
+        form().mode.value = "create";
+        form().id.value = defaultNewId();
+        form().id.readOnly = false;
+        form().id.classList.remove("opacity-70");
+        form().code.value = "";
+        form().label.value = "";
+        form().path.value = "/";
+        form().parent_id.value = "";
+        form().sort_order.value = "50";
+        form().icon.value = "fa-solid fa-circle-dot";
+        renderParentOptions("", "");
+        renderRoles(ROLES.map(x => x.name));
+        openEditor();
+      }
 
-  function closeModal(host,state){
-    state.modalOpen = false;
-    state.mode = "create";
-    state.editing = null;
-    render(host,state);
-  }
+      function fillEdit(row){
+        q("editorTitle").textContent = "Edit Menu";
+        form().mode.value = "update";
+        form().id.value = row.id || "";
+        form().id.readOnly = true;
+        form().id.classList.add("opacity-70");
+        form().code.value = row.code || "";
+        form().label.value = row.label || "";
+        form().path.value = row.path || "/";
+        form().sort_order.value = String(row.sort_order ?? 50);
+        form().icon.value = row.icon || "";
+        renderParentOptions(row.parent_id || "", row.id || "");
+        renderRoles(Array.isArray(row.role_names) ? row.role_names : []);
+        openEditor();
+      }
 
-  function showErr(host,msg){
-    const el = host.querySelector("#mbErr");
-    if(!el) return;
-    el.classList.remove("hidden");
-    el.textContent = msg;
-  }
+      function filteredRows(){
+        const keyword = String(q("qSearch").value || "").trim().toLowerCase();
+        const kind = String(q("filterKind").value || "all");
 
-  async function saveModal(host,state){
-    const id = String(host.querySelector("#f_id")?.value||"").trim();
-    const code = String(host.querySelector("#f_code")?.value||"").trim();
-    const label = String(host.querySelector("#f_label")?.value||"").trim();
-    const path = fmtPath(host.querySelector("#f_path")?.value||"/");
-    const parent_id = String(host.querySelector("#f_parent")?.value||"").trim() || null;
-    const sort_order = Number(host.querySelector("#f_sort")?.value||50);
-    const icon = String(host.querySelector("#f_icon")?.value||"").trim() || null;
+        return FLAT.filter(row => {
+          if(kind === "root" && row.parent_id) return false;
+          if(kind === "child" && !row.parent_id) return false;
 
-    if(!id && state.mode==="create") return showErr(host,"id_required");
-    if(!code || !label || !path) return showErr(host,"code/label/path_required");
+          if(!keyword) return true;
 
-    const payload = { id, code, label, path, parent_id, sort_order, icon };
+          const hay = [
+            row.id,
+            row.code,
+            row.label,
+            row.path,
+            row.parent_id,
+            ...(row.role_names || [])
+          ].join(" ").toLowerCase();
 
-    const r = await apiCreate(payload);
-    if(r.status!=="ok"){
-      return showErr(host, r.status || "server_error");
-    }
+          return hay.includes(keyword);
+        });
+      }
 
-    closeModal(host,state);
-    await state.reload(true);
-  }
+      function renderTable(){
+        const rows = filteredRows();
 
-  async function deleteModal(host,state){
-    const id = String(state.editing?.id||"").trim();
-    if(!id) return;
-    if(!confirm("Delete menu: "+id+" ?")) return;
-    const r = await apiDel(id);
-    if(r.status!=="ok"){
-      return showErr(host, r.status || "server_error");
-    }
-    closeModal(host,state);
-    await state.reload(true);
-  }
-
-  async function reorder(host,state, item, dir){
-    // reorder within same parent group: swap sort_order with nearest sibling
-    const sibs = state.flatAll.filter(x=>String(x.parent_id||"")===String(item.parent_id||"")).sort(sortByOrder);
-    const idx = sibs.findIndex(x=>x.id===item.id);
-    if(idx<0) return;
-
-    const j = dir==="up" ? idx-1 : idx+1;
-    if(j<0 || j>=sibs.length) return;
-
-    const a = sibs[idx];
-    const b = sibs[j];
-
-    // swap sort_order (keep integers)
-    const sa = Number(a.sort_order||50);
-    const sb = Number(b.sort_order||50);
-
-    const ra = await apiCreate({ id:a.id, code:a.code, label:a.label, path:a.path, parent_id:a.parent_id, sort_order:sb, icon:a.icon||null });
-    if(ra.status!=="ok") return;
-
-    const rb = await apiCreate({ id:b.id, code:b.code, label:b.label, path:b.path, parent_id:b.parent_id, sort_order:sa, icon:b.icon||null });
-    if(rb.status!=="ok") return;
-
-    await state.reload(true);
-  }
-
-  return {
-    title: "Menu Builder",
-    async mount(host){
-      const state = {
-        q:"",
-        modalOpen:false,
-        mode:"create",
-        editing:null,
-        flatAll:[],
-        filtered:[],
-        async reload(keepQuery){
-          const r = await apiList();
-          if(r.status!=="ok"){
-            host.innerHTML = `<div class="text-red-500 font-bold">Failed: ${esc(r.status||"server_error")}</div>`;
-            return;
-          }
-          const flat = (r.data?.flat || r.data?.menus || r.data || []);
-          // API /api/menus di project kamu biasanya return {menus:[...]} atau {flat:[...]}
-          // fallback: kalau ada field "menus"
-          const raw = Array.isArray(flat) ? flat : (Array.isArray(r.data?.menus)?r.data.menus:[]);
-          const { roots } = buildTree(raw.map(x=>({
-            id:String(x.id),
-            code:String(x.code),
-            label:String(x.label),
-            path:String(x.path),
-            parent_id: x.parent_id ? String(x.parent_id) : null,
-            sort_order: Number(x.sort_order ?? 50),
-            icon: x.icon ? String(x.icon) : null,
-            created_at: Number(x.created_at ?? 0)
-          })));
-          state.flatAll = flattenTree(roots);
-          if(!keepQuery) state.q = "";
-          applyFilter(state);
-          render(host,state);
+        if(!rows.length){
+          q("tableWrap").innerHTML = `<div class="text-sm text-slate-500">No matching menu data.</div>`;
+          return;
         }
+
+        q("tableWrap").innerHTML = `
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left border-b border-slate-200 dark:border-darkBorder">
+                <th class="px-4 py-3 font-black">MENU</th>
+                <th class="px-4 py-3 font-black">PATH</th>
+                <th class="px-4 py-3 font-black">ROLES</th>
+                <th class="px-4 py-3 font-black text-right">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr class="border-b border-slate-100 dark:border-darkBorder/60">
+                  <td class="px-4 py-4 align-top">
+                    <div class="flex items-start gap-3">
+                      <div class="text-slate-400 pt-0.5">
+                        <i class="${esc(row.icon || "fa-solid fa-circle-dot")}"></i>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="font-black text-base">${esc("— ".repeat(row._depth) + row.label)}</div>
+                        <div class="text-slate-500 mt-1 break-all">
+                          ${esc(row.code)} • ${esc(row.id)} • sort ${esc(row.sort_order)}
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1">
+                          ${row.parent_id ? `parent ${esc(row.parent_id)}` : "root"} • children ${esc(CHILD_COUNT.get(String(row.id)) || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-4 py-4 align-top">
+                    <div class="font-bold">${esc(row.path || "/")}</div>
+                  </td>
+                  <td class="px-4 py-4 align-top">
+                    <div class="flex flex-wrap gap-2">
+                      ${(row.role_names || []).map(name => `
+                        <span class="px-3 py-1 rounded-full bg-slate-100 dark:bg-black/20 text-xs font-bold">
+                          ${esc(name)}
+                        </span>
+                      `).join("") || `<span class="text-slate-400 text-xs">No roles</span>`}
+                    </div>
+                  </td>
+                  <td class="px-4 py-4 align-top">
+                    <div class="flex justify-end gap-2 flex-wrap">
+                      <button class="btnEdit px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-black" data-id="${esc(row.id)}">
+                        Edit
+                      </button>
+                      <button class="btnDelete px-4 py-2 rounded-2xl border border-red-200 text-red-600 font-black" data-id="${esc(row.id)}">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+
+        q("tableWrap").querySelectorAll(".btnEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const id = String(btn.getAttribute("data-id") || "");
+            const row = MENUS.find(x => String(x.id) === id);
+            if(!row) return;
+            fillEdit(row);
+          };
+        });
+
+        q("tableWrap").querySelectorAll(".btnDelete").forEach(btn => {
+          btn.onclick = async ()=>{
+            const id = String(btn.getAttribute("data-id") || "");
+            const row = MENUS.find(x => String(x.id) === id);
+            if(!row) return;
+
+            const ok = confirm(`Delete menu "${row.label}"?`);
+            if(!ok) return;
+
+            setMsg("muted", "Deleting...");
+            const r = await apiDelete({ id });
+
+            if(r.status !== "ok"){
+              const err = r.data?.error || r.status || "delete_failed";
+              setMsg("error", "Delete failed: " + err);
+              return;
+            }
+
+            setMsg("success", "Menu deleted.");
+            await load();
+            closeEditor();
+          };
+        });
+      }
+
+      async function load(){
+        setMsg("muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg("error", "Failed: " + r.status);
+          return;
+        }
+
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
+        MENUS = Array.isArray(r.data?.menus) ? r.data.menus.slice().sort(bySort) : [];
+        TREE = buildTree(MENUS);
+        FLAT = flattenTree(TREE, 0, []);
+        CHILD_COUNT = countChildrenMap(MENUS);
+
+        renderStats();
+        renderTable();
+        setMsg("success", "Loaded.");
+      }
+
+      q("btnOpenBuilder").onclick = ()=>{
+        if(typeof Orland.go === "function"){
+          Orland.go("/menu-builder");
+          return;
+        }
+        location.hash = "#/menu-builder";
       };
 
-      await state.reload(false);
+      q("btnNew").onclick = ()=>{
+        fillCreate();
+      };
+
+      q("btnReload").onclick = async ()=>{
+        await load();
+      };
+
+      q("btnCloseEditor").onclick = ()=>{
+        closeEditor();
+      };
+
+      q("btnResetForm").onclick = ()=>{
+        if(form().mode.value === "update"){
+          const row = MENUS.find(x => String(x.id) === String(form().id.value || ""));
+          if(row) fillEdit(row);
+          return;
+        }
+        fillCreate();
+      };
+
+      q("btnRolesAll").onclick = ()=>{
+        host.querySelectorAll('input[name="roles"]').forEach(el => {
+          el.checked = true;
+        });
+      };
+
+      q("btnRolesNone").onclick = ()=>{
+        host.querySelectorAll('input[name="roles"]').forEach(el => {
+          el.checked = false;
+        });
+      };
+
+      q("qSearch").oninput = ()=>{
+        renderTable();
+      };
+
+      q("filterKind").onchange = ()=>{
+        renderTable();
+      };
+
+      form().onsubmit = async (ev)=>{
+        ev.preventDefault();
+
+        const payload = {
+          action: String(form().mode.value || "create").trim(),
+          mode: String(form().mode.value || "create").trim(),
+          id: String(form().id.value || "").trim(),
+          code: String(form().code.value || "").trim(),
+          label: String(form().label.value || "").trim(),
+          path: normPath(form().path.value || "/"),
+          parent_id: String(form().parent_id.value || "").trim() || null,
+          sort_order: Number(form().sort_order.value || 50),
+          icon: String(form().icon.value || "").trim(),
+          roles: checkedRoles()
+        };
+
+        setMsg("muted", "Saving...");
+        const r = await apiSave(payload);
+
+        if(r.status !== "ok"){
+          const err = r.data?.error || r.data?.message || r.status || "save_failed";
+          setMsg("error", "Save failed: " + err);
+          return;
+        }
+
+        setMsg("success", "Menu saved.");
+        await load();
+
+        const saved = MENUS.find(x => String(x.id) === String(payload.id));
+        if(saved) fillEdit(saved);
+      };
+
+      closeEditor();
+      await load();
     }
   };
 }

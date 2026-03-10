@@ -20,39 +20,62 @@ function sortMenus(a, b){
   return String(a.label || "").localeCompare(String(b.label || ""));
 }
 
-function bucketOf(item){
-  const code = String(item?.code || "").trim().toLowerCase();
+function normalizeCode(code){
+  return String(code || "").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+}
+
+function bucketByCodeOrPath(item){
+  const code = normalizeCode(item?.code || "");
   const path = normPath(item?.path || "/");
 
-  if(code.startsWith("cfg_blogspot") || path.startsWith("/integrations")){
+  if(
+    code === "blogspot" ||
+    code === "blogspot_posts" ||
+    code === "blogspot_pages" ||
+    code === "blogspot_widgets" ||
+    code === "blogspot_sync" ||
+    code === "cfg_blogspot" ||
+    path.startsWith("/integrations/")
+  ){
     return "integrations";
   }
 
   if(
-    code.startsWith("security") ||
-    code.startsWith("ops") ||
-    code.startsWith("audit") ||
-    code.startsWith("data") ||
+    code === "security" ||
+    code === "security_policy" ||
+    code === "ops" ||
+    code === "ops_incidents" ||
+    code === "ops_oncall" ||
+    code === "audit" ||
+    code === "data" ||
+    code === "data_export" ||
+    code === "data_import" ||
+    path === "/audit" ||
     path.startsWith("/security") ||
     path.startsWith("/ops") ||
-    path.startsWith("/audit") ||
     path.startsWith("/data")
   ){
     return "system";
   }
 
   if(
-    code.startsWith("config") ||
-    code.startsWith("menu_builder") ||
-    code.startsWith("menus") ||
-    code.startsWith("rbac") ||
-    code.startsWith("ipblocks") ||
-    code.startsWith("plugins") ||
-    path.startsWith("/config") ||
-    path.startsWith("/menu-builder") ||
-    path.startsWith("/menus") ||
-    path.startsWith("/rbac") ||
-    path.startsWith("/ipblocks")
+    code === "config" ||
+    code === "menu_builder" ||
+    code === "menus" ||
+    code === "rbac" ||
+    code === "ipblocks" ||
+    code === "plugins" ||
+    code === "cfg_plugins" ||
+    code === "cfg_bulk_tools" ||
+    code === "cfg_otp" ||
+    code === "cfg_verify" ||
+    code === "cfg_sec_policy" ||
+    code === "cfg_analytics" ||
+    path === "/menu-builder" ||
+    path === "/menus" ||
+    path === "/rbac" ||
+    path === "/ipblocks" ||
+    path.startsWith("/config")
   ){
     return "config";
   }
@@ -66,6 +89,7 @@ async function getAllMenus(env){
     FROM menus
     ORDER BY sort_order ASC, created_at ASC
   `).all();
+
   return r.results || [];
 }
 
@@ -183,7 +207,8 @@ export async function onRequestGet({ request, env }){
   };
 
   for(const item of tree){
-    const bucket = bucketOf(item);
+    const bucket = bucketByCodeOrPath(item);
+    if(!grouped[bucket]) grouped[bucket] = [];
     grouped[bucket].push(item);
   }
 
