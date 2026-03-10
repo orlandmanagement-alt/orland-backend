@@ -4,8 +4,7 @@ function normPath(p){
   p = String(p || "").trim();
   if(!p) return "/";
   if(!p.startsWith("/")) p = "/" + p;
-  p = p.replace(/\/+/g, "/");
-  p = p.replace(/\/+$/,"");
+  p = p.replace(/\/+/g, "/").replace(/\/+$/,"");
   return p || "/";
 }
 
@@ -13,8 +12,14 @@ function mapCodeToModule(code, path){
   const c = String(code || "").trim().toLowerCase();
   const p = normPath(path);
 
-  // explicit by code
   const CODE_MAP = {
+/* __ORLAND_ALIAS_CODEMAP_PATCH__ */
+    blogspot_settings: "/modules/mod_cfg_blogspot.js",
+    bulk_tools: "/modules/mod_cfg_bulk_tools.js",
+    config_plugins: "/modules/mod_cfg_plugins.js",
+    oncall_groups: "/modules/mod_ops_oncall.js",
+    users_root: "/modules/mod_users_admin.js",
+    invites_talent: "/modules/mod_invites_talent.js",
     dashboard: "/modules/mod_dashboard.js",
 
     users: "/modules/mod_users.js",
@@ -55,15 +60,16 @@ function mapCodeToModule(code, path){
     blogspot_posts: "/modules/mod_blogspot_posts.js",
     blogspot_pages: "/modules/mod_blogspot_pages.js",
     blogspot_widgets: "/modules/mod_blogspot_widgets.js",
-    blogspot_settings: "/modules/mod_cfg_blogspot.js",
 
     data: "/modules/mod_data.js",
+    data_export: "/modules/mod_data_export.js",
+    data_import: "/modules/mod_data_import.js",
+
     plugins: "/modules/mod_plugins.js"
   };
 
   if(CODE_MAP[c]) return CODE_MAP[c];
 
-  // explicit by path
   const PATH_MAP = {
     "/": "/modules/mod_dashboard.js",
     "/dashboard": "/modules/mod_dashboard.js",
@@ -100,25 +106,21 @@ function mapCodeToModule(code, path){
     "/config/otp": "/modules/mod_cfg_otp.js",
     "/config/verify": "/modules/mod_cfg_verify.js",
     "/config/analytics": "/modules/mod_cfg_analytics.js",
-    "/integrations/blogspot/settings": "/modules/mod_cfg_blogspot.js",
 
     "/integrations/blogspot": "/modules/mod_blogspot.js",
+    "/integrations/blogspot/settings": "/modules/mod_cfg_blogspot.js",
     "/integrations/blogspot/posts": "/modules/mod_blogspot_posts.js",
     "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
     "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
 
     "/data": "/modules/mod_data.js",
+    "/data/export": "/modules/mod_data_export.js",
+    "/data/import": "/modules/mod_data_import.js",
+
     "/plugins": "/modules/mod_plugins.js"
   };
 
   if(PATH_MAP[p]) return PATH_MAP[p];
-
-  // heuristic fallback by path tail
-  const tail = p.split("/").filter(Boolean).pop() || "";
-  const safeTail = tail.replace(/[^a-z0-9_]/gi, "_");
-
-  if(safeTail) return "/modules/mod_" + safeTail + ".js";
-
   return "/modules/mod_placeholder.js";
 }
 
@@ -165,7 +167,6 @@ export async function onRequestGet({ request, env }){
     };
   }
 
-  // force important routes available if menu exists only as parent/inconsistent
   const ensured = {
     "/dashboard": "/modules/mod_dashboard.js",
     "/ops": "/modules/mod_ops.js",
@@ -182,6 +183,8 @@ export async function onRequestGet({ request, env }){
     "/integrations/blogspot/posts": "/modules/mod_blogspot_posts.js",
     "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
     "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
+    "/data/export": "/modules/mod_data_export.js",
+    "/data/import": "/modules/mod_data_import.js",
     "/profile": "/modules/mod_profile.js",
     "/profile/security": "/modules/mod_profile_security.js"
   };
@@ -192,8 +195,5 @@ export async function onRequestGet({ request, env }){
     }
   }
 
-  return json(200,"ok",{
-    routes,
-    total: Object.keys(routes).length
-  });
+  return json(200,"ok",{ routes, total: Object.keys(routes).length });
 }

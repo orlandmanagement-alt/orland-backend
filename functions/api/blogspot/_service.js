@@ -1,65 +1,64 @@
 import { json } from "../../_lib.js";
 
-export async function getSetting(env, k){
-  const r = await env.DB.prepare("SELECT v FROM system_settings WHERE k=? LIMIT 1").bind(k).first();
-  return r ? String(r.v ?? "") : "";
+async function getKV(env, k){
+  const row = await env.DB.prepare(`SELECT v FROM system_settings WHERE k=? LIMIT 1`).bind(k).first();
+  return row ? String(row.v || "") : "";
 }
 
 export async function getBlogspotConfig(env){
-  const enabled = await getSetting(env, "blogspot_enabled");
-  const blog_id = await getSetting(env, "blogspot_blog_id");
-  const api_key = await getSetting(env, "blogspot_api_key");
-  const client_id = await getSetting(env, "blogspot_client_id");
-  const client_secret = await getSetting(env, "blogspot_client_secret");
-  const service_account = await getSetting(env, "blogspot_service_account");
-
+  const enabled = await getKV(env, "blogspot_enabled");
+  const blog_id = await getKV(env, "blogspot_blog_id");
+  const api_key = await getKV(env, "blogspot_api_key");
   return {
     enabled: enabled === "1",
     blog_id,
     api_key,
-    client_id,
-    client_secret,
-    service_account
+    api_key_configured: !!api_key
   };
 }
 
-export function missingConfig(cfg){
-  const miss = [];
-  if(!cfg.blog_id) miss.push("blogspot_blog_id");
-  if(!cfg.api_key) miss.push("blogspot_api_key");
-  return miss;
-}
+export async function blogspotGet(env, path, params = {}){
+  const cfg = await getBlogspotConfig(env);
 
-export function bloggerUrl(path, params={}){
-  const u = new URL("https://www.googleapis.com/blogger/v3/" + String(path||"").replace(/^\/+/,""));
-  for(const [k,v] of Object.entries(params||{})){
-    if(v !== undefined && v !== null && String(v) !== "") u.searchParams.set(k, String(v));
+  if(!cfg.enabled){
+    return json(200, "ok", { enabled:false });
   }
-  return u.toString();
-}
-
-export async function bloggerFetch(url){
-  const r = await fetch(url, { method:"GET" });
-  const ct = r.headers.get("content-type") || "";
-  if(ct.includes("application/json")){
-    const j = await r.json().catch(()=>null);
-    return { ok:r.ok, http:r.status, data:j };
+  if(!cfg.blog_id || !cfg.api_key){
+    return json(200, "ok", {
+      enabled:true,
+      configured:false,
+      message:"missing_blogspot_config"
+    });
   }
-  const t = await r.text().catch(()=> "");
-  return { ok:r.ok, http:r.status, data:{ raw:t } };
-}
 
-export function upstreamError(res){
-  return json(502,"upstream_error",{ http:res.http, data:res.data || null });
-}
+  const u = new URL("https://www.googleapis.com/blogger/v3/blogs/" + encodeURIComponent(cfg.blog_id) + path);
+  u.searchParams.set("key", cfg.api_key);
 
-export function maskedConfig(cfg){
-  return {
-    enabled: !!cfg.enabled,
-    blog_id: cfg.blog_id || "",
-    api_key_configured: !!cfg.api_key,
-    client_id: cfg.client_id || "",
-    client_secret_configured: !!cfg.client_secret,
-    service_account: cfg.service_account || ""
-  };
+  for(const [k,v] of Object.entries(params)){
+    if(v !== undefined && v !== null && String(v) !== ""){
+      u.searchParams.set(k, String(v));
+    }
+  }
+
+  try{
+    const res = await fetch(u.toString(), {
+      method: "GET",
+      headers: { "accept": "application/json" }
+    });
+
+    const ct = res.headers.get("content-type") || "";
+    if(!ct.includes("application/json")){
+      const t = await res.text().catch(()=> "");
+      return json(502, "server_error", { http: res.status, body: t.slice(0,500) });
+    }
+
+    const data = await res.json();
+    if(!res.ok){
+      return json(res.status, "server_error", { http: res.status, body: data });
+    }
+
+    return json(200, "ok", data);
+  }catch(e){
+    return json(500, "network_error", { message:String(e?.message || e) });
+  }
 }

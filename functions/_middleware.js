@@ -1,4 +1,4 @@
-import { json, nowSec, sha256Base64, auditEvent } from "./_lib.js";
+import { json, nowSec, sha256Base64, auditEvent } from "_lib.js";
 
 async function hashIp(env, ip){
   const pepper = String(env.HASH_PEPPER || "");

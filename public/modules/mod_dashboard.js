@@ -1,240 +1,236 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
-  const nfmt = (n)=> {
-    try{ return new Intl.NumberFormat("id-ID").format(Number(n||0)); }
-    catch{ return String(n||0); }
-  };
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
 
-  async function loadOps(){
-    const r = await Orland.api("/api/ops/status");
-    if(r.status==="ok") return r.data || {};
-    return {};
+  function fmtNum(n){
+    try{ return new Intl.NumberFormat("id-ID").format(Number(n || 0)); }
+    catch{ return String(n || 0); }
   }
 
-  async function loadVisitors(){
-    const r = await Orland.api("/api/analytics/visitors?minutes=60");
-    if(r.status==="ok") return r.data || {};
-    return { enabled:false, error:r };
+  function fmtBytes(n){
+    n = Number(n || 0);
+    if(n < 1024) return n + " B";
+    if(n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    if(n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + " MB";
+    return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
   }
 
-  function drawMiniChart(canvas, series){
-    if(!canvas) return;
+  async function loadOverview(days=7){
+    return await Orland.api("/api/analytics/overview?days=" + encodeURIComponent(days));
+  }
 
-    const ratio = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    const width = Math.max(320, Math.floor(rect.width * ratio));
-    const height = Math.max(220, Math.floor(rect.height * ratio));
+  async function loadTopPages(){
+    return await Orland.api("/api/analytics/top-pages");
+  }
 
-    canvas.width = width;
-    canvas.height = height;
+  async function loadTopCountries(){
+    return await Orland.api("/api/analytics/top-countries");
+  }
 
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0,0,width,height);
+  function sumOverview(items){
+    let requests = 0;
+    let pageViews = 0;
+    let bytes = 0;
+    let cachedRequests = 0;
 
-    const pad = 20 * ratio;
-    const innerW = width - pad*2;
-    const innerH = height - pad*2;
-
-    // bg
-    ctx.fillStyle = "rgba(148,163,184,0.04)";
-    ctx.fillRect(0,0,width,height);
-
-    if(!series || !series.length){
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = `${12*ratio}px sans-serif`;
-      ctx.fillText("No visitor data", pad, pad + 14*ratio);
-      return;
+    for(const row of (items || [])){
+      const s = row?.sum || {};
+      requests += Number(s.requests || 0);
+      pageViews += Number(s.pageViews || 0);
+      bytes += Number(s.bytes || 0);
+      cachedRequests += Number(s.cachedRequests || 0);
     }
 
-    const vals = series.map(x=>Number(x.requests||0));
-    const max = Math.max(1, ...vals);
+    return { requests, pageViews, bytes, cachedRequests };
+  }
 
-    // grid
-    ctx.strokeStyle = "rgba(148,163,184,0.18)";
-    ctx.lineWidth = 1;
-    for(let i=0;i<4;i++){
-      const y = pad + (innerH/3)*i;
-      ctx.beginPath();
-      ctx.moveTo(pad, y);
-      ctx.lineTo(pad + innerW, y);
-      ctx.stroke();
+  function renderMiniBars(items){
+    if(!items.length){
+      return `<div class="text-sm text-slate-500">No visitor data.</div>`;
     }
 
-    // area
-    ctx.beginPath();
-    vals.forEach((v,i)=>{
-      const x = pad + (i / (vals.length-1 || 1)) * innerW;
-      const y = pad + innerH - (v/max) * innerH;
-      if(i===0) ctx.moveTo(x,y);
-      else ctx.lineTo(x,y);
-    });
-    ctx.lineTo(pad + innerW, pad + innerH);
-    ctx.lineTo(pad, pad + innerH);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(59,130,246,0.16)";
-    ctx.fill();
+    const vals = items.map(x => Number(x?.sum?.requests || 0));
+    const max = Math.max(...vals, 1);
 
-    // line
-    ctx.beginPath();
-    vals.forEach((v,i)=>{
-      const x = pad + (i / (vals.length-1 || 1)) * innerW;
-      const y = pad + innerH - (v/max) * innerH;
-      if(i===0) ctx.moveTo(x,y);
-      else ctx.lineTo(x,y);
-    });
-    ctx.strokeStyle = "#3b82f6";
-    ctx.lineWidth = 2 * ratio;
-    ctx.stroke();
+    return `
+      <div class="space-y-3">
+        ${items.slice().reverse().map(row => {
+          const d = row?.dimensions?.date || "-";
+          const v = Number(row?.sum?.requests || 0);
+          const w = Math.max(4, Math.round((v / max) * 100));
+          return `
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="text-slate-500">${esc(d)}</span>
+                <span class="font-bold">${fmtNum(v)}</span>
+              </div>
+              <div class="h-2 rounded-full bg-slate-100 dark:bg-black/20 overflow-hidden">
+                <div class="h-2 rounded-full bg-primary" style="width:${w}%"></div>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
 
-    // point
-    const last = vals[vals.length-1] || 0;
-    const lx = pad + innerW;
-    const ly = pad + innerH - (last/max) * innerH;
-    ctx.beginPath();
-    ctx.arc(lx, ly, 3.5*ratio, 0, Math.PI*2);
-    ctx.fillStyle = "#3b82f6";
-    ctx.fill();
+  function renderSimpleTable(items, kind){
+    if(!items.length){
+      return `<div class="text-sm text-slate-500">No data.</div>`;
+    }
 
-    // labels
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = `${11*ratio}px sans-serif`;
-    ctx.fillText("60m ago", pad, height - 5*ratio);
-    ctx.fillText("now", width - 30*ratio, height - 5*ratio);
-    ctx.fillText(String(max), 4*ratio, pad + 10*ratio);
+    return `
+      <div class="space-y-2">
+        ${items.map((row, i) => {
+          let label = "-";
+          if(kind === "pages") label = row?.dimensions?.clientRequestPath || "/";
+          if(kind === "countries") label = row?.dimensions?.clientCountryName || "Unknown";
+          const req = Number(row?.sum?.requests || 0);
+
+          return `
+            <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-3 py-3">
+              <div class="min-w-0">
+                <div class="text-xs text-slate-500">#${i + 1}</div>
+                <div class="text-sm font-bold truncate">${esc(label)}</div>
+              </div>
+              <div class="text-sm font-black shrink-0">${fmtNum(req)}</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
   }
 
   return {
-    title: "Dashboard",
+    title:"Dashboard",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-4">
-          <div>
-            <div class="text-xl font-extrabold text-slate-900 dark:text-white">Dashboard</div>
-            <div class="text-sm text-slate-500">Enterprise overview + realtime visitor analytics.</div>
+        <div class="space-y-5">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-2xl font-extrabold">Dashboard</div>
+              <div class="text-slate-500 mt-1">Cloudflare visitor analytics overview.</div>
+            </div>
+            <div class="flex gap-2">
+              <select id="days" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter font-bold text-sm">
+                <option value="7" selected>7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">30 days</option>
+              </select>
+              <button id="btnReload" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">Reload</button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="text-[11px] text-slate-500">Total Admin</div>
-              <div id="kpiAdmin" class="text-2xl font-black mt-1">—</div>
+          <div id="msg" class="text-sm text-slate-500"></div>
+
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xs text-slate-500 font-bold">Requests</div>
+              <div id="kRequests" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="text-[11px] text-slate-500">Total Client</div>
-              <div id="kpiClient" class="text-2xl font-black mt-1">—</div>
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xs text-slate-500 font-bold">Page Views</div>
+              <div id="kViews" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="text-[11px] text-slate-500">Total Talent</div>
-              <div id="kpiTalent" class="text-2xl font-black mt-1">—</div>
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xs text-slate-500 font-bold">Bandwidth</div>
+              <div id="kBytes" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="text-[11px] text-slate-500">Total Projects</div>
-              <div id="kpiProjects" class="text-2xl font-black mt-1">—</div>
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xs text-slate-500 font-bold">Cached Requests</div>
+              <div id="kCached" class="text-2xl font-extrabold mt-2">—</div>
             </div>
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div class="xl:col-span-2 bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <div class="text-sm font-extrabold">Visitors LIVE</div>
-                  <div class="text-[11px] text-slate-500">Cloudflare Analytics • 60 menit terakhir</div>
-                </div>
-                <div id="visBadge" class="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder text-slate-500">—</div>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                <div class="p-3 rounded-xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20">
-                  <div class="text-[11px] text-slate-500">Last minute requests</div>
-                  <div id="visLastReq" class="text-xl font-black mt-1">—</div>
-                </div>
-                <div class="p-3 rounded-xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20">
-                  <div class="text-[11px] text-slate-500">Total requests (60m)</div>
-                  <div id="visTotReq" class="text-xl font-black mt-1">—</div>
-                </div>
-                <div class="p-3 rounded-xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20">
-                  <div class="text-[11px] text-slate-500">Total uniques (60m)</div>
-                  <div id="visTotUniq" class="text-xl font-black mt-1">—</div>
-                </div>
-              </div>
-
-              <div class="mt-4 rounded-2xl border border-slate-200 dark:border-darkBorder overflow-hidden bg-slate-50 dark:bg-black/20">
-                <div class="px-3 py-2 text-[11px] text-slate-500 border-b border-slate-200 dark:border-darkBorder">
-                  Requests per minute
-                </div>
-                <div class="p-3">
-                  <canvas id="visChart" style="width:100%;height:240px;display:block"></canvas>
-                </div>
-              </div>
-
-              <div id="visHint" class="text-[11px] text-slate-500 mt-4"></div>
+            <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Visitor Chart</div>
+              <div class="text-slate-500 text-sm mt-1">Requests per day</div>
+              <div id="chartBox" class="mt-5"></div>
             </div>
 
-            <div class="bg-white dark:bg-darkLighter p-4 rounded-2xl border border-slate-200 dark:border-darkBorder">
-              <div class="text-sm font-extrabold">Quick Actions</div>
-              <div class="text-[11px] text-slate-500 mt-1">Akses cepat modul penting</div>
+            <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Top Pages</div>
+              <div class="text-slate-500 text-sm mt-1">Most requested paths</div>
+              <div id="pagesBox" class="mt-5"></div>
+            </div>
 
-              <div class="grid gap-2 mt-4">
-                <button class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5 text-left" id="goUsers">
-                  <div class="text-xs font-black"><i class="fa-solid fa-users-gear me-2"></i>User Manager</div>
-                  <div class="text-[11px] text-slate-500">Admin / Client / Talent</div>
-                </button>
-                <button class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5 text-left" id="goMenus">
-                  <div class="text-xs font-black"><i class="fa-solid fa-sitemap me-2"></i>Menu Builder</div>
-                  <div class="text-[11px] text-slate-500">Sidebar & role menus</div>
-                </button>
-                <button class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5 text-left" id="goAnalytics">
-                  <div class="text-xs font-black"><i class="fa-solid fa-chart-line me-2"></i>Analytics Settings</div>
-                  <div class="text-[11px] text-slate-500">Enable / zone / token</div>
-                </button>
-              </div>
+            <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Top Countries</div>
+              <div class="text-slate-500 text-sm mt-1">Traffic by country</div>
+              <div id="countriesBox" class="mt-5"></div>
             </div>
           </div>
         </div>
       `;
 
-      host.querySelector("#goUsers")?.addEventListener("click", ()=>Orland.navigate("/users/admin"));
-      host.querySelector("#goMenus")?.addEventListener("click", ()=>Orland.navigate("/menus"));
-      host.querySelector("#goAnalytics")?.addEventListener("click", ()=>Orland.navigate("/config/analytics"));
+      const q = (id)=>host.querySelector("#" + id);
 
-      try{
-        const ops = await loadOps();
-        host.querySelector("#kpiAdmin").textContent = nfmt(ops.users_admin ?? ops.admins ?? ops.total_admin ?? 0);
-        host.querySelector("#kpiClient").textContent = nfmt(ops.users_client ?? ops.clients ?? ops.total_client ?? 0);
-        host.querySelector("#kpiTalent").textContent = nfmt(ops.users_talent ?? ops.talents ?? ops.total_talent ?? 0);
-        host.querySelector("#kpiProjects").textContent = nfmt(ops.projects ?? ops.total_projects ?? 0);
-      }catch{}
+      async function render(){
+        const days = Number(q("days").value || 7);
+        q("msg").className = "text-sm text-slate-500";
+        q("msg").textContent = "Loading analytics...";
 
-      async function renderVisitors(){
-        const badge = host.querySelector("#visBadge");
-        const hint = host.querySelector("#visHint");
-        const chart = host.querySelector("#visChart");
+        const [overviewRes, pagesRes, countriesRes] = await Promise.all([
+          loadOverview(days),
+          loadTopPages(),
+          loadTopCountries()
+        ]);
 
-        const v = await loadVisitors();
-
-        if(!v || !v.enabled){
-          badge.textContent = "Analytics OFF";
-          badge.className = "text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder text-slate-500";
-          host.querySelector("#visLastReq").textContent = "—";
-          host.querySelector("#visTotReq").textContent = "—";
-          host.querySelector("#visTotUniq").textContent = "—";
-          hint.innerHTML = `Aktifkan di <b>Configuration → Analytics Settings</b>.`;
-          drawMiniChart(chart, []);
+        if(overviewRes.status !== "ok"){
+          q("msg").className = "text-sm text-red-500";
+          q("msg").textContent = "Overview failed: " + overviewRes.status;
           return;
         }
 
-        badge.textContent = "LIVE";
-        badge.className = "text-[11px] px-2 py-1 rounded-lg border border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-black/20 dark:border-emerald-700 dark:text-emerald-400";
+        const ov = overviewRes.data || {};
+        if(ov.enabled === false){
+          q("msg").className = "text-sm text-amber-600";
+          q("msg").textContent = "Analytics is disabled.";
+          q("chartBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
+          q("pagesBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
+          q("countriesBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
+          return;
+        }
 
-        host.querySelector("#visLastReq").textContent = nfmt(v.last?.requests ?? 0);
-        host.querySelector("#visTotReq").textContent = nfmt(v.total_requests ?? 0);
-        host.querySelector("#visTotUniq").textContent = nfmt(v.total_uniques ?? 0);
-        hint.textContent = `Window: ${v.minutes || 60} menit • source: Cloudflare Analytics`;
-        drawMiniChart(chart, v.series || []);
+        if(ov.upstream_ok === false){
+          q("msg").className = "text-sm text-red-500";
+          q("msg").textContent = "Cloudflare upstream auth/query failed.";
+          q("chartBox").innerHTML = `<pre class="text-xs whitespace-pre-wrap break-words">${esc(JSON.stringify(ov, null, 2))}</pre>`;
+          q("pagesBox").innerHTML = `<div class="text-sm text-slate-500">No data.</div>`;
+          q("countriesBox").innerHTML = `<div class="text-sm text-slate-500">No data.</div>`;
+          return;
+        }
+
+        const items = Array.isArray(ov.items) ? ov.items : [];
+        const sums = sumOverview(items);
+
+        q("kRequests").textContent = fmtNum(sums.requests);
+        q("kViews").textContent = fmtNum(sums.pageViews);
+        q("kBytes").textContent = fmtBytes(sums.bytes);
+        q("kCached").textContent = fmtNum(sums.cachedRequests);
+
+        q("chartBox").innerHTML = renderMiniBars(items);
+
+        const pageItems = pagesRes.status === "ok" && Array.isArray(pagesRes.data?.items)
+          ? pagesRes.data.items
+          : [];
+        const countryItems = countriesRes.status === "ok" && Array.isArray(countriesRes.data?.items)
+          ? countriesRes.data.items
+          : [];
+
+        q("pagesBox").innerHTML = renderSimpleTable(pageItems, "pages");
+        q("countriesBox").innerHTML = renderSimpleTable(countryItems, "countries");
+
+        q("msg").className = "text-sm text-emerald-600";
+        q("msg").textContent = "Loaded.";
       }
 
-      await renderVisitors();
-      const timer = setInterval(renderVisitors, 60000);
-      host.__orlandTimer = timer;
+      q("btnReload").onclick = render;
+      q("days").onchange = render;
+
+      await render();
     }
   };
 }
