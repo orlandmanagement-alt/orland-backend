@@ -1,210 +1,321 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[m]));
 
-  async function loadBundle(){
-    return await Orland.api("/api/rbac/bundle");
+  async function apiLoad(roleId=""){
+    const q = roleId ? ("?role_id=" + encodeURIComponent(roleId)) : "";
+    return await Orland.api("/api/rbac" + q);
   }
 
-  async function saveRoleMenus(role_id, menu_ids){
-    return await Orland.api("/api/role-menus/set", {
-      method:"POST",
-      body: JSON.stringify({ role_id, menu_ids })
+  async function apiSave(payload){
+    return await Orland.api("/api/rbac", {
+      method: "POST",
+      body: JSON.stringify(payload)
     });
   }
 
-  function sortMenus(a,b){
+  function bySort(a, b){
     const sa = Number(a.sort_order ?? 9999);
     const sb = Number(b.sort_order ?? 9999);
     if(sa !== sb) return sa - sb;
     return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
   }
 
-  function buildTree(menus){
+  function buildTree(items){
     const byId = new Map();
     const roots = [];
 
-    for(const m of (menus||[])){
-      byId.set(String(m.id), { ...m, children:[] });
+    for(const row of (items || [])){
+      byId.set(String(row.id), {
+        id: String(row.id),
+        code: row.code || "",
+        label: row.label || row.code || row.path || "Menu",
+        path: row.path || "",
+        parent_id: row.parent_id ? String(row.parent_id) : null,
+        icon: row.icon || "fa-solid fa-circle-dot",
+        sort_order: Number(row.sort_order ?? 9999),
+        created_at: Number(row.created_at ?? 0),
+        children: []
+      });
     }
 
-    for(const m of byId.values()){
-      if(m.parent_id && byId.has(String(m.parent_id))){
-        byId.get(String(m.parent_id)).children.push(m);
+    for(const item of byId.values()){
+      if(item.parent_id && byId.has(item.parent_id)){
+        byId.get(item.parent_id).children.push(item);
       }else{
-        roots.push(m);
+        roots.push(item);
       }
     }
 
     const walk = (arr)=>{
-      arr.sort(sortMenus);
-      for(const x of arr) walk(x.children || []);
+      arr.sort(bySort);
+      for(const x of arr){
+        walk(x.children);
+      }
     };
     walk(roots);
+
     return roots;
   }
 
-  function flattenTree(roots){
-    const out = [];
-    const walk = (node, depth)=>{
-      out.push({ ...node, __depth: depth });
-      for(const c of (node.children||[])) walk(c, depth+1);
-    };
-    for(const r of roots) walk(r, 0);
+  function flattenTree(nodes, out = []){
+    for(const n of nodes){
+      out.push(n);
+      flattenTree(n.children || [], out);
+    }
     return out;
   }
 
   return {
-    title:"RBAC Manager",
+    title: "RBAC Manager",
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4">
-          <div>
-            <div class="text-xl font-extrabold text-slate-900 dark:text-white">RBAC Manager</div>
-            <div class="text-sm text-slate-500">Assign menus ke role.</div>
-          </div>
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-2xl font-extrabold">RBAC Manager</div>
+            <div class="text-slate-500 mt-1">Assign menus ke role melalui tabel role_menus.</div>
 
-          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-            <div class="flex gap-2 flex-wrap">
-              <button id="btnSave" class="px-4 py-2 rounded-xl text-xs font-black bg-primary text-white">Save</button>
-              <button id="btnReload" class="px-4 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder">Reload</button>
+            <div class="mt-5 flex gap-3 flex-wrap">
+              <button id="btnSave" class="px-5 py-3 rounded-2xl bg-primary text-white font-black">
+                <i class="fa-solid fa-floppy-disk mr-2"></i>Save
+              </button>
+              <button id="btnReload" class="px-5 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">
+                <i class="fa-solid fa-rotate mr-2"></i>Reload
+              </button>
             </div>
 
-            <div class="mt-4">
-              <label class="text-[11px] font-bold text-slate-500">ROLE</label>
-              <select id="roleSel" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder"></select>
+            <div class="mt-6">
+              <label class="block text-sm font-bold text-slate-500 mb-2">ROLE</label>
+              <select id="roleSelect" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-bold"></select>
             </div>
 
-            <div class="mt-4">
-              <label class="text-[11px] font-bold text-slate-500">INFO</label>
-              <div class="mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder text-slate-500">
+            <div class="mt-5">
+              <label class="block text-sm font-bold text-slate-500 mb-2">INFO</label>
+              <div id="infoBox" class="rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3 text-sm text-slate-500">
                 Checklist menu → Save untuk set menu_ids.
               </div>
             </div>
 
-            <div id="msg" class="mt-3 text-xs"></div>
+            <div id="msg" class="mt-4 text-sm"></div>
           </div>
 
-          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-            <div class="text-sm font-extrabold">Menus</div>
-            <div id="menusBox" class="mt-4 space-y-2"></div>
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-xl font-extrabold">Menus</div>
+                <div class="text-slate-500 text-sm mt-1">Checklist parent / child menu dari database D1.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnCheckAll" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-bold text-sm">Check all</button>
+                <button id="btnUncheckAll" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-bold text-sm">Uncheck all</button>
+              </div>
+            </div>
+
+            <div id="menuBox" class="mt-5 space-y-3"></div>
           </div>
         </div>
       `;
 
-      const msg = host.querySelector("#msg");
-      const roleSel = host.querySelector("#roleSel");
-      const menusBox = host.querySelector("#menusBox");
+      const q = (id)=>host.querySelector("#" + id);
 
       let ROLES = [];
       let MENUS = [];
-      let ROLE_MENUS_MAP = {};
-      let CURRENT_ROLE = "";
+      let TREE = [];
+      let CHECKED = new Set();
+      let ACTIVE_ROLE = "";
 
-      function selectedMenuIds(){
-        return Array.from(menusBox.querySelectorAll('input[type="checkbox"]:checked')).map(x=>x.value);
+      function setMsg(kind, text){
+        const el = q("msg");
+        el.className = "mt-4 text-sm";
+        if(kind === "error") el.classList.add("text-red-500");
+        else if(kind === "success") el.classList.add("text-emerald-600");
+        else el.classList.add("text-slate-500");
+        el.textContent = text;
       }
 
-      function renderRoles(){
-        roleSel.innerHTML = ROLES.map(r =>
-          `<option value="${esc(r.id)}">${esc(r.name)}</option>`
-        ).join("");
-        if(CURRENT_ROLE){
-          roleSel.value = CURRENT_ROLE;
-        }else if(ROLES.length){
-          CURRENT_ROLE = String(ROLES[0].id);
-          roleSel.value = CURRENT_ROLE;
+      function collectDescIds(node){
+        let ids = [];
+        for(const ch of (node.children || [])){
+          ids.push(ch.id);
+          ids = ids.concat(collectDescIds(ch));
         }
+        return ids;
+      }
+
+      function updateParentState(){
+        const flat = flattenTree(TREE, []);
+        const byId = new Map(flat.map(x => [x.id, x]));
+
+        for(let i = flat.length - 1; i >= 0; i--){
+          const item = flat[i];
+          if(!item.children || !item.children.length) continue;
+
+          const childIds = item.children.map(x => x.id);
+          const allChecked = childIds.length > 0 && childIds.every(id => CHECKED.has(id));
+
+          if(allChecked) CHECKED.add(item.id);
+          else CHECKED.delete(item.id);
+        }
+
+        for(const item of flat){
+          if(item.parent_id && CHECKED.has(item.id)){
+            const p = byId.get(item.parent_id);
+            if(p){
+              const siblings = (p.children || []).map(x => x.id);
+              if(siblings.length && siblings.every(id => CHECKED.has(id))){
+                CHECKED.add(p.id);
+              }
+            }
+          }
+        }
+      }
+
+      function toggleNode(node, checked){
+        if(checked) CHECKED.add(node.id);
+        else CHECKED.delete(node.id);
+
+        for(const ch of (node.children || [])){
+          toggleNode(ch, checked);
+        }
+      }
+
+      function renderRoleSelect(){
+        q("roleSelect").innerHTML = ROLES.map(r => `
+          <option value="${esc(r.id)}">${esc(r.name)}</option>
+        `).join("");
+
+        if(ACTIVE_ROLE){
+          q("roleSelect").value = ACTIVE_ROLE;
+        }
+      }
+
+      function renderTree(nodes, depth = 0){
+        return nodes.map(node => {
+          const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+          const checked = CHECKED.has(node.id);
+
+          return `
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder overflow-hidden">
+              <label class="flex items-start gap-3 px-4 py-3 ${depth === 0 ? "bg-slate-50 dark:bg-black/10" : "bg-white dark:bg-darkLighter"}">
+                <input class="menuCheck mt-1" type="checkbox" data-id="${esc(node.id)}" ${checked ? "checked" : ""}>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <i class="${esc(node.icon)} text-slate-400"></i>
+                    <span class="font-black text-sm">${esc(node.label)}</span>
+                  </div>
+                  <div class="text-xs text-slate-500 mt-1 break-all">
+                    ${esc(node.code || "-")} • ${esc(node.path || "-")}
+                  </div>
+                </div>
+              </label>
+
+              ${hasChildren ? `
+                <div class="pl-6 border-t border-slate-200 dark:border-darkBorder">
+                  ${renderTree(node.children, depth + 1)}
+                </div>
+              ` : ""}
+            </div>
+          `;
+        }).join("");
+      }
+
+      function bindChecks(){
+        const flat = flattenTree(TREE, []);
+        const byId = new Map(flat.map(x => [x.id, x]));
+
+        q("menuBox").querySelectorAll(".menuCheck").forEach(el => {
+          el.onchange = ()=>{
+            const id = el.getAttribute("data-id");
+            const node = byId.get(String(id));
+            if(!node) return;
+
+            toggleNode(node, !!el.checked);
+            updateParentState();
+            renderMenus();
+          };
+        });
       }
 
       function renderMenus(){
-        const roots = buildTree(MENUS);
-        const flat = flattenTree(roots);
+        if(!TREE.length){
+          q("menuBox").innerHTML = `<div class="text-sm text-slate-500">No menu data.</div>`;
+          return;
+        }
+        q("menuBox").innerHTML = renderTree(TREE, 0);
+        bindChecks();
 
-        const allowedIds = Array.isArray(ROLE_MENUS_MAP[CURRENT_ROLE])
-          ? ROLE_MENUS_MAP[CURRENT_ROLE]
-          : [];
-
-        menusBox.innerHTML = flat.map(m=>{
-          const checked = allowedIds.includes(String(m.id)) ? "checked" : "";
-          const pad = 10 + (m.__depth * 18);
-          return `
-            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-darkBorder px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5" style="padding-left:${pad}px">
-              <input type="checkbox" value="${esc(m.id)}" ${checked}>
-              <div class="min-w-0">
-                <div class="text-xs font-black truncate">${esc(m.label || m.code || m.id)}</div>
-                <div class="text-[11px] text-slate-500 truncate">${esc(m.path || "")}</div>
-              </div>
-            </label>
-          `;
-        }).join("") || `<div class="text-xs text-slate-500">No menus.</div>`;
+        const roleName = ROLES.find(x => String(x.id) === String(ACTIVE_ROLE))?.name || "-";
+        q("infoBox").textContent = "Role: " + roleName + " • Checked menus: " + CHECKED.size;
       }
 
-      async function reload(){
-        msg.className = "mt-3 text-xs text-slate-500";
-        msg.textContent = "Loading...";
-        const r = await loadBundle();
+      async function load(roleId = ""){
+        setMsg("muted", "Loading...");
+        const r = await apiLoad(roleId);
 
-        if(r.status!=="ok"){
-          msg.className = "mt-3 text-xs text-red-500";
-          msg.textContent = "Failed: " + r.status;
+        if(r.status !== "ok"){
+          setMsg("error", "Failed: " + r.status);
           return;
         }
 
-        const d = r.data || {};
-        ROLES = Array.isArray(d.roles) ? d.roles : [];
-        MENUS = Array.isArray(d.menus) ? d.menus : [];
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
+        MENUS = Array.isArray(r.data?.menus) ? r.data.menus : [];
+        CHECKED = new Set((Array.isArray(r.data?.menu_ids) ? r.data.menu_ids : []).map(String));
 
-        // FIX utama: role_menus bisa object map, bukan array
-        ROLE_MENUS_MAP = (d.role_menus && typeof d.role_menus === "object" && !Array.isArray(d.role_menus))
-          ? d.role_menus
-          : {};
+        if(!ACTIVE_ROLE){
+          ACTIVE_ROLE = roleId || (ROLES[0]?.id || "");
+        }
 
-        renderRoles();
+        TREE = buildTree(MENUS);
+        updateParentState();
+        renderRoleSelect();
         renderMenus();
-
-        msg.className = "mt-3 text-xs text-emerald-600";
-        msg.textContent = "Loaded.";
+        setMsg("success", "Loaded.");
       }
 
-      roleSel.onchange = ()=>{
-        CURRENT_ROLE = roleSel.value || "";
+      q("roleSelect").onchange = async ()=>{
+        ACTIVE_ROLE = q("roleSelect").value;
+        await load(ACTIVE_ROLE);
+      };
+
+      q("btnReload").onclick = async ()=>{
+        await load(ACTIVE_ROLE);
+      };
+
+      q("btnCheckAll").onclick = ()=>{
+        const flat = flattenTree(TREE, []);
+        CHECKED = new Set(flat.map(x => x.id));
         renderMenus();
       };
 
-      host.querySelector("#btnReload").onclick = reload;
-
-      host.querySelector("#btnSave").onclick = async ()=>{
-        if(!CURRENT_ROLE){
-          msg.className = "mt-3 text-xs text-red-500";
-          msg.textContent = "Role required.";
-          return;
-        }
-
-        const menu_ids = selectedMenuIds();
-        if(!menu_ids.length){
-          msg.className = "mt-3 text-xs text-red-500";
-          msg.textContent = "Select at least one menu.";
-          return;
-        }
-
-        msg.className = "mt-3 text-xs text-slate-500";
-        msg.textContent = "Saving...";
-
-        const r = await saveRoleMenus(CURRENT_ROLE, menu_ids);
-        if(r.status!=="ok"){
-          msg.className = "mt-3 text-xs text-red-500";
-          msg.textContent = "Save failed: " + r.status;
-          return;
-        }
-
-        msg.className = "mt-3 text-xs text-emerald-600";
-        msg.textContent = "Saved.";
-        await reload();
+      q("btnUncheckAll").onclick = ()=>{
+        CHECKED = new Set();
+        renderMenus();
       };
 
-      await reload();
+      q("btnSave").onclick = async ()=>{
+        if(!ACTIVE_ROLE){
+          setMsg("error", "Role belum dipilih.");
+          return;
+        }
+
+        setMsg("muted", "Saving...");
+        const payload = {
+          role_id: ACTIVE_ROLE,
+          menu_ids: Array.from(CHECKED)
+        };
+
+        const r = await apiSave(payload);
+        if(r.status !== "ok"){
+          setMsg("error", "Save failed: " + r.status);
+          return;
+        }
+
+        setMsg("success", "RBAC saved.");
+        await load(ACTIVE_ROLE);
+      };
+
+      await load("");
     }
   };
 }
