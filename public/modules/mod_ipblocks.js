@@ -1,30 +1,40 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
-  const nfmt = (n)=> {
-    try{ return new Intl.DateTimeFormat("id-ID",{ dateStyle:"short", timeStyle:"short" }).format(new Date(Number(n||0)*1000)); }
-    catch{ return String(n||""); }
-  };
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
 
-  async function list(active=1){
-    return await Orland.api("/api/ip-blocks?active="+encodeURIComponent(active)+"&limit=100");
+  async function load(mode="active"){
+    return await Orland.api("/api/ipblocks?mode=" + encodeURIComponent(mode) + "&limit=100");
   }
-  async function block(ip, ttl_sec, reason){
-    return await Orland.api("/api/ip-blocks",{
+
+  async function createBlock(payload){
+    return await Orland.api("/api/ipblocks_create", {
       method:"POST",
-      body: JSON.stringify({ action:"block", ip, ttl_sec, reason })
+      body: JSON.stringify(payload)
     });
   }
-  async function unblock(id){
-    return await Orland.api("/api/ip-blocks",{
+
+  async function revokeBlock(id){
+    return await Orland.api("/api/ipblocks_revoke", {
       method:"POST",
-      body: JSON.stringify({ action:"unblock", id })
+      body: JSON.stringify({ id })
     });
   }
-  async function purge(){
-    return await Orland.api("/api/ip-blocks",{
+
+  async function purgeBlocks(){
+    return await Orland.api("/api/ipblocks_purge", {
       method:"POST",
-      body: JSON.stringify({ action:"purge" })
+      body: "{}"
     });
+  }
+
+  function fmtTs(sec){
+    if(!sec) return "—";
+    try{
+      return new Intl.DateTimeFormat("id-ID", { dateStyle:"medium", timeStyle:"short" }).format(new Date(Number(sec) * 1000));
+    }catch{
+      return String(sec);
+    }
   }
 
   return {
@@ -34,152 +44,135 @@ export default function(Orland){
         <div class="space-y-4">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <div class="text-xl font-extrabold text-slate-900 dark:text-white">Banned / IP Blocks</div>
-              <div class="text-sm text-slate-500">Block manual, unblock, dan purge expired IP hashes.</div>
+              <div class="text-2xl font-extrabold">Banned / IP Blocks</div>
+              <div class="text-slate-500 mt-1">Block manual, unblock, dan purge expired IP hashes.</div>
             </div>
             <div class="flex gap-2">
-              <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-                Reload
-              </button>
-              <button id="btnPurge" class="px-3 py-2 rounded-xl text-xs font-black border border-amber-200 text-amber-700 hover:bg-amber-50">
-                Purge
-              </button>
+              <button id="btnReload" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">Reload</button>
+              <button id="btnPurge" class="px-4 py-2 rounded-2xl border border-amber-300 text-amber-700 font-black">Purge</button>
             </div>
           </div>
 
-          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div class="md:col-span-2">
-                <label class="text-[11px] font-bold text-slate-500">IP Address</label>
-                <input id="f_ip" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="203.0.113.10">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">IP Address</label>
+                <input id="ip" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark" placeholder="203.0.113.10">
               </div>
               <div>
-                <label class="text-[11px] font-bold text-slate-500">TTL (sec)</label>
-                <input id="f_ttl" type="number" value="86400" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+                <label class="block text-sm font-bold text-slate-500 mb-2">TTL (sec)</label>
+                <input id="ttl" type="number" value="86400" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
               </div>
               <div>
-                <label class="text-[11px] font-bold text-slate-500">Reason</label>
-                <input id="f_reason" value="manual_block" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
+                <label class="block text-sm font-bold text-slate-500 mb-2">Reason</label>
+                <input id="reason" value="manual_block" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
               </div>
+              <div class="flex justify-end">
+                <button id="btnBlock" class="px-6 py-3 rounded-2xl bg-red-500 text-white font-black">Block IP</button>
+              </div>
+              <div id="formMsg" class="text-sm"></div>
             </div>
-            <div class="mt-3 flex justify-end">
-              <button id="btnBlock" class="px-4 py-2 rounded-xl text-xs font-black bg-danger text-white hover:opacity-95">
-                Block IP
-              </button>
-            </div>
-            <div id="msg" class="mt-2 text-xs"></div>
           </div>
 
-          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl overflow-hidden">
-            <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
-              <div class="text-sm font-extrabold">Active blocks</div>
-              <button id="btnShowAll" class="text-xs font-black text-primary">Toggle active/all</button>
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
+              <div class="text-xl font-extrabold">Active blocks</div>
+              <button id="btnToggleMode" class="text-primary font-bold">Toggle active/all</button>
             </div>
-            <div id="listBox" class="divide-y divide-slate-100 dark:divide-darkBorder"></div>
+            <div id="listBox" class="p-5"></div>
           </div>
         </div>
       `;
 
-      const msg = host.querySelector("#msg");
-      const listBox = host.querySelector("#listBox");
-      let activeOnly = 1;
+      const q = (id)=>host.querySelector("#"+id);
+      let mode = "active";
 
-      async function reload(){
-        msg.textContent = "";
-        const r = await list(activeOnly);
-        if(r.status!=="ok"){
-          listBox.innerHTML = `<div class="p-4 text-red-500 text-sm font-bold">Failed: ${esc(r.status)}</div>`;
+      async function render(){
+        const r = await load(mode);
+        if(r.status !== "ok"){
+          q("listBox").innerHTML = `<div class="text-red-500 font-bold">Failed: ${esc(r.status)}</div>`;
           return;
         }
-        const items = r.data?.items || [];
+
+        const items = Array.isArray(r.data?.items) ? r.data.items : [];
         if(!items.length){
-          listBox.innerHTML = `<div class="p-4 text-xs text-slate-500">No data.</div>`;
+          q("listBox").innerHTML = `<div class="text-slate-500 text-sm">No blocked IP data.</div>`;
           return;
         }
 
-        listBox.innerHTML = items.map(x=>`
-          <div class="p-4 flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="text-sm font-extrabold truncate">${esc(x.reason || "—")}</div>
-              <div class="text-[11px] text-slate-500 break-all mt-1">hash: ${esc(x.ip_hash)}</div>
-              <div class="text-[11px] text-slate-500 mt-1">
-                created: ${esc(nfmt(x.created_at))}
-                ${x.expires_at ? ` • expires: ${esc(nfmt(x.expires_at))}` : ``}
-                ${x.revoked_at ? ` • revoked: ${esc(nfmt(x.revoked_at))}` : ``}
+        q("listBox").innerHTML = `
+          <div class="space-y-3">
+            ${items.map(it => `
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-sm font-black break-all">${esc(it.ip_hash || "-")}</div>
+                    <div class="text-xs text-slate-500 mt-1">Reason: ${esc(it.reason || "-")}</div>
+                    <div class="text-xs text-slate-500 mt-1">Created: ${esc(fmtTs(it.created_at))}</div>
+                    <div class="text-xs text-slate-500 mt-1">Expires: ${esc(fmtTs(it.expires_at))}</div>
+                    <div class="text-xs text-slate-500 mt-1">Revoked: ${esc(fmtTs(it.revoked_at))}</div>
+                  </div>
+                  <div class="shrink-0">
+                    ${!it.revoked_at ? `<button class="btnUnblock px-4 py-2 rounded-xl border border-slate-200 dark:border-darkBorder font-bold" data-id="${esc(it.id)}">Unblock</button>` : ""}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="flex gap-2 shrink-0">
-              ${x.revoked_at ? `` : `
-              <button class="btnUnblock px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5" data-id="${esc(x.id)}">
-                Unblock
-              </button>`}
-            </div>
+            `).join("")}
           </div>
-        `).join("");
+        `;
 
-        listBox.querySelectorAll(".btnUnblock").forEach(btn=>{
-          btn.addEventListener("click", async ()=>{
+        q("listBox").querySelectorAll(".btnUnblock").forEach(btn=>{
+          btn.onclick = async ()=>{
             const id = btn.getAttribute("data-id");
-            if(!id) return;
-            if(!confirm("Unblock this entry?")) return;
-            const rr = await unblock(id);
-            if(rr.status!=="ok"){
-              msg.className = "mt-2 text-xs text-red-500";
-              msg.textContent = "Failed: " + rr.status;
+            const res = await revokeBlock(id);
+            if(res.status !== "ok"){
+              alert("Unblock failed: " + res.status);
               return;
             }
-            msg.className = "mt-2 text-xs text-emerald-600";
-            msg.textContent = "Unblocked.";
-            await reload();
-          });
+            await render();
+          };
         });
       }
 
-      host.querySelector("#btnReload")?.addEventListener("click", reload);
+      q("btnReload").onclick = render;
+      q("btnToggleMode").onclick = async ()=>{
+        mode = mode === "active" ? "all" : "active";
+        await render();
+      };
 
-      host.querySelector("#btnShowAll")?.addEventListener("click", async ()=>{
-        activeOnly = activeOnly ? 0 : 1;
-        await reload();
-      });
-
-      host.querySelector("#btnPurge")?.addEventListener("click", async ()=>{
-        if(!confirm("Purge expired/revoked entries?")) return;
-        const r = await purge();
-        if(r.status!=="ok"){
-          msg.className = "mt-2 text-xs text-red-500";
-          msg.textContent = "Failed: " + r.status;
+      q("btnPurge").onclick = async ()=>{
+        const r = await purgeBlocks();
+        if(r.status !== "ok"){
+          alert("Purge failed: " + r.status);
           return;
         }
-        msg.className = "mt-2 text-xs text-emerald-600";
-        msg.textContent = "Purged.";
-        await reload();
-      });
+        await render();
+      };
 
-      host.querySelector("#btnBlock")?.addEventListener("click", async ()=>{
-        const ip = host.querySelector("#f_ip")?.value || "";
-        const ttl = Number(host.querySelector("#f_ttl")?.value || 86400);
-        const reason = host.querySelector("#f_reason")?.value || "manual_block";
+      q("btnBlock").onclick = async ()=>{
+        const msg = q("formMsg");
+        msg.className = "text-sm text-slate-500";
+        msg.textContent = "Saving...";
 
-        if(!ip.trim()){
-          msg.className = "mt-2 text-xs text-red-500";
-          msg.textContent = "IP required.";
-          return;
-        }
+        const r = await createBlock({
+          ip: q("ip").value.trim(),
+          ttl: Number(q("ttl").value || 86400),
+          reason: q("reason").value.trim()
+        });
 
-        const r = await block(ip.trim(), ttl, reason.trim());
-        if(r.status!=="ok"){
-          msg.className = "mt-2 text-xs text-red-500";
+        if(r.status !== "ok"){
+          msg.className = "text-sm text-red-500";
           msg.textContent = "Failed: " + r.status;
           return;
         }
 
-        msg.className = "mt-2 text-xs text-emerald-600";
-        msg.textContent = "Blocked.";
-        host.querySelector("#f_ip").value = "";
-        await reload();
-      });
+        msg.className = "text-sm text-emerald-600";
+        msg.textContent = "IP blocked.";
+        q("ip").value = "";
+        await render();
+      };
 
-      await reload();
+      await render();
     }
   };
 }
