@@ -1,4 +1,4 @@
-import { json, nowSec } from "../_lib.js";
+import { json, nowSec } from "../../_lib.js";
 import { getBlogspotConfig } from "../blogspot/_service.js";
 
 async function getCfg(env, k){
