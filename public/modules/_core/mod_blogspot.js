@@ -26,7 +26,7 @@ export default function(Orland){
 
   function card(title, id, hint=""){
     return `
-      <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+      <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
         <div class="text-xs text-slate-500 font-bold">${title}</div>
         <div id="${id}" class="text-2xl font-extrabold mt-2">—</div>
         ${hint ? `<div class="text-[11px] text-slate-500 mt-2">${hint}</div>` : ``}
@@ -62,7 +62,7 @@ export default function(Orland){
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Connection</div>
               <div class="mt-4 space-y-3 text-sm">
                 <div class="flex items-center justify-between gap-3">
@@ -80,7 +80,7 @@ export default function(Orland){
               </div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Sync Status</div>
               <div class="mt-4 space-y-3 text-sm">
                 <div class="flex items-center justify-between gap-3">
@@ -98,7 +98,7 @@ export default function(Orland){
               </div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Last Message</div>
               <div id="vLastMsg" class="mt-4 text-sm text-slate-500 break-words">—</div>
             </div>

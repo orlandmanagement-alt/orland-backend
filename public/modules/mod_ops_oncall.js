@@ -52,19 +52,19 @@ export default function(Orland){
           </div>
 
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
               <div class="text-[11px] text-slate-500 font-bold">Total Groups</div>
               <div id="kGroups" class="text-2xl font-black mt-1">—</div>
             </div>
-            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
               <div class="text-[11px] text-slate-500 font-bold">Total Members</div>
               <div id="kMembers" class="text-2xl font-black mt-1">—</div>
             </div>
-            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
               <div class="text-[11px] text-slate-500 font-bold">Active Members</div>
               <div id="kActiveMembers" class="text-2xl font-black mt-1">—</div>
             </div>
-            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
               <div class="text-[11px] text-slate-500 font-bold">Selected Group</div>
               <div id="kSelected" class="text-sm font-black mt-2 truncate">—</div>
             </div>
@@ -72,7 +72,7 @@ export default function(Orland){
 
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="xl:col-span-1 space-y-4">
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="text-sm font-extrabold">Create / Edit Group</div>
 
                 <div class="mt-4 space-y-3">
@@ -114,7 +114,7 @@ export default function(Orland){
                 <div id="groupMsg" class="mt-3 text-xs"></div>
               </div>
 
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-extrabold">Groups</div>
@@ -128,12 +128,12 @@ export default function(Orland){
             </div>
 
             <div class="xl:col-span-2 space-y-4">
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="text-sm font-extrabold">Selected Group Detail</div>
                 <div id="selBox" class="mt-3 text-xs text-slate-500">No group selected.</div>
               </div>
 
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="text-sm font-extrabold">Add / Update Roster</div>
 
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
@@ -165,7 +165,7 @@ export default function(Orland){
                 </div>
               </div>
 
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-extrabold">Roster</div>

@@ -1,3 +1,5 @@
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+
 export default function(Orland){
   const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -41,7 +43,7 @@ export default function(Orland){
   <div class="mt-2 text-sm text-slate-600">Isi pengumuman penting di sini.</div>
 </div>`,
     cta: `<div class="rounded-3xl bg-slate-900 text-white p-6">
-  <div class="text-2xl font-extrabold">Need attention?</div>
+  <div class="text-2xl font-extrabold ui-title-gradient">Need attention?</div>
   <div class="text-sm text-slate-300 mt-2">Tambahkan CTA singkat di sini.</div>
   <div class="mt-4"><a href="#" class="inline-flex px-4 py-2 rounded-2xl bg-white text-slate-900 font-bold">Open Link</a></div>
 </div>`
@@ -80,6 +82,45 @@ export default function(Orland){
     if(!v) return "-";
     try{ return new Date(v).toLocaleString("id-ID"); }
     catch{ return String(v); }
+  }
+
+  function validationHint(name, hintText){
+    return `
+      <div class="text-xs text-slate-500 mt-2" data-fve-hint-for="${esc(name)}">${esc(hintText || "")}</div>
+      <div class="text-xs text-red-500 mt-2 hidden" data-fve-error-for="${esc(name)}"></div>
+      <div class="fve-state hidden mt-2" data-fve-state-for="${esc(name)}"></div>
+    `;
+  }
+
+  function clearAsyncState(form, name){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+    if(error){
+      error.textContent = "";
+      error.classList.add("hidden");
+    }
+    if(state){
+      state.textContent = "";
+      state.className = "fve-state hidden mt-2";
+    }
+  }
+
+  function setInlineError(form, name, message){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-warning", "is-checking");
+    input?.classList.add("is-invalid");
+    if(error){
+      error.textContent = String(message || "");
+      error.classList.remove("hidden");
+    }
+    if(state){
+      state.textContent = "Invalid";
+      state.className = "fve-state is-invalid mt-2";
+    }
   }
 
   function renderRemoteItems(items){
@@ -135,7 +176,7 @@ export default function(Orland){
               </div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xl font-extrabold">Remote Preview</div>
                 <span id="remoteCount" class="text-xs text-slate-500">0 items</span>
@@ -317,6 +358,7 @@ export default function(Orland){
                 <div>
                   <label class="block text-sm font-bold text-slate-500 mb-2">SLUG</label>
                   <input name="slug" value="${esc(row.slug || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  ${validationHint("slug", "Slug post harus unik. Live check ke backend.")}
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-slate-500 mb-2">STATUS</label>
@@ -373,6 +415,33 @@ export default function(Orland){
         const htmlEl = q("content_html");
         const preview = q("htmlPreview");
 
+        const asyncEngine = afvCreateEngine(form, {
+          slug: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/post-slug", {
+                method: "POST",
+                body: JSON.stringify({
+                  slug: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"Slug available" }
+                : { ok:false, used:true, message:"Slug already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
         function renderPreview(){
           preview.innerHTML = htmlEl.value || `<div class="text-xs text-slate-500">Empty preview.</div>`;
         }
@@ -416,6 +485,7 @@ export default function(Orland){
 
         form.addEventListener("submit", async (ev)=>{
           ev.preventDefault();
+
           const payload = {
             action: form.mode.value,
             id: form.id.value.trim(),
@@ -426,8 +496,29 @@ export default function(Orland){
             content_html: htmlEl.value
           };
 
+          clearAsyncState(form, "slug");
+
           if(!payload.title){
             setMsg("error", "Title required.");
+            return;
+          }
+
+          if(!payload.slug){
+            setInlineError(form, "slug", "Slug wajib diisi.");
+            setMsg("error", "Periksa field post yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+
+          if(asyncHasError){
+            setMsg("error", "Masih ada unique field post yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg("error", "Masih menunggu pengecekan field post.");
             return;
           }
 

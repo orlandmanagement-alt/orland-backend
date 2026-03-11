@@ -34,10 +34,10 @@ export default function(Orland){
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4 max-w-7xl">
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <div class="text-2xl font-extrabold">IP Blocks</div>
+                <div class="text-2xl font-extrabold ui-title-gradient">IP Blocks</div>
                 <div class="text-slate-500 mt-1">Manage banned / blocked IP hashes secara aman.</div>
               </div>
               <div class="flex gap-2 flex-wrap">
@@ -67,25 +67,25 @@ export default function(Orland){
           </div>
 
           <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Total</div>
               <div id="kTotal" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Active</div>
               <div id="kActive" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Revoked</div>
               <div id="kRevoked" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Expired</div>
               <div id="kExpired" class="text-2xl font-extrabold mt-2">—</div>
             </div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="text-xl font-extrabold">Block List</div>
             <div id="listBox" class="mt-4 space-y-3"></div>
           </div>

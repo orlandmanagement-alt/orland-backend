@@ -7,7 +7,7 @@ export default function(Orland){
 
   function card(title, id, hint=""){
     return `
-      <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+      <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
         <div class="text-[11px] font-bold text-slate-500">${title}</div>
         <div id="${id}" class="text-2xl font-black mt-1">—</div>
         ${hint ? `<div class="text-[11px] text-slate-500 mt-1">${hint}</div>` : ``}
@@ -63,14 +63,14 @@ export default function(Orland){
             ${card("Rules fired", "k_rules_fired", "Jumlah rule yang pernah fired dalam window.")}
           </div>
 
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+          <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
             <div class="text-sm font-extrabold">Notes</div>
             <div id="notesBox" class="text-xs text-slate-500 mt-2 space-y-1">
               <div>Loading...</div>
             </div>
           </div>
 
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+          <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
             <div class="text-sm font-extrabold">Quick Security Actions</div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
               <button id="goPolicy" class="px-3 py-3 rounded-xl border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5 text-left">

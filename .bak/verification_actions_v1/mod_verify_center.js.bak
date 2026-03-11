@@ -1,0 +1,114 @@
+import { esc, emptyState, renderVerificationBanner, bindVerificationBanner, verificationActionLabel } from "../assets/js/orland_ui.js";
+
+export default function(Orland){
+  async function apiMe(){
+    return await Orland.api("/api/me");
+  }
+
+  function statusBadge(ok, yes="ok", no="pending"){
+    return ok
+      ? `<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black">${esc(yes)}</span>`
+      : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">${esc(no)}</span>`;
+  }
+
+  return {
+    title:"Verify Center",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-6xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">Verify Center</div>
+                <div class="text-slate-500 mt-1">Pusat tindakan verifikasi untuk memenuhi global verification policy.</div>
+              </div>
+              <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                <i class="fa-solid fa-rotate mr-2"></i>Reload
+              </button>
+            </div>
+          </div>
+
+          <div id="bannerBox"></div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Required Actions</div>
+              <div id="requiredBox" class="mt-4 space-y-3"></div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Current Status</div>
+              <div id="statusBox" class="mt-4 space-y-3"></div>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold">Quick Actions</div>
+            <div class="mt-4 flex gap-2 flex-wrap">
+              <button id="goProfile" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                My Profile
+              </button>
+              <button id="goSecurity" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                Security & Password
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      async function render(){
+        const me = await apiMe();
+        const d = me?.data || {};
+        const vc = d.verification_compliance || {};
+        const vs = d.verification_summary || {};
+        const required = Array.isArray(vc.required_actions) ? vc.required_actions : [];
+
+        q("bannerBox").innerHTML = renderVerificationBanner({
+          scope: vc.scope || d.verification_policy?.scope || "user",
+          required_actions: required
+        });
+        bindVerificationBanner(q("bannerBox"), Orland);
+
+        q("requiredBox").innerHTML = required.length
+          ? required.map(x => `
+              <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <div class="font-black text-sm text-amber-800">${esc(verificationActionLabel(x))}</div>
+                <div class="text-xs text-amber-700 mt-1">Tindakan ini masih diperlukan untuk akses penuh.</div>
+              </div>
+            `).join("")
+          : emptyState("Tidak ada action yang diperlukan.");
+
+        q("statusBox").innerHTML = `
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="text-sm font-semibold">Phone Verified</span>
+            ${statusBadge(Number(vs.phone_verified || 0), "verified", "not verified")}
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="text-sm font-semibold">Email Verified</span>
+            ${statusBadge(Number(vs.email_verified || 0), "verified", "not verified")}
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="text-sm font-semibold">Email 2FA</span>
+            ${statusBadge(Number(vs.email_2fa_enabled || 0), "enabled", "not enabled")}
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="text-sm font-semibold">KYC Status</span>
+            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(vs.kyc_status || "none")}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="text-sm font-semibold">Policy Compliance</span>
+            ${statusBadge(vc.compliant !== false, "ok", "needs action")}
+          </div>
+        `;
+      }
+
+      q("btnReload").onclick = render;
+      q("goProfile").onclick = ()=>Orland.navigate("/profile");
+      q("goSecurity").onclick = ()=>Orland.navigate("/profile/security");
+
+      await render();
+    }
+  };
+}

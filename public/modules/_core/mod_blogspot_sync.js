@@ -71,25 +71,25 @@ export default function(Orland){
           <div id="msg" class="text-sm text-slate-500"></div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Last Run</div>
               <div id="kLastRun" class="text-sm font-extrabold mt-2">-</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Last Success</div>
               <div id="kLastSuccess" class="text-sm font-extrabold mt-2">-</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Last Status</div>
               <div id="kLastStatus" class="mt-2">-</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Last Message</div>
               <div id="kLastMessage" class="text-sm font-extrabold mt-2 break-words">-</div>
             </div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div class="text-xl font-extrabold">Filters</div>
@@ -126,12 +126,12 @@ export default function(Orland){
             </div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="text-xl font-extrabold">Sync Logs</div>
             <div id="logsBox" class="mt-4 space-y-3"></div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="text-xl font-extrabold">Raw Status</div>
             <pre id="rawBox" class="mt-4 text-xs whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">{}</pre>
           </div>

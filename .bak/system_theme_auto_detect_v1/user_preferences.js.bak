@@ -1,0 +1,49 @@
+export async function prefLoad(Orland, namespace = ""){
+  const qs = namespace ? ("?namespace=" + encodeURIComponent(namespace)) : "";
+  return await Orland.api("/api/profile/preferences" + qs);
+}
+
+export async function prefSave(Orland, namespace, value){
+  return await Orland.api("/api/profile/preferences", {
+    method: "POST",
+    body: JSON.stringify({
+      namespace,
+      value
+    })
+  });
+}
+
+export function prefThemeApply(value = {}){
+  const mode = String(value?.mode || "system");
+  const density = String(value?.density || "comfortable");
+
+  const root = document.documentElement;
+
+  if(mode === "dark"){
+    root.classList.add("dark");
+  }else if(mode === "light"){
+    root.classList.remove("dark");
+  }
+
+  root.setAttribute("data-density", density);
+}
+
+export function prefTableGetColumnState(prefValue = {}, tableKey = ""){
+  const tables = prefValue?.tables || {};
+  const t = tables?.[tableKey] || {};
+  return {
+    hidden_columns: Array.isArray(t.hidden_columns) ? t.hidden_columns : [],
+    sort_by: String(t.sort_by || ""),
+    sort_dir: ["asc","desc"].includes(String(t.sort_dir || "")) ? String(t.sort_dir) : "asc"
+  };
+}
+
+export function prefTableSetColumnState(prefValue = {}, tableKey = "", nextState = {}){
+  const tables = { ...(prefValue?.tables || {}) };
+  tables[tableKey] = {
+    hidden_columns: Array.isArray(nextState.hidden_columns) ? nextState.hidden_columns : [],
+    sort_by: String(nextState.sort_by || ""),
+    sort_dir: ["asc","desc"].includes(String(nextState.sort_dir || "")) ? String(nextState.sort_dir) : "asc"
+  };
+  return { tables };
+}

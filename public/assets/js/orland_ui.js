@@ -88,3 +88,63 @@ export function closeConfirm(root, opts = {}){
   if(meta) meta.innerHTML = "";
   backdrop?.classList.add("hidden");
 }
+
+export function verificationActionLabel(x){
+  const k = String(x || "");
+  if(k === "enable_two_step") return "Aktifkan 2 langkah";
+  if(k === "verify_phone") return "Verifikasi SMS / WA";
+  if(k === "verify_email") return "Verifikasi email";
+  if(k === "verify_kyc") return "Verifikasi KYC";
+  return k || "-";
+}
+
+export function renderVerificationBanner(state = {}){
+  const required = Array.isArray(state.required_actions) ? state.required_actions : [];
+  const scope = String(state.scope || "user");
+
+  if(!required.length) return "";
+
+  return `
+    <div class="rounded-3xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-lg font-extrabold text-amber-800">Verification Required</div>
+          <div class="text-sm text-amber-700 mt-1">
+            Akun dengan scope <span class="font-black">${scope}</span> belum memenuhi global verification policy.
+          </div>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" data-verify-open="center" class="px-4 py-2 rounded-2xl bg-amber-600 text-white font-black text-sm">
+            Open Verify Center
+          </button>
+          <button type="button" data-verify-open="profile" class="px-4 py-2 rounded-2xl border border-amber-300 text-amber-800 font-black text-sm bg-white/70">
+            Open Profile
+          </button>
+          <button type="button" data-verify-open="security" class="px-4 py-2 rounded-2xl border border-amber-300 text-amber-800 font-black text-sm bg-white/70">
+            Open Security
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 flex gap-2 flex-wrap">
+        ${required.map(x => `
+          <span class="px-3 py-1 rounded-full bg-white border border-amber-200 text-amber-700 text-xs font-black">
+            ${verificationActionLabel(x)}
+          </span>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+export function bindVerificationBanner(root, Orland){
+  if(!root) return;
+  root.querySelectorAll("[data-verify-open]").forEach(btn => {
+    btn.onclick = ()=>{
+      const act = btn.getAttribute("data-verify-open");
+      if(act === "center") return Orland.navigate("/verify-center");
+      if(act === "profile") return Orland.navigate("/profile");
+      if(act === "security") return Orland.navigate("/profile/security");
+    };
+  });
+}

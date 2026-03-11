@@ -13,7 +13,7 @@ export default function(Orland){
       host.innerHTML = `
         <div class="space-y-4 max-w-5xl">
           <div>
-            <div class="text-2xl font-extrabold">Analytics Settings</div>
+            <div class="text-2xl font-extrabold ui-title-gradient">Analytics Settings</div>
             <div class="text-slate-500 mt-1">Konfigurasi Cloudflare analytics backend.</div>
           </div>
 

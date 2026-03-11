@@ -12,7 +12,7 @@ export default function(Orland){
 
   function card(title, value, hint=""){
     return `
-      <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+      <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
         <div class="text-[11px] text-slate-500 font-bold">${title}</div>
         <div class="text-2xl font-black mt-1">${value}</div>
         ${hint ? `<div class="text-[11px] text-slate-500 mt-1">${hint}</div>` : ``}
@@ -50,7 +50,7 @@ export default function(Orland){
               <div id="recentBox" class="mt-4 space-y-3"></div>
             </div>
 
-            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
               <div class="text-sm font-extrabold">Quick Actions</div>
               <div class="text-[11px] text-slate-500 mt-1">Navigasi cepat ke modul ops.</div>
 

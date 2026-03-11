@@ -73,8 +73,8 @@ export default function(Orland){
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4 max-w-6xl">
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
-            <div class="text-2xl font-extrabold">RBAC Manager</div>
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-2xl font-extrabold ui-title-gradient">RBAC Manager</div>
             <div class="text-slate-500 mt-1">Atur role_menus dengan tree menu dari database.</div>
 
             <div class="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto] gap-3">
@@ -91,7 +91,7 @@ export default function(Orland){
             <div id="msg" class="mt-4 text-sm text-slate-500"></div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="text-xl font-extrabold">Role Menus</div>
             <div class="text-slate-500 text-sm mt-1">Checklist parent-child otomatis cascade.</div>
             <div id="menuBox" class="mt-5 space-y-3"></div>

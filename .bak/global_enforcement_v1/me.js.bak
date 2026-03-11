@@ -1,0 +1,60 @@
+import { json, requireAuth } from "../../_lib.js";
+import { loadGlobalVerificationPolicy, resolveVerificationRules } from "../config/_global_policy.js";
+
+async function getUserSecurity(env, userId){
+  const row = await env.DB.prepare(`
+    SELECT
+      email_2fa_enabled
+    FROM user_security
+    WHERE user_id=?
+    LIMIT 1
+  `).bind(userId).first();
+
+  return {
+    email_2fa_enabled: Number(row?.email_2fa_enabled || 0)
+  };
+}
+
+async function getUserVerificationSummary(env, userId){
+  const user = await env.DB.prepare(`
+    SELECT
+      phone_verified,
+      phone_verified_at
+    FROM users
+    WHERE id=?
+    LIMIT 1
+  `).bind(userId).first();
+
+  const sec = await getUserSecurity(env, userId);
+
+  const kyc = await env.DB.prepare(`
+    SELECT status
+    FROM user_verifications
+    WHERE user_id=? AND kind='kyc'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(userId).first();
+
+  return {
+    phone_verified: Number(user?.phone_verified || 0),
+    phone_verified_at: Number(user?.phone_verified_at || 0),
+    email_2fa_enabled: Number(sec?.email_2fa_enabled || 0),
+    kyc_status: String(kyc?.status || "none")
+  };
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const policy = await loadGlobalVerificationPolicy(env);
+  const effective = resolveVerificationRules(policy, a.roles || []);
+  const verify = await getUserVerificationSummary(env, a.user?.id);
+
+  return json(200, "ok", {
+    ...a.user,
+    roles: a.roles || [],
+    verification_policy: effective,
+    verification_summary: verify
+  });
+}

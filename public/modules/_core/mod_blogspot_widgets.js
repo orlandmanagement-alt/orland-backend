@@ -64,7 +64,7 @@ export default function(Orland){
 
           <div id="msg" class="text-sm text-slate-500"></div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div class="text-xl font-extrabold">Filters</div>
@@ -88,12 +88,12 @@ export default function(Orland){
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Widgets List</div>
               <div id="listBox" class="mt-4 space-y-3"></div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Preview Selected</div>
               <div id="previewBox" class="mt-4 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 min-h-[240px] overflow-auto">
                 ${emptyState("Pilih widget dari list untuk preview.")}

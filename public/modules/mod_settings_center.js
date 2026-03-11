@@ -1,0 +1,454 @@
+export default function(Orland){
+  const ITEMS = [
+    { title:"Global Settings", desc:"Atur policy global verification untuk client dan talent.", path:"/config/global", icon:"fa-solid fa-sliders", category:"verification", tags:["global","verification","client","talent","policy"] },
+    { title:"Cron Global", desc:"Atur automation cleanup verification dan run status.", path:"/config/cron-global", icon:"fa-solid fa-clock-rotate-left", category:"system", tags:["cron","cleanup","automation","verification"] },
+    { title:"Security Policy", desc:"Kelola security policy, rate limit, account lock, dan header.", path:"/security/policy", icon:"fa-solid fa-shield-halved", category:"security", tags:["security","policy","rate limit","lock","headers"] },
+    { title:"Analytics Config", desc:"Konfigurasi analytics dan pengaturan integrasi terkait.", path:"/config/analytics", icon:"fa-solid fa-chart-line", category:"system", tags:["analytics","config","stats","traffic"] },
+    { title:"Blogspot Settings", desc:"Kelola integrasi Blogger, API config, dan sync behavior.", path:"/integrations/blogspot/settings", icon:"fa-brands fa-blogger-b", category:"integrations", tags:["blogspot","blogger","integration","api","sync"] },
+    { title:"Verification Dashboard", desc:"Audit summary dan event verifikasi untuk admin review.", path:"/security/verification-dashboard", icon:"fa-solid fa-chart-column", category:"verification", tags:["verification","dashboard","audit","kyc"] },
+    { title:"Verification Review", desc:"Review request KYC, approve, reject, dan audit review.", path:"/security/verification-review", icon:"fa-solid fa-user-check", category:"verification", tags:["verification","review","kyc","approve","reject"] },
+    { title:"Verify Center", desc:"Pusat tindakan verifikasi untuk memenuhi global verification policy.", path:"/verify-center", icon:"fa-solid fa-badge-check", category:"verification", tags:["verification","otp","email","phone","kyc"] },
+    { title:"Security Module", desc:"Ringkasan keamanan, alert, policy, incident, dan quick actions.", path:"/security", icon:"fa-solid fa-lock", category:"security", tags:["security","module","alerts","incident"] }
+  ];
+
+  const CATEGORY_META = {
+    all:{ label:"All", icon:"fa-solid fa-border-all" },
+    security:{ label:"Security", icon:"fa-solid fa-shield-halved" },
+    verification:{ label:"Verification", icon:"fa-solid fa-badge-check" },
+    integrations:{ label:"Integrations", icon:"fa-solid fa-plug" },
+    system:{ label:"System", icon:"fa-solid fa-server" }
+  };
+
+  const LS_FAVORITES = "orland_settings_favorites_v1";
+  const LS_RECENTS = "orland_settings_recents_v1";
+  const LS_UPDATED_AT = "orland_settings_updated_at_v1";
+  const MAX_RECENTS = 8;
+  const MAX_FAVORITES = 20;
+  const DEFAULT_STRATEGY = "merge";
+
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
+
+  function readJson(key, fallback){
+    try{
+      const raw = localStorage.getItem(key);
+      if(!raw) return fallback;
+      const x = JSON.parse(raw);
+      return x ?? fallback;
+    }catch{
+      return fallback;
+    }
+  }
+
+  function writeJson(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch{}
+  }
+
+  function readNum(key, fallback = 0){
+    try{
+      const raw = localStorage.getItem(key);
+      const n = Number(raw || fallback || 0);
+      return Number.isFinite(n) ? n : Number(fallback || 0);
+    }catch{
+      return Number(fallback || 0);
+    }
+  }
+
+  function writeNum(key, value){
+    try{ localStorage.setItem(key, String(Number(value || 0))); }catch{}
+  }
+
+  function cleanPathList(xs, max){
+    return Array.from(new Set(
+      (Array.isArray(xs) ? xs : [])
+        .map(String)
+        .map(x => x.trim())
+        .filter(Boolean)
+    )).slice(0, max);
+  }
+
+  async function apiLoadProfile(){
+    return await Orland.api("/api/profile/settings-center");
+  }
+
+  async function apiSaveProfile(payload){
+    return await Orland.api("/api/profile/settings-center", {
+      method:"POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function getFavorites(){
+    return cleanPathList(readJson(LS_FAVORITES, []), MAX_FAVORITES);
+  }
+
+  function setFavorites(xs){
+    writeJson(LS_FAVORITES, cleanPathList(xs, MAX_FAVORITES));
+  }
+
+  function getRecents(){
+    return cleanPathList(readJson(LS_RECENTS, []), MAX_RECENTS);
+  }
+
+  function setRecents(xs){
+    writeJson(LS_RECENTS, cleanPathList(xs, MAX_RECENTS));
+  }
+
+  function getLocalUpdatedAt(){
+    return readNum(LS_UPDATED_AT, 0);
+  }
+
+  function setLocalUpdatedAt(ts){
+    writeNum(LS_UPDATED_AT, Number(ts || 0));
+  }
+
+  function getLocalState(){
+    return {
+      favorites: getFavorites(),
+      recents: getRecents()
+    };
+  }
+
+  function applyLocalState(v = {}, updatedAt = 0){
+    setFavorites(v.favorites || []);
+    setRecents(v.recents || []);
+    setLocalUpdatedAt(updatedAt || 0);
+  }
+
+  function findItem(path){
+    return ITEMS.find(x => String(x.path) === String(path)) || null;
+  }
+
+  function miniCardHtml(x, kind="recent"){
+    return `
+      <button type="button" class="miniSettingsCard w-full text-left ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition" data-path="${esc(x.path)}">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <i class="${esc(x.icon)}"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-extrabold text-slate-900 dark:text-white">${esc(x.title)}</div>
+            <div class="text-xs text-slate-500 mt-1 truncate">${esc(x.path)}</div>
+          </div>
+          <div class="shrink-0 text-[10px] px-2 py-1 rounded-full bg-slate-100 dark:bg-black/20 text-slate-600 dark:text-slate-300 font-black uppercase">${esc(kind)}</div>
+        </div>
+      </button>
+    `;
+  }
+
+  function cardHtml(x, isFav){
+    return `
+      <div class="relative">
+        <button type="button" class="settingsCard w-full text-left ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5 hover:bg-slate-50 dark:hover:bg-white/5 transition" data-path="${esc(x.path)}">
+          <div class="flex items-start gap-4 pr-12">
+            <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <i class="${esc(x.icon)} text-lg"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <div class="text-lg font-extrabold text-slate-900 dark:text-white">${esc(x.title)}</div>
+                <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-black/20 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase">${esc(CATEGORY_META[x.category]?.label || x.category)}</span>
+              </div>
+              <div class="text-sm text-slate-500 mt-1">${esc(x.desc)}</div>
+              <div class="text-xs text-primary font-black mt-4">${esc(x.path)}</div>
+            </div>
+          </div>
+        </button>
+
+        <button type="button" class="btnFavorite absolute top-4 right-4 w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter hover:bg-slate-50 dark:hover:bg-white/5" data-path="${esc(x.path)}" title="${isFav ? "Unpin favorite" : "Pin favorite"}">
+          <i class="${isFav ? "fa-solid" : "fa-regular"} fa-star ${isFav ? "text-amber-500" : "text-slate-400"}"></i>
+        </button>
+      </div>
+    `;
+  }
+
+  function tabHtml(key, active){
+    const meta = CATEGORY_META[key] || { label:key, icon:"fa-solid fa-circle" };
+    return `
+      <button type="button" class="catTab px-4 py-2.5 rounded-2xl border text-sm font-black transition ${
+        active ? "border-primary bg-primary/10 text-primary" : "border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5"
+      }" data-category="${esc(key)}">
+        <i class="${esc(meta.icon)} mr-2"></i>${esc(meta.label)}
+      </button>
+    `;
+  }
+
+  function emptyState(){
+    return `
+      <div class="col-span-full rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-8 text-center">
+        <div class="text-lg font-extrabold">No settings found</div>
+        <div class="text-sm text-slate-500 mt-2">Coba ubah kata kunci pencarian atau pilih kategori lain.</div>
+      </div>
+    `;
+  }
+
+  return {
+    title:"Settings Center",
+    async mount(host){
+      let activeCategory = "all";
+      let searchText = "";
+      let syncBusy = false;
+
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Settings Center</div>
+                <div class="text-slate-500 mt-1">Pusat pengaturan enterprise untuk konfigurasi utama sistem.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="goSecurityModule" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Security Module</button>
+                <button id="goVerificationDashboard" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Verification Dashboard</button>
+              </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-3">
+              <input id="settingsSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari settings, module, route, tag...">
+              <button id="btnClearSearch" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Clear Search</button>
+            </div>
+
+            <div id="catTabs" class="mt-4 flex gap-2 flex-wrap"></div>
+          </div>
+
+          <div id="syncInfo" class="text-sm text-slate-500"></div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 ui-gap-grid">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div>
+                <div class="text-xl font-extrabold ui-title-gradient">Favorites</div>
+                <div class="text-sm text-slate-500 mt-1">Setting yang dipin untuk akses cepat.</div>
+              </div>
+              <div id="favoritesBox" class="mt-4 grid grid-cols-1 gap-3"></div>
+            </div>
+
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div>
+                <div class="text-xl font-extrabold ui-title-gradient">Recent Access</div>
+                <div class="text-sm text-slate-500 mt-1">Halaman setting yang terakhir dibuka.</div>
+              </div>
+              <div id="recentsBox" class="mt-4 grid grid-cols-1 gap-3"></div>
+            </div>
+          </div>
+
+          <div id="settingsInfo" class="text-sm text-slate-500"></div>
+          <div id="cardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 ui-gap-grid"></div>
+
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold ui-title-gradient">Notes</div>
+            <div class="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm text-slate-500">
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">Sync memakai timestamp compare + conflict resolution.</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">Default strategy adalah merge agar aman lintas device.</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">Local cache tetap aktif sebagai fallback.</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      function renderSyncInfo(text, cls="text-slate-500"){
+        q("syncInfo").className = "text-sm " + cls;
+        q("syncInfo").textContent = text;
+      }
+
+      async function saveProfileState(){
+        if(syncBusy) return;
+        syncBusy = true;
+
+        try{
+          const r = await apiSaveProfile({
+            value: getLocalState(),
+            client_updated_at: getLocalUpdatedAt(),
+            strategy: DEFAULT_STRATEGY
+          });
+
+          if(r.status === "ok"){
+            applyLocalState(r.data?.value || {}, r.data?.updated_at || 0);
+
+            if(r.data?.conflict){
+              renderSyncInfo("Profile sync merged due to newer server state.", "text-amber-600");
+            }else{
+              renderSyncInfo("Profile sync active.", "text-emerald-600");
+            }
+          }else{
+            renderSyncInfo("Profile sync fallback to local cache.", "text-amber-600");
+          }
+        }catch{
+          renderSyncInfo("Profile sync fallback to local cache.", "text-amber-600");
+        }finally{
+          syncBusy = false;
+        }
+      }
+
+      async function loadProfileState(){
+        renderSyncInfo("Loading profile sync...", "text-slate-500");
+        const r = await apiLoadProfile();
+
+        if(r.status !== "ok"){
+          renderSyncInfo("Profile sync unavailable, using local cache.", "text-amber-600");
+          return;
+        }
+
+        const serverValue = r.data?.value || {};
+        const serverUpdatedAt = Number(r.data?.updated_at || 0);
+        const localUpdatedAt = getLocalUpdatedAt();
+
+        if(serverUpdatedAt >= localUpdatedAt){
+          applyLocalState(serverValue, serverUpdatedAt);
+          renderSyncInfo("Profile sync loaded.", "text-emerald-600");
+        }else{
+          renderSyncInfo("Local state newer, syncing with merge policy...", "text-amber-600");
+          await saveProfileState();
+        }
+      }
+
+      function renderMiniSections(){
+        const favItems = getFavorites().map(findItem).filter(Boolean);
+        const recentItems = getRecents().map(findItem).filter(Boolean);
+
+        q("favoritesBox").innerHTML = favItems.length
+          ? favItems.map(x => miniCardHtml(x, "favorite")).join("")
+          : `<div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-sm text-slate-500">Belum ada favorite. Klik ikon bintang pada card settings.</div>`;
+
+        q("recentsBox").innerHTML = recentItems.length
+          ? recentItems.map(x => miniCardHtml(x, "recent")).join("")
+          : `<div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-sm text-slate-500">Belum ada recent access.</div>`;
+
+        host.querySelectorAll(".miniSettingsCard").forEach(btn => {
+          btn.addEventListener("click", async ()=>{
+            const path = btn.getAttribute("data-path");
+            if(path){
+              const xs = getRecents().filter(x => x !== String(path));
+              xs.unshift(String(path));
+              setRecents(xs.slice(0, MAX_RECENTS));
+              renderMiniSections();
+              await saveProfileState();
+              Orland.navigate(path);
+            }
+          });
+        });
+      }
+
+      function filteredItems(){
+        const kw = String(searchText || "").trim().toLowerCase();
+
+        return ITEMS.filter(item => {
+          const okCategory = activeCategory === "all" || item.category === activeCategory;
+          const haystack = [
+            item.title,
+            item.desc,
+            item.path,
+            item.category,
+            ...(Array.isArray(item.tags) ? item.tags : [])
+          ].join(" ").toLowerCase();
+
+          return okCategory && (!kw || haystack.includes(kw));
+        });
+      }
+
+      function renderTabs(){
+        q("catTabs").innerHTML = Object.keys(CATEGORY_META).map(key => tabHtml(key, key === activeCategory)).join("");
+        q("catTabs").querySelectorAll(".catTab").forEach(btn => {
+          btn.addEventListener("click", ()=>{
+            activeCategory = btn.getAttribute("data-category") || "all";
+            renderAll();
+          });
+        });
+      }
+
+      function bindCards(){
+        q("cardsGrid").querySelectorAll(".settingsCard").forEach(btn => {
+          btn.addEventListener("click", async ()=>{
+            const path = btn.getAttribute("data-path");
+            if(path){
+              const xs = getRecents().filter(x => x !== String(path));
+              xs.unshift(String(path));
+              setRecents(xs.slice(0, MAX_RECENTS));
+              renderMiniSections();
+              await saveProfileState();
+              Orland.navigate(path);
+            }
+          });
+        });
+
+        q("cardsGrid").querySelectorAll(".btnFavorite").forEach(btn => {
+          btn.addEventListener("click", async (ev)=>{
+            ev.stopPropagation();
+            const path = String(btn.getAttribute("data-path") || "");
+            const xs = getFavorites();
+
+            if(xs.includes(path)){
+              setFavorites(xs.filter(x => x !== path));
+            }else{
+              xs.unshift(path);
+              setFavorites(xs.slice(0, MAX_FAVORITES));
+            }
+
+            renderAll();
+            await saveProfileState();
+          });
+        });
+      }
+
+      function renderCards(){
+        const rows = filteredItems();
+        const favs = new Set(getFavorites());
+
+        q("cardsGrid").innerHTML = rows.length
+          ? rows.map(x => cardHtml(x, favs.has(String(x.path)))).join("")
+          : emptyState();
+
+        q("settingsInfo").textContent =
+          `${rows.length} setting item${rows.length === 1 ? "" : "s"} found` +
+          (activeCategory !== "all" ? ` • category: ${CATEGORY_META[activeCategory]?.label || activeCategory}` : "") +
+          (searchText ? ` • search: "${searchText}"` : "") +
+          ` • local_updated_at: ${String(getLocalUpdatedAt() || 0)}`;
+
+        bindCards();
+      }
+
+      function renderAll(){
+        renderTabs();
+        renderMiniSections();
+        renderCards();
+      }
+
+      q("settingsSearch").addEventListener("input", ()=>{
+        searchText = q("settingsSearch").value || "";
+        renderCards();
+      });
+
+      q("btnClearSearch").addEventListener("click", ()=>{
+        searchText = "";
+        q("settingsSearch").value = "";
+        renderCards();
+      });
+
+      q("goSecurityModule")?.addEventListener("click", async ()=>{
+        const xs = getRecents().filter(x => x !== "/security");
+        xs.unshift("/security");
+        setRecents(xs.slice(0, MAX_RECENTS));
+        renderMiniSections();
+        await saveProfileState();
+        Orland.navigate("/security");
+      });
+
+      q("goVerificationDashboard")?.addEventListener("click", async ()=>{
+        const p = "/security/verification-dashboard";
+        const xs = getRecents().filter(x => x !== p);
+        xs.unshift(p);
+        setRecents(xs.slice(0, MAX_RECENTS));
+        renderMiniSections();
+        await saveProfileState();
+        Orland.navigate(p);
+      });
+
+      await loadProfileState();
+      renderAll();
+    }
+  };
+}

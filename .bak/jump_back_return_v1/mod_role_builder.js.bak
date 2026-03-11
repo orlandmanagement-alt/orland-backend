@@ -1,0 +1,536 @@
+import { esc, emptyState, openModal, closeModal, openConfirm, closeConfirm, setMsg } from "../../assets/js/orland_ui.js";
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/roles");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/roles", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function validationHint(name, hintText){
+    return `
+      <div class="text-xs text-slate-500 mt-2" data-fve-hint-for="${esc(name)}">${esc(hintText || "")}</div>
+      <div class="text-xs text-red-500 mt-2 hidden" data-fve-error-for="${esc(name)}"></div>
+      <div class="fve-state hidden mt-2" data-fve-state-for="${esc(name)}"></div>
+    `;
+  }
+
+  function clearAsyncState(form, name){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+    if(error){
+      error.textContent = "";
+      error.classList.add("hidden");
+    }
+    if(state){
+      state.textContent = "";
+      state.className = "fve-state hidden mt-2";
+    }
+  }
+
+  function setInlineError(form, name, message){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-warning", "is-checking");
+    input?.classList.add("is-invalid");
+    if(error){
+      error.textContent = String(message || "");
+      error.classList.remove("hidden");
+    }
+    if(state){
+      state.textContent = "Invalid";
+      state.className = "fve-state is-invalid mt-2";
+    }
+  }
+
+  function protectedRole(id){
+    return ["super_admin","admin","staff","client","talent"].includes(String(id || ""));
+  }
+
+  function roleInUse(row){
+    return Number(row?.menu_usage_count ?? 0) > 0;
+  }
+
+  function usageBadge(row){
+    const count = Number(row?.menu_usage_count ?? 0);
+    if(count > 0){
+      return `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">used by ${esc(count)} menu</span>`;
+    }
+    return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">unused</span>`;
+  }
+
+  function jumpToMenuBuilder(menuId){
+    try{
+      sessionStorage.setItem("orland_jump_menu_id", String(menuId || ""));
+    }catch{}
+
+    try{
+      if(typeof Orland?.openModule === "function"){
+        Orland.openModule("menu_builder");
+        return true;
+      }
+    }catch{}
+
+    try{
+      if(typeof Orland?.navigate === "function"){
+        Orland.navigate("menu_builder");
+        return true;
+      }
+    }catch{}
+
+    try{
+      if(typeof Orland?.go === "function"){
+        Orland.go("menu_builder");
+        return true;
+      }
+    }catch{}
+
+    try{
+      location.hash = "#/menu_builder";
+      return true;
+    }catch{}
+
+    return false;
+  }
+
+  function usageHtml(row){
+    const items = Array.isArray(row?.menu_usage_items) ? row.menu_usage_items : [];
+    if(!items.length){
+      return `<div class="text-sm text-slate-500">Role ini belum dipakai menu mana pun.</div>`;
+    }
+
+    return `
+      <div class="space-y-3">
+        ${items.map(x => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="font-black text-sm">${esc(x.label || x.id || "Menu")}</div>
+                <div class="mt-2 text-xs text-slate-500 space-y-1">
+                  <div>id: ${esc(x.id || "-")}</div>
+                  <div>code: ${esc(x.code || "-")}</div>
+                  <div>path: ${esc(x.path || "-")}</div>
+                </div>
+              </div>
+              <div class="shrink-0">
+                <button type="button" class="btnJumpMenu px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black" data-menu-id="${esc(x.id || "")}">
+                  <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>Open Menu Builder
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  return {
+    title:"Role Builder",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Role Builder</div>
+                <div class="text-slate-500 mt-1">CRUD role + consistency guard + usage inspector + jump navigation.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Role
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari id / name / description / usage">
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold ui-title-gradient">Roles</div>
+            <div class="text-slate-500 text-sm mt-1">Audit cepat relasi role terhadap menu dan lompat ke menu builder.</div>
+            <div id="listBox" class="mt-5 space-y-3"></div>
+          </div>
+        </div>
+
+        <div id="modalBackdrop" class="hidden fixed inset-0 z-[100] bg-black/50 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-3xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-4 lg:px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
+                <div>
+                  <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Role</div>
+                  <div class="text-xs text-slate-500 mt-1">Create / edit role</div>
+                </div>
+                <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div id="modalBody" class="p-4 lg:p-5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+      let ITEMS = [];
+      let confirmAction = null;
+
+      function filteredItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        if(!kw) return ITEMS;
+        return ITEMS.filter(x => {
+          const usageItems = Array.isArray(x.menu_usage_items) ? x.menu_usage_items : [];
+          const usageText = usageItems.map(m => [m.id, m.code, m.label, m.path].join(" ")).join(" ");
+          const hay = [x.id, x.name, x.description, String(x.menu_usage_count ?? 0), usageText].join(" ").toLowerCase();
+          return hay.includes(kw);
+        });
+      }
+
+      function editorHtml(row = {}){
+        const isProtected = protectedRole(row.id);
+        const isUsed = roleInUse(row);
+
+        return `
+          <form id="roleForm" class="grid grid-cols-1 gap-4">
+            <input type="hidden" name="mode" value="${row.id ? "update" : "create"}">
+
+            <div class="flex flex-wrap gap-2">
+              ${isProtected ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+              ${usageBadge(row)}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+              <input name="id" value="${esc(row.id || "")}" ${row.id ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="marketing_manager">
+              ${validationHint("id", row.id ? "ID existing role. Read-only saat edit." : "Minimal 2 karakter. Huruf, angka, underscore, dash.")}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">NAME</label>
+              <input name="name" value="${esc(row.name || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Marketing Manager">
+              ${validationHint("name", "Role name harus unik. Live check ke backend.")}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">DESCRIPTION</label>
+              <textarea name="description" rows="5" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Optional">${esc(row.description || "")}</textarea>
+            </div>
+
+            ${isProtected ? `
+              <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold p-4">
+                Core system role. Delete diblokir.
+              </div>
+            ` : ``}
+
+            ${isUsed ? `
+              <div class="rounded-2xl border border-sky-200 bg-sky-50 text-sky-700 text-sm font-semibold p-4">
+                Role ini masih dipakai oleh ${esc(row.menu_usage_count)} menu. Hapus mapping menu dulu sebelum delete role.
+              </div>
+            ` : ``}
+
+            <div class="flex gap-2 flex-wrap">
+              <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+              <button type="button" id="btnCancelRole" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+            </div>
+          </form>
+        `;
+      }
+
+      function renderList(){
+        const rows = filteredItems();
+
+        q("listBox").innerHTML = rows.length ? rows.map(row => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder overflow-hidden">
+            <div class="px-4 py-4 bg-white dark:bg-darkLighter">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <div class="font-black text-sm">${esc(row.name || row.id)}</div>
+                    ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+                    ${usageBadge(row)}
+                  </div>
+                  <div class="mt-2 text-xs text-slate-500 space-y-1">
+                    <div>id: ${esc(row.id)}</div>
+                    ${row.description ? `<div>${esc(row.description)}</div>` : ``}
+                  </div>
+                </div>
+
+                <div class="flex gap-2 shrink-0 flex-wrap justify-end">
+                  <button class="btnInspect px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-diagram-project"></i></button>
+                  <button class="btnEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-pen"></i></button>
+                  <button class="btnDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(row.id)}" ${(protectedRole(row.id) || roleInUse(row)) ? "disabled" : ""}><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join("") : emptyState("No role data.");
+
+        q("listBox").querySelectorAll(".btnInspect").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+
+            openModal(host, {
+              modalTitle: `Usage Inspector: ${row.name || row.id}`,
+              modalBody: `
+                <div class="space-y-4">
+                  <div class="flex flex-wrap gap-2">
+                    ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+                    ${usageBadge(row)}
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                    <div class="text-sm font-black">${esc(row.name || row.id)}</div>
+                    <div class="text-xs text-slate-500 mt-1">id: ${esc(row.id)}</div>
+                    ${row.description ? `<div class="text-sm text-slate-600 mt-3">${esc(row.description)}</div>` : ``}
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-slate-500 mb-2">Menus using this role</div>
+                    ${usageHtml(row)}
+                  </div>
+                  <div class="flex gap-2">
+                    <button type="button" id="btnUsageClose" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Close</button>
+                  </div>
+                </div>
+              `
+            });
+
+            q("btnUsageClose").onclick = ()=>closeModal(host);
+
+            q("modalBody").querySelectorAll(".btnJumpMenu").forEach(jumpBtn => {
+              jumpBtn.onclick = ()=>{
+                const menuId = String(jumpBtn.getAttribute("data-menu-id") || "").trim();
+                if(!menuId) return;
+                closeModal(host);
+                const jumped = jumpToMenuBuilder(menuId);
+                if(!jumped){
+                  setMsg(host, "#msg", "warning", "Tidak bisa auto navigate. Target menu sudah disimpan untuk dibuka manual di Menu Builder.");
+                }
+              };
+            });
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(row) openEditor(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnDelete").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+            if(protectedRole(row.id)) return;
+            if(roleInUse(row)) return;
+
+            openConfirm(host, {
+              confirmTitle: "Delete Role",
+              confirmDesc: "Role akan dihapus dari sistem.",
+              confirmMeta: `<div class="font-black text-red-600">${esc(row.name || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.id)}</div>`
+            });
+
+            confirmAction = async ()=>{
+              setMsg(host, "#msg", "muted", "Deleting...");
+              const r = await apiSave({ action:"delete", id: row.id });
+              if(r.status !== "ok"){
+                const msg = r.data?.message || r.status;
+                if(msg === "role_in_use_by_menus"){
+                  setMsg(host, "#msg", "error", `Delete failed: role masih dipakai ${r.data?.menu_usage_count || 0} menu.`);
+                }else{
+                  setMsg(host, "#msg", "error", "Delete failed: " + msg);
+                }
+                return;
+              }
+              closeConfirm(host);
+              setMsg(host, "#msg", "success", "Role deleted.");
+              await load();
+            };
+          };
+        });
+      }
+
+      function openEditor(row = {}){
+        openModal(host, {
+          modalTitle: row.id ? "Edit Role" : "Create Role",
+          modalBody: editorHtml(row)
+        });
+
+        const form = q("roleForm");
+
+        q("btnCancelRole").onclick = ()=>closeModal(host);
+
+        const asyncEngine = afvCreateEngine(form, {
+          id: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              if(row.id){
+                return { ok:true, message:"ID locked" };
+              }
+              const r = await Orland.api("/api/validate/role-code", {
+                method: "POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"ID available" }
+                : { ok:false, used:true, message:"ID already used" };
+            }
+          },
+          name: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/role-code", {
+                method: "POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"Role name available" }
+                : { ok:false, used:true, message:"Role name already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+
+          const payload = {
+            action: form.mode.value,
+            id: form.id.value.trim(),
+            name: form.name.value.trim(),
+            description: form.description.value.trim()
+          };
+
+          clearAsyncState(form, "id");
+          clearAsyncState(form, "name");
+
+          const syncErrors = {};
+          if(!payload.id) syncErrors.id = "ID wajib diisi.";
+          else if(payload.id.length < 2) syncErrors.id = "ID minimal 2 karakter.";
+          else if(!/^[a-zA-Z0-9_\-]+$/.test(payload.id)) syncErrors.id = "ID hanya boleh huruf, angka, underscore, dash.";
+
+          if(!payload.name) syncErrors.name = "Role name wajib diisi.";
+          else if(payload.name.length < 2) syncErrors.name = "Role name minimal 2 karakter.";
+
+          if(syncErrors.id) setInlineError(form, "id", syncErrors.id);
+          if(syncErrors.name) setInlineError(form, "name", syncErrors.name);
+
+          if(Object.keys(syncErrors).length){
+            setMsg(host, "#msg", "error", "Periksa field role yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+
+          if(asyncHasError){
+            setMsg(host, "#msg", "error", "Masih ada unique field role yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg(host, "#msg", "warning", "Masih menunggu pengecekan field role.");
+            return;
+          }
+
+          setMsg(host, "#msg", "muted", "Saving...");
+          const r = await apiSave(payload);
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          closeModal(host);
+          setMsg(host, "#msg", "success", "Role saved.");
+          await load();
+        };
+      }
+
+      async function load(){
+        setMsg(host, "#msg", "muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Load failed: " + r.status);
+          return;
+        }
+
+        ITEMS = Array.isArray(r.data?.items) ? r.data.items : [];
+        renderList();
+        setMsg(host, "#msg", "success", "Loaded.");
+      }
+
+      q("btnReload").onclick = load;
+      q("btnNew").onclick = ()=>openEditor({});
+      q("qSearch").oninput = renderList;
+
+      q("btnModalClose").onclick = ()=>closeModal(host);
+      q("modalBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("modalBackdrop")) closeModal(host);
+      });
+
+      q("btnConfirmCancel").onclick = ()=>closeConfirm(host);
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
+      };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm(host);
+      });
+
+      await load();
+    }
+  };
+}

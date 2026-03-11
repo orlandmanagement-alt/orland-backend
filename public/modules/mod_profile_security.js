@@ -1,114 +1,61 @@
+import { renderVerificationBanner, bindVerificationBanner } from "../assets/js/orland_ui.js";
+
 export default function(Orland){
-  const esc=(s)=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-
-  function toast(msg,type="info"){
-    const host=document.getElementById("toast-host");
-    if(!host){alert(msg);return;}
-    const d=document.createElement("div");
-    d.className="fixed right-4 top-4 z-[300] rounded-xl px-4 py-3 text-xs shadow-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter";
-    d.innerHTML=`<div class="font-bold">${esc(type.toUpperCase())}</div><div class="text-slate-500 mt-1">${esc(msg)}</div>`;
-    host.appendChild(d); setTimeout(()=>d.remove(),2800);
-  }
-
-  function bindPwToggle(root){
-    root.querySelectorAll("[data-pw-toggle]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const id = btn.getAttribute("data-pw-toggle");
-        const inp = root.querySelector("#"+CSS.escape(id));
-        if(!inp) return;
-        const isPw = inp.type === "password";
-        inp.type = isPw ? "text" : "password";
-        btn.innerHTML = isPw ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
-      });
-    });
-  }
-
-  async function changePassword(new_password){
-    return await Orland.api("/api/profile/password", { method:"POST", body: JSON.stringify({ new_password }) });
-  }
-
-  // optional settings (UI only for now, can be wired to system_settings later)
-  function readLocalSec(){
-    try{ return JSON.parse(localStorage.getItem("admin_security_local")||"{}"); }catch{ return {}; }
-  }
-  function saveLocalSec(obj){
-    localStorage.setItem("admin_security_local", JSON.stringify(obj||{}));
-  }
-
   return {
-    title:"Security & Password",
+    title:"Profile Security",
     async mount(host){
-      const st = readLocalSec();
+      const me = await Orland.api("/api/me");
+      const d = me?.data || {};
+      const vc = d.verification_compliance || {};
+      const actions = Array.isArray(vc.required_actions) ? vc.required_actions : [];
 
-      host.innerHTML=`
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-5">
-          <div class="text-base font-bold">Change Password</div>
-          <div class="text-xs text-slate-500 mt-1">Min 10 chars.</div>
+      host.innerHTML = `
+        <div class="space-y-5 max-w-6xl">
+          <div id="bannerBox"></div>
 
-          <div class="mt-4">
-            <div class="relative">
-              <input id="pwNew" type="password" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs" placeholder="new password (min 10)">
-              <button type="button" data-pw-toggle="pwNew" class="absolute right-2 top-1.5 w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5">
-                <i class="fa-solid fa-eye"></i>
-              </button>
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-2xl font-extrabold ui-title-gradient">Security & Password</div>
+            <div class="text-slate-500 mt-1">Kelola keamanan akun, password, dan persiapan compliance policy.</div>
+          </div>
+
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold">Quick Actions</div>
+            <div class="mt-4 flex gap-2 flex-wrap">
+              <button id="goVerifyCenter" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">Open Verify Center</button>
+              <button id="goProfile" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">My Profile</button>
             </div>
-            <button id="btnPw" class="mt-3 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90 w-full">
-              Update Password
-            </button>
+
+            ${
+              actions.length ? `
+                <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div class="font-black text-amber-800 text-sm">Required Actions</div>
+                  <div class="text-amber-700 text-xs mt-1">Selesaikan verifikasi agar akses penuh terbuka.</div>
+                </div>
+              ` : `
+                <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div class="font-black text-emerald-800 text-sm">Security policy satisfied</div>
+                  <div class="text-emerald-700 text-xs mt-1">Tidak ada tindakan tambahan yang diwajibkan saat ini.</div>
+                </div>
+              `
+            }
           </div>
         </div>
+      `;
 
-        <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-xl p-5">
-          <div class="text-base font-bold">2-Step Options (Admin UI)</div>
-          <div class="text-xs text-slate-500 mt-1">
-            Default: OFF untuk admin/staff/super_admin (sesuai keputusan kamu). Ini hanya UI config lokal dulu.
-          </div>
+      const bannerHost = host.querySelector("#bannerBox");
+      bannerHost.innerHTML = renderVerificationBanner({
+        scope: vc.scope || "user",
+        required_actions: actions
+      });
+      bindVerificationBanner(bannerHost, Orland);
 
-          <div class="mt-4 space-y-3 text-xs">
-            <label class="flex items-center gap-2">
-              <input id="chkEmail" type="checkbox" class="rounded" ${st.require_email? "checked":""}>
-              <span>Require Email step</span>
-            </label>
-            <label class="flex items-center gap-2">
-              <input id="chkPhone" type="checkbox" class="rounded" ${st.require_phone? "checked":""}>
-              <span>Require Phone step</span>
-            </label>
-            <label class="flex items-center gap-2">
-              <input id="chkPin" type="checkbox" class="rounded" ${st.require_pin? "checked":""}>
-              <span>Require PIN step</span>
-            </label>
+      host.querySelector("#goVerifyCenter")?.addEventListener("click", ()=>{
+        Orland.navigate("/verify-center");
+      });
 
-            <button id="btnSave" class="mt-2 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5 w-full">
-              Save Settings (Local)
-            </button>
-
-            <div class="text-[10px] text-slate-500">
-              Next step (PART 4): kita wiring ke <code>system_settings</code> supaya persist di D1 + bisa di toggle dari super_admin.
-            </div>
-          </div>
-        </div>
-      </div>`;
-
-      bindPwToggle(host);
-
-      host.querySelector("#btnPw").onclick=async ()=>{
-        const pw=String(host.querySelector("#pwNew").value||"");
-        if(pw.length<10) return toast("Min 10 chars","error");
-        const r=await changePassword(pw);
-        toast(r.status, r.status==="ok"?"success":"error");
-        if(r.status==="ok") host.querySelector("#pwNew").value="";
-      };
-
-      host.querySelector("#btnSave").onclick=()=>{
-        const obj={
-          require_email: !!host.querySelector("#chkEmail").checked,
-          require_phone: !!host.querySelector("#chkPhone").checked,
-          require_pin: !!host.querySelector("#chkPin").checked
-        };
-        saveLocalSec(obj);
-        toast("Saved (local)", "success");
-      };
+      host.querySelector("#goProfile")?.addEventListener("click", ()=>{
+        Orland.navigate("/profile");
+      });
     }
   };
 }

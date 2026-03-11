@@ -77,10 +77,10 @@ export default function(Orland){
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4 max-w-7xl">
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <div class="text-2xl font-extrabold">Menu Builder</div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Menu Builder</div>
                 <div class="text-slate-500 mt-1">CRUD menu + role_menus + sort order + parent-child.</div>
               </div>
               <div class="flex gap-2 flex-wrap">

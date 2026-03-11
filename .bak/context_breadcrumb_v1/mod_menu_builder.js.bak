@@ -1,0 +1,718 @@
+import { esc, emptyState, openModal, closeModal, openConfirm, closeConfirm, setMsg } from "../../assets/js/orland_ui.js";
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/menus");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/menus", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function bySort(a, b){
+    const sa = Number(a.sort_order ?? 9999);
+    const sb = Number(b.sort_order ?? 9999);
+    if(sa !== sb) return sa - sb;
+    return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
+  }
+
+  function buildTree(items){
+    const byId = new Map();
+    const roots = [];
+
+    for(const row of (items || [])){
+      byId.set(String(row.id), {
+        ...row,
+        id: String(row.id),
+        parent_id: row.parent_id ? String(row.parent_id) : null,
+        sort_order: Number(row.sort_order ?? 9999),
+        created_at: Number(row.created_at ?? 0),
+        children: []
+      });
+    }
+
+    for(const item of byId.values()){
+      if(item.parent_id && byId.has(item.parent_id)){
+        byId.get(item.parent_id).children.push(item);
+      }else{
+        roots.push(item);
+      }
+    }
+
+    const walk = (arr)=>{
+      arr.sort(bySort);
+      for(const x of arr) walk(x.children || []);
+    };
+    walk(roots);
+
+    return roots;
+  }
+
+  return {
+    title:"Menu Builder",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Menu Builder</div>
+                <div class="text-slate-500 mt-1">CRUD menu + role_menus + sort order + parent-child.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Menu
+                </button>
+                <button id="btnBackReturn" class="hidden px-4 py-3 rounded-2xl border border-sky-200 text-sky-700 font-black text-sm">
+                  <i class="fa-solid fa-arrow-left mr-2"></i>Back to Role Usage
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari label / path / id / code">
+              <select id="qRole" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                <option value="">All roles</option>
+              </select>
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold ui-title-gradient">Menus</div>
+            <div class="text-slate-500 text-sm mt-1">Tampilan mobile ringkas, edit cepat, mover sort, dan role menus.</div>
+            <div id="listBox" class="mt-5 space-y-3"></div>
+          </div>
+        </div>
+
+        <div id="modalBackdrop" class="hidden fixed inset-0 z-[100] bg-black/50 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-5xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-4 lg:px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
+                <div>
+                  <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Menu</div>
+                  <div class="text-xs text-slate-500 mt-1">Create / edit menu</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="btnModalReturn" class="hidden px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black">
+                    <i class="fa-solid fa-arrow-left mr-1"></i>Back to Role Usage
+                  </button>
+                  <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+              <div id="modalBody" class="p-4 lg:p-5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+      let MENUS = [];
+      let ROLES = [];
+      let TREE = [];
+      let confirmAction = null;
+      let HIGHLIGHT_MENU_ID = "";
+      let HIGHLIGHT_TIMER = null;
+      let RETURN_ROLE_ID = "";
+      let RETURN_ENABLED = false;
+
+      function setHighlightTarget(id){
+        HIGHLIGHT_MENU_ID = String(id || "").trim();
+        if(HIGHLIGHT_TIMER){
+          clearTimeout(HIGHLIGHT_TIMER);
+          HIGHLIGHT_TIMER = null;
+        }
+        if(HIGHLIGHT_MENU_ID){
+          HIGHLIGHT_TIMER = setTimeout(()=>{
+            HIGHLIGHT_MENU_ID = "";
+            renderList();
+          }, 7000);
+        }
+      }
+
+      function hasReturnContext(){
+        return !!String(RETURN_ROLE_ID || "").trim();
+      }
+
+      function updateReturnButtons(){
+        const on = hasReturnContext() && RETURN_ENABLED;
+        q("btnBackReturn").classList.toggle("hidden", !on);
+        q("btnModalReturn").classList.toggle("hidden", !on);
+      }
+
+      function goBackToRoleUsage(){
+        if(!hasReturnContext()) return;
+
+        try{
+          sessionStorage.setItem("orland_return_role_id", String(RETURN_ROLE_ID));
+          sessionStorage.setItem("orland_return_open_usage", "1");
+        }catch{}
+
+        try{
+          if(typeof Orland?.openModule === "function"){
+            Orland.openModule("role_builder");
+            return true;
+          }
+        }catch{}
+
+        try{
+          if(typeof Orland?.navigate === "function"){
+            Orland.navigate("role_builder");
+            return true;
+          }
+        }catch{}
+
+        try{
+          if(typeof Orland?.go === "function"){
+            Orland.go("role_builder");
+            return true;
+          }
+        }catch{}
+
+        try{
+          location.hash = "#/role_builder";
+          return true;
+        }catch{}
+
+        return false;
+      }
+
+      function renderRoleFilter(){
+        q("qRole").innerHTML = `<option value="">All roles</option>` + ROLES.map(r => `
+          <option value="${esc(r.name)}">${esc(r.name)}</option>
+        `).join("");
+      }
+
+      function filteredItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        const role = String(q("qRole").value || "").trim();
+
+        return MENUS.filter(x => {
+          const hay = [x.id, x.code, x.label, x.path, x.parent_label].join(" ").toLowerCase();
+          const okKw = !kw || hay.includes(kw);
+          const okRole = !role || (Array.isArray(x.role_names_json) && x.role_names_json.includes(role));
+          return okKw && okRole;
+        });
+      }
+
+      function renderRows(nodes, depth=0){
+        const visibleIds = new Set(filteredItems().map(x => String(x.id)));
+        const hasVisible = (node)=>{
+          if(visibleIds.has(String(node.id))) return true;
+          return (node.children || []).some(hasVisible);
+        };
+
+        return nodes.filter(hasVisible).map(node => {
+          const roles = Array.isArray(node.role_names_json) ? node.role_names_json : [];
+          const roleCount = Array.isArray(node.role_ids_json) ? node.role_ids_json.length : roles.length;
+          const indent = depth * 16;
+          const isTarget = HIGHLIGHT_MENU_ID && String(node.id) === String(HIGHLIGHT_MENU_ID);
+
+          return `
+            <div class="rounded-2xl border overflow-hidden ${isTarget ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900 bg-sky-50/40 dark:bg-sky-950/20" : "border-slate-200 dark:border-darkBorder"}" data-menu-row="${esc(node.id)}">
+              <div class="px-3 lg:px-4 py-3 bg-white dark:bg-darkLighter ${isTarget ? "bg-sky-50 dark:bg-sky-950/20" : ""}" style="padding-left:${12 + indent}px">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <i class="${esc(node.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
+                      <div class="font-black text-sm">${depth > 0 ? "&mdash; " : ""}${esc(node.label || "Menu")}</div>
+                      ${isTarget ? `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">jump target</span>` : ``}
+                    </div>
+                    <div class="mt-2 text-xs text-slate-500 space-y-1">
+                      ${depth > 0 ? `<div>Parent <span class="font-bold">[${esc(node.parent_label || "-")}]</span></div>` : ``}
+                      ${node.path && node.path !== "/" ? `<div>${esc(node.path)}</div>` : ``}
+                      <div>sort: ${esc(node.sort_order)} • id: ${esc(node.id)}</div>
+                    </div>
+                    <div class="mt-3 flex gap-2 flex-wrap">
+                      ${roleCount ? `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">${esc(roleCount)} role</span>` : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">no roles</span>`}
+                      ${roles.length ? roles.map(r => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(r)}</span>`).join("") : ``}
+                    </div>
+                  </div>
+
+                  <div class="flex gap-2 shrink-0 flex-wrap justify-end">
+                    <button class="btnMoveUp px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button class="btnMoveDown px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button class="btnEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btnDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
+              ${(node.children || []).length ? `<div class="border-t border-slate-200 dark:border-darkBorder">${renderRows(node.children, depth + 1)}</div>` : ``}
+            </div>
+          `;
+        }).join("");
+      }
+
+      async function quickSave(row){
+        setMsg(host, "#msg", "muted", "Saving sort...");
+
+        let role_ids = [];
+        if(Array.isArray(row.role_ids_json) && row.role_ids_json.length){
+          role_ids = row.role_ids_json.map(x => String(x));
+        }else{
+          role_ids = ROLES
+            .filter(r => Array.isArray(row.role_names_json) && row.role_names_json.includes(r.name))
+            .map(r => String(r.id));
+        }
+
+        const r = await apiSave({
+          action: "update",
+          id: row.id,
+          code: row.code,
+          label: row.label,
+          path: row.path,
+          parent_id: row.parent_id || "",
+          sort_order: row.sort_order,
+          icon: row.icon || "",
+          role_ids
+        });
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Sort save failed: " + (r.data?.message || r.status));
+          return;
+        }
+
+        setMsg(host, "#msg", "success", "Sort updated.");
+        await load();
+      }
+
+      function bindListActions(){
+        q("listBox").querySelectorAll(".btnEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = MENUS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(row) openEditor(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnDelete").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = MENUS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+
+            openConfirm(host, {
+              confirmTitle: "Delete Menu",
+              confirmDesc: "Menu akan dihapus jika tidak punya children.",
+              confirmMeta: `<div class="font-black text-red-600">${esc(row.label || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.path || "-")}</div>`
+            });
+
+            confirmAction = async ()=>{
+              setMsg(host, "#msg", "muted", "Deleting...");
+              const r = await apiSave({ action:"delete", id: row.id });
+              if(r.status !== "ok"){
+                setMsg(host, "#msg", "error", "Delete failed: " + (r.data?.message || r.status));
+                return;
+              }
+              closeConfirm(host);
+              setMsg(host, "#msg", "success", "Menu deleted.");
+              await load();
+            };
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnMoveUp").forEach(btn => {
+          btn.onclick = async ()=>{
+            const row = MENUS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+            row.sort_order = Number(row.sort_order || 50) - 1;
+            await quickSave(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnMoveDown").forEach(btn => {
+          btn.onclick = async ()=>{
+            const row = MENUS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+            row.sort_order = Number(row.sort_order || 50) + 1;
+            await quickSave(row);
+          };
+        });
+      }
+
+      function scrollToHighlight(){
+        if(!HIGHLIGHT_MENU_ID) return;
+        const el = q("listBox").querySelector(`[data-menu-row="${CSS.escape(String(HIGHLIGHT_MENU_ID))}"]`);
+        if(!el) return;
+        try{
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }catch{}
+      }
+
+      function renderList(){
+        TREE = buildTree(MENUS);
+        q("listBox").innerHTML = renderRows(TREE, 0) || emptyState("No menu data.");
+        bindListActions();
+        setTimeout(scrollToHighlight, 50);
+      }
+
+      function validationHint(name, hintText){
+        return `
+          <div class="text-xs text-slate-500 mt-2" data-fve-hint-for="${esc(name)}">${esc(hintText || "")}</div>
+          <div class="text-xs text-red-500 mt-2 hidden" data-fve-error-for="${esc(name)}"></div>
+          <div class="fve-state hidden mt-2" data-fve-state-for="${esc(name)}"></div>
+        `;
+      }
+
+      function editorHtml(row = {}){
+        const selectedRoleIds = new Set(
+          Array.isArray(row.role_ids_json) && row.role_ids_json.length
+            ? row.role_ids_json.map(x => String(x))
+            : ROLES
+                .filter(r => Array.isArray(row.role_names_json) && row.role_names_json.includes(r.name))
+                .map(r => String(r.id))
+        );
+
+        const parents = MENUS
+          .filter(x => String(x.id) !== String(row.id || ""))
+          .map(x => `<option value="${esc(x.id)}" ${String(row.parent_id || "") === String(x.id) ? "selected" : ""}>${esc(x.label)}</option>`)
+          .join("");
+
+        return `
+          <form id="menuForm" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="space-y-4">
+              <input type="hidden" name="mode" value="${row.id ? "update" : "create"}">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+                <input name="id" value="${esc(row.id || "")}" ${row.id ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="m_core_dashboard">
+                ${validationHint("id", row.id ? "ID existing record. Read-only saat edit." : "Minimal 3 karakter. Live check ke backend.")}
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
+                  <input name="code" value="${esc(row.code || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="dashboard">
+                  ${validationHint("code", "Code harus unik. Live check ke backend.")}
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
+                  <input name="label" value="${esc(row.label || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Dashboard">
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
+                <input name="path" value="${esc(row.path || "/")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/dashboard">
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
+                  <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                    <option value="">root</option>
+                    ${parents}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
+                  <input name="sort_order" type="number" value="${esc(row.sort_order ?? 50)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
+                <input name="icon" value="${esc(row.icon || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button type="submit" id="btnSubmitMenu" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+                <button type="button" id="btnCancelMenu" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <div class="text-sm font-bold text-slate-500 mb-2">ROLE MENUS</div>
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                  <div class="flex gap-2 flex-wrap mb-3">
+                    <button type="button" id="btnRoleAll" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Check all</button>
+                    <button type="button" id="btnRoleNone" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Uncheck all</button>
+                  </div>
+                  <div id="roleChecks" class="space-y-2">
+                    ${ROLES.map(r => `
+                      <label class="flex items-center gap-3 text-sm">
+                        <input class="roleCheck" type="checkbox" value="${esc(r.id)}" ${
+                          row.id
+                            ? (selectedRoleIds.has(String(r.id)) ? "checked" : "")
+                            : "checked"
+                        }>
+                        <span class="font-semibold">${esc(r.name)}</span>
+                      </label>
+                    `).join("")}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        `;
+      }
+
+      function clearAsyncState(form, name){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+        if(error){
+          error.textContent = "";
+          error.classList.add("hidden");
+        }
+        if(state){
+          state.textContent = "";
+          state.className = "fve-state hidden mt-2";
+        }
+      }
+
+      function setInlineError(form, name, message){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-warning", "is-checking");
+        input?.classList.add("is-invalid");
+        if(error){
+          error.textContent = String(message || "");
+          error.classList.remove("hidden");
+        }
+        if(state){
+          state.textContent = "Invalid";
+          state.className = "fve-state is-invalid mt-2";
+        }
+      }
+
+      function openEditor(row = {}){
+        openModal(host, {
+          modalTitle: row.id ? "Edit Menu" : "Create Menu",
+          modalBody: editorHtml(row)
+        });
+
+        RETURN_ENABLED = true;
+        updateReturnButtons();
+
+        const form = q("menuForm");
+        const roleChecks = ()=>Array.from(q("roleChecks").querySelectorAll(".roleCheck"));
+
+        q("btnCancelMenu").onclick = ()=>{
+          closeModal(host);
+          updateReturnButtons();
+        };
+        q("btnRoleAll").onclick = ()=>roleChecks().forEach(x => x.checked = true);
+        q("btnRoleNone").onclick = ()=>roleChecks().forEach(x => x.checked = false);
+
+        const asyncEngine = afvCreateEngine(form, {
+          id: {
+            debounce_ms: 500,
+            min_length: 3,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              if(row.id){
+                return { ok: true, message: "ID locked" };
+              }
+              const r = await Orland.api("/api/validate/menu-id", {
+                method: "POST",
+                body: JSON.stringify({
+                  id: value,
+                  exclude_id: ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"ID available" }
+                : { ok:false, used:true, message:"ID already used" };
+            }
+          },
+          code: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/menu-code", {
+                method: "POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"Code available" }
+                : { ok:false, used:true, message:"Code already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+
+          const role_ids = roleChecks().filter(x => x.checked).map(x => x.value);
+
+          const payload = {
+            action: form.mode.value,
+            id: form.id.value.trim(),
+            code: form.code.value.trim(),
+            label: form.label.value.trim(),
+            path: form.path.value.trim(),
+            parent_id: form.parent_id.value.trim(),
+            sort_order: Number(form.sort_order.value || 50),
+            icon: form.icon.value.trim(),
+            role_ids
+          };
+
+          clearAsyncState(form, "id");
+          clearAsyncState(form, "code");
+
+          const syncErrors = {};
+          if(!payload.id) syncErrors.id = "ID wajib diisi.";
+          else if(payload.id.length < 3) syncErrors.id = "ID minimal 3 karakter.";
+          else if(!/^[a-zA-Z0-9_\-]+$/.test(payload.id)) syncErrors.id = "ID hanya boleh huruf, angka, underscore, dash.";
+
+          if(!payload.code) syncErrors.code = "CODE wajib diisi.";
+          if(!payload.label) syncErrors.label = "LABEL wajib diisi.";
+          if(payload.id && payload.code && payload.id === payload.code) syncErrors.code = "CODE harus berbeda dari ID.";
+          if(payload.parent_id && payload.parent_id === payload.id) syncErrors.id = "Parent tidak boleh sama dengan ID.";
+
+          if(syncErrors.id) setInlineError(form, "id", syncErrors.id);
+          if(syncErrors.code) setInlineError(form, "code", syncErrors.code);
+
+          if(Object.keys(syncErrors).length){
+            setMsg(host, "#msg", "error", "Periksa field yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+
+          if(asyncHasError){
+            setMsg(host, "#msg", "error", "Masih ada unique field yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg(host, "#msg", "warning", "Masih menunggu pengecekan field.");
+            return;
+          }
+
+          setMsg(host, "#msg", "muted", "Saving...");
+          const r = await apiSave(payload);
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          closeModal(host);
+          RETURN_ENABLED = true;
+          updateReturnButtons();
+          setMsg(host, "#msg", "success", "Menu saved.");
+          await load();
+        };
+      }
+
+      function consumeJumpTarget(){
+        try{
+          const id = String(sessionStorage.getItem("orland_jump_menu_id") || "").trim();
+          const roleId = String(sessionStorage.getItem("orland_return_role_id") || "").trim();
+          if(!id) return null;
+          sessionStorage.removeItem("orland_jump_menu_id");
+          RETURN_ROLE_ID = roleId;
+          updateReturnButtons();
+          return id;
+        }catch{
+          return null;
+        }
+      }
+
+      function processJumpTarget(){
+        const targetId = consumeJumpTarget();
+        if(!targetId) return;
+
+        const row = MENUS.find(x => String(x.id) === String(targetId));
+        if(!row){
+          setMsg(host, "#msg", "warning", `Jump target menu not found: ${targetId}`);
+          return;
+        }
+
+        q("qSearch").value = String(row.id || "");
+        setHighlightTarget(row.id);
+        renderList();
+        RETURN_ENABLED = true;
+        updateReturnButtons();
+        setMsg(host, "#msg", "success", `Jumped from Role Usage Inspector to menu: ${row.label || row.id}`);
+        openEditor(row);
+      }
+
+      async function load(){
+        setMsg(host, "#msg", "muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Load failed: " + r.status);
+          return;
+        }
+
+        MENUS = Array.isArray(r.data?.menus) ? r.data.menus : [];
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
+
+        renderRoleFilter();
+        renderList();
+        setMsg(host, "#msg", "success", "Loaded.");
+        processJumpTarget();
+      }
+
+      q("btnReload").onclick = load;
+      q("btnNew").onclick = ()=>openEditor({});
+      q("qSearch").oninput = renderList;
+      q("qRole").onchange = renderList;
+      q("btnBackReturn").onclick = ()=>goBackToRoleUsage();
+      q("btnModalReturn").onclick = ()=>goBackToRoleUsage();
+
+      q("btnModalClose").onclick = ()=>{
+        closeModal(host);
+        updateReturnButtons();
+      };
+      q("modalBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("modalBackdrop")){
+          closeModal(host);
+          updateReturnButtons();
+        }
+      });
+
+      q("btnConfirmCancel").onclick = ()=>closeConfirm(host);
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
+      };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm(host);
+      });
+
+      await load();
+    }
+  };
+}

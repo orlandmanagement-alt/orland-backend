@@ -1,0 +1,157 @@
+export default function(Orland){
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+
+  async function apiLoad(){
+    return await Orland.api("/api/config/global");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/config/global", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function card(scope, title, desc){
+    return `
+      <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+        <div class="text-xl font-extrabold ui-title-gradient">${esc(title)}</div>
+        <div class="text-sm text-slate-500 mt-1">${esc(desc)}</div>
+
+        <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <input id="${scope}_enable_two_step" type="checkbox" class="w-4 h-4">
+            <div>
+              <div class="font-black text-sm">Aktivasi 2 langkah</div>
+              <div class="text-xs text-slate-500">Wajibkan 2 step security</div>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <input id="${scope}_verify_sms_wa" type="checkbox" class="w-4 h-4">
+            <div>
+              <div class="font-black text-sm">Verifikasi SMS / WA</div>
+              <div class="text-xs text-slate-500">Aktifkan verifikasi nomor</div>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <input id="${scope}_verify_email" type="checkbox" class="w-4 h-4">
+            <div>
+              <div class="font-black text-sm">Verifikasi Email</div>
+              <div class="text-xs text-slate-500">Aktifkan verifikasi email</div>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <input id="${scope}_verify_kyc" type="checkbox" class="w-4 h-4">
+            <div>
+              <div class="font-black text-sm">Verifikasi KYC</div>
+              <div class="text-xs text-slate-500">Aktifkan verifikasi identitas</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
+  return {
+    title:"Global Settings",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-6xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Global Settings</div>
+                <div class="text-slate-500 mt-1">Setting global enable / disable untuk policy client dan talent.</div>
+              </div>
+
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-5 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnSave" class="px-5 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-floppy-disk mr-2"></i>Save
+                </button>
+              </div>
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          ${card("client", "Client Policy", "Default policy untuk user client.")}
+          ${card("talent", "Talent Policy", "Default policy untuk user talent.")}
+
+          <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-700">
+            Hanya <span class="font-black">super_admin</span> yang boleh menyimpan perubahan global setting ini.
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      function setScope(scope, v = {}){
+        q(scope + "_enable_two_step").checked = !!Number(v.enable_two_step || 0);
+        q(scope + "_verify_sms_wa").checked = !!Number(v.verify_sms_wa || 0);
+        q(scope + "_verify_email").checked = !!Number(v.verify_email || 0);
+        q(scope + "_verify_kyc").checked = !!Number(v.verify_kyc || 0);
+      }
+
+      function readScope(scope){
+        return {
+          enable_two_step: q(scope + "_enable_two_step").checked ? 1 : 0,
+          verify_sms_wa: q(scope + "_verify_sms_wa").checked ? 1 : 0,
+          verify_email: q(scope + "_verify_email").checked ? 1 : 0,
+          verify_kyc: q(scope + "_verify_kyc").checked ? 1 : 0
+        };
+      }
+
+      async function loadData(){
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Loading...";
+
+        const r = await apiLoad();
+        if(r.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Load failed: " + r.status;
+          return;
+        }
+
+        const v = r.data?.value || {};
+        setScope("client", v.client || {});
+        setScope("talent", v.talent || {});
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Loaded.";
+      }
+
+      q("btnReload").onclick = loadData;
+
+      q("btnSave").onclick = async ()=>{
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Saving...";
+
+        const payload = {
+          client: readScope("client"),
+          talent: readScope("talent")
+        };
+
+        const r = await apiSave(payload);
+        if(r.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Save failed: " + (r.data?.message || r.status);
+          return;
+        }
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Saved.";
+        await loadData();
+      };
+
+      await loadData();
+    }
+  };
+}

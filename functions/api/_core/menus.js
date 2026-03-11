@@ -26,7 +26,11 @@ async function listRoles(env){
     FROM roles
     ORDER BY name ASC
   `).all();
-  return r.results || [];
+
+  return (r.results || []).map(x => ({
+    id: String(x.id),
+    name: String(x.name || "")
+  }));
 }
 
 async function listMenus(env){
@@ -67,10 +71,17 @@ async function listMenus(env){
   `).all();
 
   return (r.results || []).map(row => ({
-    ...row,
-    parent_label: row.parent_label || "",
-    role_names_json: safeJsonArray(row.role_names_json),
-    role_ids_json: safeJsonArray(row.role_ids_json)
+    id: String(row.id),
+    code: String(row.code || ""),
+    label: String(row.label || ""),
+    path: String(row.path || "/"),
+    parent_id: row.parent_id ? String(row.parent_id) : null,
+    sort_order: Number(row.sort_order ?? 50),
+    icon: String(row.icon || ""),
+    created_at: Number(row.created_at ?? 0),
+    parent_label: String(row.parent_label || ""),
+    role_names_json: safeJsonArray(row.role_names_json).map(x => String(x)),
+    role_ids_json: safeJsonArray(row.role_ids_json).map(x => String(x))
   }));
 }
 

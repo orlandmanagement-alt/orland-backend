@@ -40,10 +40,10 @@ export default function(Orland){
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4 max-w-7xl">
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <div class="text-2xl font-extrabold">OPS Incidents</div>
+                <div class="text-2xl font-extrabold ui-title-gradient">OPS Incidents</div>
                 <div class="text-slate-500 mt-1">Incident CRUD, triage, dan discussion thread.</div>
               </div>
               <div class="flex gap-2 flex-wrap">
@@ -78,12 +78,12 @@ export default function(Orland){
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Incident List</div>
               <div id="listBox" class="mt-4 space-y-3"></div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Detail & Comments</div>
               <div id="detailBox" class="mt-4 text-sm text-slate-500">Pilih incident dari list.</div>
             </div>

@@ -1,10 +1,9 @@
-import { json, nowSec, sha256Base64, auditEvent } from "./_lib.js";
-
-const POLICY_KEY = "security_policy";
+import { json, nowSec, sha256Base64, auditEvent, requireAuth } from "./_lib.js";
+import { getEffectiveVerificationState, shouldEnforceForPath } from "./api/config/_global_policy.js";
 
 async function hashIp(env, ip){
   const pepper = String(env.HASH_PEPPER || "");
-  return await sha256Base64(String(ip || "") + "|" + pepper);
+  return await sha256Base64(String(ip||"") + "|" + pepper);
 }
 
 async function hashUa(request){
@@ -19,44 +18,6 @@ function getClientIp(request){
   );
 }
 
-async function readSecurityPolicy(env){
-  const fallback = {
-    rate_limit: {
-      enabled: 1,
-      window_sec: Number(env.API_RATE_WINDOW_SEC || 60),
-      max_requests: Number(env.API_RATE_MAX || 60)
-    },
-    headers: {
-      enabled: 1
-    }
-  };
-
-  try{
-    const row = await env.DB.prepare(`
-      SELECT v
-      FROM system_settings
-      WHERE k = ?
-      LIMIT 1
-    `).bind(POLICY_KEY).first();
-
-    if(!row?.v) return fallback;
-
-    const parsed = JSON.parse(row.v || "{}");
-    return {
-      rate_limit: {
-        enabled: parsed?.rate_limit?.enabled ? 1 : 0,
-        window_sec: Math.max(1, Number(parsed?.rate_limit?.window_sec || fallback.rate_limit.window_sec)),
-        max_requests: Math.max(1, Number(parsed?.rate_limit?.max_requests || fallback.rate_limit.max_requests))
-      },
-      headers: {
-        enabled: parsed?.headers?.enabled ? 1 : 0
-      }
-    };
-  }catch{
-    return fallback;
-  }
-}
-
 async function isBlocked(env, ip){
   if(!ip) return false;
   const ip_hash = await hashIp(env, ip);
@@ -65,7 +26,7 @@ async function isBlocked(env, ip){
   const row = await env.DB.prepare(`
     SELECT id
     FROM ip_blocks
-    WHERE ip_hash = ?
+    WHERE ip_hash=?
       AND revoked_at IS NULL
       AND (expires_at IS NULL OR expires_at > ?)
     LIMIT 1
@@ -77,9 +38,9 @@ async function isBlocked(env, ip){
 async function bumpCounter(env, key, windowSec){
   const now = nowSec();
   const row = await env.DB.prepare(`
-    SELECT k, count, window_start
+    SELECT k,count,window_start
     FROM request_counters
-    WHERE k = ?
+    WHERE k=?
     LIMIT 1
   `).bind(key).first();
 
@@ -96,32 +57,15 @@ async function bumpCounter(env, key, windowSec){
   }
 
   await env.DB.prepare(`
-    INSERT INTO request_counters (k, count, window_start, updated_at)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO request_counters (k,count,window_start,updated_at)
+    VALUES (?,?,?,?)
     ON CONFLICT(k) DO UPDATE SET
-      count = excluded.count,
-      window_start = excluded.window_start,
-      updated_at = excluded.updated_at
+      count=excluded.count,
+      window_start=excluded.window_start,
+      updated_at=excluded.updated_at
   `).bind(key, count, window_start, now).run();
 
   return { count, window_start };
-}
-
-function applySecurityHeaders(response, enabled){
-  if(!enabled || !response) return response;
-
-  const h = new Headers(response.headers);
-  h.set("Cache-Control", "no-store");
-  h.set("Pragma", "no-cache");
-  h.set("X-Content-Type-Options", "nosniff");
-  h.set("X-Frame-Options", "DENY");
-  h.set("Referrer-Policy", "same-origin");
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: h
-  });
 }
 
 export async function onRequest(ctx) {
@@ -129,12 +73,11 @@ export async function onRequest(ctx) {
   const url = new URL(request.url);
   const p = url.pathname || "/";
 
-  if(!p.startsWith("/api/")) return ctx.next();
+  if (!p.startsWith("/api/")) return ctx.next();
 
   const ip = getClientIp(request);
   const ipHash = await hashIp(env, ip);
   const uaHash = await hashUa(request);
-  const policy = await readSecurityPolicy(env);
 
   try{
     const blocked = await isBlocked(env, ip);
@@ -146,10 +89,7 @@ export async function onRequest(ctx) {
         http_status: 403,
         meta: { reason: "ip_blocked" }
       });
-      return applySecurityHeaders(
-        json(403, "blocked_ip", { message: "ip_blocked" }),
-        !!policy?.headers?.enabled
-      );
+      return json(403, "blocked_ip", { message:"ip_blocked" });
     }
   }catch{}
 
@@ -158,12 +98,12 @@ export async function onRequest(ctx) {
       p === "/api/login" ||
       p.startsWith("/api/security") ||
       p.startsWith("/api/config") ||
-      p.startsWith("/api/ipblocks")
+      p.startsWith("/api/ip-blocks")
     );
 
-    if(sensitive && policy?.rate_limit?.enabled){
-      const rlWindow = Number(policy.rate_limit.window_sec || 60);
-      const rlMax = Number(policy.rate_limit.max_requests || 60);
+    if(sensitive){
+      const rlWindow = Number(env.API_RATE_WINDOW_SEC || 60);
+      const rlMax = Number(env.API_RATE_MAX || 60);
       const c = await bumpCounter(env, "rl:" + p + ":" + ipHash, rlWindow);
 
       if(c.count > rlMax){
@@ -174,15 +114,51 @@ export async function onRequest(ctx) {
           http_status: 429,
           meta: { path: p, count: c.count, window_sec: rlWindow, max: rlMax }
         });
+        return json(429, "rate_limited", { message:"too_many_requests" });
+      }
+    }
+  }catch{}
 
-        return applySecurityHeaders(
-          json(429, "rate_limited", { message: "too_many_requests" }),
-          !!policy?.headers?.enabled
-        );
+  try{
+    const a = await requireAuth(env, request);
+    if(a.ok && shouldEnforceForPath(p)){
+      const state = await getEffectiveVerificationState(env, a.user, a.roles || []);
+
+      if(!state.compliance.compliant){
+        await auditEvent(env, request, {
+          action: "verification_policy_block",
+          user_id: a.user?.id || null,
+          ip_hash: ipHash,
+          ua_hash: uaHash,
+          http_status: 403,
+          meta: {
+            path: p,
+            scope: state.compliance.scope,
+            required_actions: state.compliance.required_actions
+          }
+        });
+
+        return json(403, "verification_required", {
+          message: "global_verification_policy_not_satisfied",
+          scope: state.compliance.scope,
+          required_actions: state.compliance.required_actions,
+          checks: state.compliance.checks
+        });
       }
     }
   }catch{}
 
   const res = await ctx.next();
-  return applySecurityHeaders(res, !!policy?.headers?.enabled);
+
+  try{
+    const a = await requireAuth(env, request);
+    if(a.ok){
+      const state = await getEffectiveVerificationState(env, a.user, a.roles || []);
+      res.headers.set("x-verification-scope", String(state.compliance.scope || "admin"));
+      res.headers.set("x-verification-compliant", state.compliance.compliant ? "1" : "0");
+      res.headers.set("x-verification-required-actions", (state.compliance.required_actions || []).join(","));
+    }
+  }catch{}
+
+  return res;
 }

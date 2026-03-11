@@ -1,0 +1,213 @@
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/config/cron-global");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/config/cron-global", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function apiStatus(){
+    return await Orland.api("/api/verification/cron_status");
+  }
+
+  async function apiRunNow(){
+    return await Orland.api("/api/verification/cron_cleanup?force=1");
+  }
+
+  function fmtTs(v){
+    const n = Number(v || 0);
+    if(!n) return "-";
+    try{
+      return new Date(n * 1000).toLocaleString("id-ID");
+    }catch{
+      return String(n);
+    }
+  }
+
+  return {
+    title:"Global Cron Settings",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-6xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">Global Cron Settings</div>
+                <div class="text-slate-500 mt-1">Kelola automation verification cleanup secara global.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnRunNow" class="px-4 py-3 rounded-2xl border border-emerald-200 text-emerald-700 font-black text-sm">
+                  <i class="fa-solid fa-play mr-2"></i>Run Now
+                </button>
+                <button id="btnSave" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-floppy-disk mr-2"></i>Save
+                </button>
+              </div>
+            </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Cron Config</div>
+              <div class="mt-5 space-y-4">
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                  <div>
+                    <div class="font-black text-sm">Enable Cron Cleanup</div>
+                    <div class="text-xs text-slate-500 mt-1">Aktifkan automation cleanup verification.</div>
+                  </div>
+                  <input id="enabled" type="checkbox" class="w-5 h-5">
+                </label>
+
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">Interval Seconds</label>
+                  <input id="interval_sec" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-bold text-slate-500 mb-2">OTP Expired Days</label>
+                    <input id="otp_expired_days" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-bold text-slate-500 mb-2">OTP Consumed Days</label>
+                    <input id="otp_consumed_days" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-bold text-slate-500 mb-2">Pending KYC Days</label>
+                    <input id="pending_kyc_days" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-bold text-slate-500 mb-2">Audit Retention Days</label>
+                    <input id="audit_retention_days" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Cron Status</div>
+              <div id="statusBox" class="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-300">
+                <div>Loading...</div>
+              </div>
+
+              <div class="mt-5">
+                <div class="text-sm font-bold text-slate-500 mb-2">Last Result</div>
+                <pre id="lastResult" class="text-[11px] whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">{}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      function fillForm(v = {}){
+        q("enabled").checked = !!v.enabled;
+        q("interval_sec").value = String(v.interval_sec ?? 86400);
+        q("otp_expired_days").value = String(v.otp_expired_days ?? 7);
+        q("otp_consumed_days").value = String(v.otp_consumed_days ?? 30);
+        q("pending_kyc_days").value = String(v.pending_kyc_days ?? 30);
+        q("audit_retention_days").value = String(v.audit_retention_days ?? 180);
+      }
+
+      function readForm(){
+        return {
+          enabled: q("enabled").checked,
+          interval_sec: Number(q("interval_sec").value || 86400),
+          otp_expired_days: Number(q("otp_expired_days").value || 7),
+          otp_consumed_days: Number(q("otp_consumed_days").value || 30),
+          pending_kyc_days: Number(q("pending_kyc_days").value || 30),
+          audit_retention_days: Number(q("audit_retention_days").value || 180)
+        };
+      }
+
+      function renderStatus(d = {}){
+        q("statusBox").innerHTML = `
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="font-semibold">Enabled</span>
+            <span class="font-black">${d.enabled ? "Yes" : "No"}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="font-semibold">Interval</span>
+            <span class="font-black">${String(d.interval_sec || 0)} sec</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="font-semibold">Last Run</span>
+            <span class="font-black">${fmtTs(d.last_run_at)}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-4 py-3">
+            <span class="font-semibold">Last Status</span>
+            <span class="font-black">${String(d.last_status || "-")}</span>
+          </div>
+        `;
+        q("lastResult").textContent = JSON.stringify(d.last_result || {}, null, 2);
+      }
+
+      async function loadAll(){
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Loading...";
+
+        const [cfg, st] = await Promise.all([
+          apiLoad(),
+          apiStatus()
+        ]);
+
+        if(cfg.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Load config failed: " + cfg.status;
+          return;
+        }
+
+        fillForm(cfg.data || {});
+        renderStatus(st.status === "ok" ? (st.data || {}) : {});
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Loaded.";
+      }
+
+      q("btnReload").onclick = loadAll;
+
+      q("btnSave").onclick = async ()=>{
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Saving...";
+
+        const r = await apiSave(readForm());
+        if(r.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Save failed: " + (r.data?.message || r.status);
+          return;
+        }
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Saved.";
+        await loadAll();
+      };
+
+      q("btnRunNow").onclick = async ()=>{
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Running cron now...";
+
+        const r = await apiRunNow();
+        if(r.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Run failed: " + (r.data?.message || r.status);
+          return;
+        }
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Cron executed.";
+        await loadAll();
+      };
+
+      await loadAll();
+    }
+  };
+}

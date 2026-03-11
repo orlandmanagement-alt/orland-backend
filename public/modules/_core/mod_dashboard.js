@@ -134,10 +134,10 @@ export default function(Orland){
     title:"Dashboard",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-5 max-w-7xl">
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <div class="text-2xl font-extrabold">Dashboard</div>
+              <div class="text-2xl font-extrabold ui-title-gradient">Dashboard</div>
               <div class="text-slate-500 mt-1">Cloudflare visitor analytics overview.</div>
             </div>
             <div class="flex gap-2 flex-wrap">
@@ -153,23 +153,23 @@ export default function(Orland){
           <div id="msg" class="text-sm text-slate-500"></div>
 
           <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Requests</div>
               <div id="kRequests" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Page Views</div>
               <div id="kViews" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Visitors</div>
               <div id="kVisitors" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Bandwidth</div>
               <div id="kBytes" class="text-2xl font-extrabold mt-2">—</div>
             </div>
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Cached Requests</div>
               <div id="kCached" class="text-2xl font-extrabold mt-2">—</div>
             </div>

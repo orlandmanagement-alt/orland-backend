@@ -1,0 +1,828 @@
+import { esc, emptyState, openConfirm, closeConfirm, setMsg } from "../../assets/js/orland_ui.js";
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+import {
+  navConsumeReturnToRoleUsage,
+  navSetMenuJumpTarget,
+  navSetRoleMenuContext,
+  navGoModule
+} from "../../assets/js/role_menu_nav_bridge.js";
+
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/roles");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/roles", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function uniqStrings(arr){
+    return Array.from(new Set((Array.isArray(arr) ? arr : []).map(x => String(x || "").trim()).filter(Boolean)));
+  }
+
+  function protectedRole(id){
+    return ["super_admin","admin","staff","client","talent"].includes(String(id || ""));
+  }
+
+  function roleInUse(row){
+    return Number(row?.menu_usage_count ?? 0) > 0;
+  }
+
+  function usageBadge(row){
+    const count = Number(row?.menu_usage_count ?? 0);
+    if(count > 0){
+      return `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">used by ${esc(count)} menu</span>`;
+    }
+    return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">unused</span>`;
+  }
+
+  function deepClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v));
+    }catch{
+      return v;
+    }
+  }
+
+  function jsonPretty(v){
+    try{
+      return JSON.stringify(v, null, 2);
+    }catch{
+      return String(v);
+    }
+  }
+
+  function diffRows(original, draft){
+    const out = [];
+
+    if(String(original.name || "") !== String(draft.name || "")){
+      out.push({ field:"name", from: original.name || "", to: draft.name || "" });
+    }
+
+    if(String(original.description || "") !== String(draft.description || "")){
+      out.push({ field:"description", from: original.description || "", to: draft.description || "" });
+    }
+
+    return out;
+  }
+
+  return {
+    title:"Role Builder",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Role Builder</div>
+                <div class="text-slate-500 mt-1">Split view editor, sticky selection, keyboard navigation, usage inspector, diff preview.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Role
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari id / name / description / usage">
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">↑ ↓ pilih role</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Enter edit</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Ctrl/Cmd+S save</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Esc reset</span>
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-[1.05fr_0.95fr] gap-4 ui-gap-grid">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Role Explorer</div>
+                  <div class="text-xs text-slate-500 mt-1">Klik role untuk select, Enter untuk edit.</div>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                  <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
+                </div>
+              </div>
+
+              <div id="listBox" class="mt-5 space-y-3"></div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Inspector</div>
+                    <div class="text-xs text-slate-500 mt-1">Usage inspector + jump navigation.</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnEditSelected" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Edit Selected</button>
+                    <button id="btnDeleteSelected" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black">Delete Selected</button>
+                  </div>
+                </div>
+
+                <div id="inspectorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Editor</div>
+                    <div class="text-xs text-slate-500 mt-1">Create/update role tanpa modal.</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnResetEditor" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reset</button>
+                  </div>
+                </div>
+
+                <div id="editorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Diff Preview</div>
+                    <div class="text-xs text-slate-500 mt-1">Preview perubahan sebelum save.</div>
+                  </div>
+                </div>
+
+                <div id="diffBox" class="mt-4"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      let ITEMS = [];
+      let VISIBLE_ITEMS = [];
+      let SELECTED_ID = "";
+      let EDIT_MODE = "create";
+      let EDIT_ORIGINAL = null;
+      let EDIT_CURRENT_ID = "";
+      let confirmAction = null;
+
+      function getRoleById(id){
+        return ITEMS.find(x => String(x.id) === String(id)) || null;
+      }
+
+      function validationHint(name, hintText){
+        return `
+          <div class="text-xs text-slate-500 mt-2" data-fve-hint-for="${esc(name)}">${esc(hintText || "")}</div>
+          <div class="text-xs text-red-500 mt-2 hidden" data-fve-error-for="${esc(name)}"></div>
+          <div class="fve-state hidden mt-2" data-fve-state-for="${esc(name)}"></div>
+        `;
+      }
+
+      function clearAsyncState(form, name){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+        if(error){
+          error.textContent = "";
+          error.classList.add("hidden");
+        }
+        if(state){
+          state.textContent = "";
+          state.className = "fve-state hidden mt-2";
+        }
+      }
+
+      function setInlineError(form, name, message){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-warning", "is-checking");
+        input?.classList.add("is-invalid");
+        if(error){
+          error.textContent = String(message || "");
+          error.classList.remove("hidden");
+        }
+        if(state){
+          state.textContent = "Invalid";
+          state.className = "fve-state is-invalid mt-2";
+        }
+      }
+
+      function filteredItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        if(!kw) return ITEMS;
+
+        return ITEMS.filter(x => {
+          const usageItems = Array.isArray(x.menu_usage_items) ? x.menu_usage_items : [];
+          const usageText = usageItems.map(m => [m.id, m.code, m.label, m.path].join(" ")).join(" ");
+          const hay = [x.id, x.name, x.description, String(x.menu_usage_count ?? 0), usageText].join(" ").toLowerCase();
+          return hay.includes(kw);
+        });
+      }
+
+      function ensureSelectionStillValid(){
+        if(SELECTED_ID && getRoleById(SELECTED_ID)) return;
+        const first = VISIBLE_ITEMS[0];
+        SELECTED_ID = first ? String(first.id) : "";
+      }
+
+      function renderList(){
+        VISIBLE_ITEMS = filteredItems();
+        ensureSelectionStillValid();
+
+        q("listBox").innerHTML = VISIBLE_ITEMS.length ? VISIBLE_ITEMS.map(row => {
+          const isSelected = String(row.id) === String(SELECTED_ID);
+          return `
+            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}" data-role-row="${esc(row.id)}">
+              <div class="px-4 py-4 bg-white dark:bg-darkLighter ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : ""}">
+                <div class="flex items-start justify-between gap-3">
+                  <button class="btnSelectRow min-w-0 flex-1 text-left" data-id="${esc(row.id)}">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <div class="font-black text-sm">${esc(row.name || row.id)}</div>
+                      ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+                      ${usageBadge(row)}
+                      ${isSelected ? `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">selected</span>` : ``}
+                    </div>
+                    <div class="mt-2 text-xs text-slate-500 space-y-1">
+                      <div>id: ${esc(row.id)}</div>
+                      ${row.description ? `<div>${esc(row.description)}</div>` : ``}
+                    </div>
+                  </button>
+
+                  <div class="flex gap-2 shrink-0 flex-wrap justify-end">
+                    <button class="btnInspect px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-diagram-project"></i></button>
+                    <button class="btnQuickEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btnQuickDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(row.id)}" ${(protectedRole(row.id) || roleInUse(row)) ? "disabled" : ""}><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("") : emptyState("No role data.");
+
+        bindListActions();
+        renderInspector();
+        scrollSelectedIntoView();
+      }
+
+      function scrollSelectedIntoView(){
+        if(!SELECTED_ID) return;
+        const el = q("listBox").querySelector(`[data-role-row="${CSS.escape(String(SELECTED_ID))}"]`);
+        if(!el) return;
+        try{
+          el.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        }catch{}
+      }
+
+      function renderInspector(){
+        const row = getRoleById(SELECTED_ID);
+        if(!row){
+          q("inspectorBox").innerHTML = `<div class="text-sm text-slate-500">No selected role.</div>`;
+          return;
+        }
+
+        const usageItems = Array.isArray(row.menu_usage_items) ? row.menu_usage_items : [];
+
+        q("inspectorBox").innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <div class="text-lg font-extrabold">${esc(row.name || row.id)}</div>
+                ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+                ${usageBadge(row)}
+              </div>
+              <div class="mt-3 text-sm text-slate-500 space-y-1">
+                <div><span class="font-bold">ID:</span> ${esc(row.id)}</div>
+                ${row.description ? `<div><span class="font-bold">Description:</span> ${esc(row.description)}</div>` : ``}
+              </div>
+            </div>
+
+            <div>
+              <div class="text-sm font-bold text-slate-500 mb-2">Menus using this role</div>
+              ${
+                usageItems.length
+                  ? `<div class="space-y-3">
+                      ${usageItems.map(x => `
+                        <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                          <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                              <div class="font-black text-sm">${esc(x.label || x.id || "Menu")}</div>
+                              <div class="mt-2 text-xs text-slate-500 space-y-1">
+                                <div>id: ${esc(x.id || "-")}</div>
+                                <div>code: ${esc(x.code || "-")}</div>
+                                <div>path: ${esc(x.path || "-")}</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <button type="button" class="btnJumpMenu px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black" data-menu-id="${esc(x.id || "")}" data-menu-label="${esc(x.label || x.id || "Menu")}">
+                                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>Open Menu Builder
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      `).join("")}
+                    </div>`
+                  : `<div class="text-sm text-slate-500">Role ini belum dipakai menu mana pun.</div>`
+              }
+            </div>
+          </div>
+        `;
+
+        q("inspectorBox").querySelectorAll(".btnJumpMenu").forEach(btn => {
+          btn.onclick = ()=>{
+            const menuId = String(btn.getAttribute("data-menu-id") || "").trim();
+            const menuLabel = String(btn.getAttribute("data-menu-label") || "").trim();
+            if(!menuId || !row?.id) return;
+
+            navSetRoleMenuContext({
+              role_id: row.id,
+              role_name: row.name || row.id,
+              menu_id: menuId,
+              menu_label: menuLabel,
+              open_usage: true
+            });
+
+            navSetMenuJumpTarget(row.id, row.name || row.id, menuId, menuLabel);
+
+            const jumped = navGoModule(Orland, "menu_builder");
+            if(!jumped){
+              setMsg(host, "#msg", "warning", "Tidak bisa auto navigate ke Menu Builder.");
+            }
+          };
+        });
+      }
+
+      function editorHtml(row = null){
+        const isUpdate = !!row;
+        const isProtected = protectedRole(row?.id);
+        const isUsed = roleInUse(row);
+
+        return `
+          <form id="roleForm" class="grid grid-cols-1 gap-4">
+            <input type="hidden" name="mode" value="${isUpdate ? "update" : "create"}">
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3 text-xs text-slate-500">
+              ${isUpdate ? `Editing role <span class="font-black">${esc(row.id)}</span>` : `Creating new role`}
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              ${isProtected ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+              ${row ? usageBadge(row) : ``}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+              <input name="id" value="${esc(row?.id || "")}" ${isUpdate ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="marketing_manager">
+              ${validationHint("id", isUpdate ? "Read-only saat edit." : "Minimal 2 karakter. Huruf, angka, underscore, dash.")}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">NAME</label>
+              <input name="name" value="${esc(row?.name || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Marketing Manager">
+              ${validationHint("name", "Role name harus unik. Live check ke backend.")}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">DESCRIPTION</label>
+              <textarea name="description" rows="5" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Optional">${esc(row?.description || "")}</textarea>
+            </div>
+
+            ${isProtected ? `
+              <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold p-4">
+                Core system role. Delete diblokir.
+              </div>
+            ` : ``}
+
+            ${isUsed ? `
+              <div class="rounded-2xl border border-sky-200 bg-sky-50 text-sky-700 text-sm font-semibold p-4">
+                Role ini masih dipakai oleh ${esc(row.menu_usage_count)} menu. Hapus mapping menu dulu sebelum delete role.
+              </div>
+            ` : ``}
+
+            <div class="flex gap-2 flex-wrap">
+              <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+              <button type="button" id="btnDeleteFromForm" class="${isUpdate ? "" : "hidden "}px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm" ${(isProtected || isUsed) ? "disabled" : ""}>Delete</button>
+            </div>
+          </form>
+        `;
+      }
+
+      function collectFormPayload(){
+        const form = q("roleForm");
+        if(!form){
+          return { action:"create", id:"", name:"", description:"" };
+        }
+
+        return {
+          action: form.mode.value,
+          id: form.id.value.trim(),
+          name: form.name.value.trim(),
+          description: form.description.value.trim()
+        };
+      }
+
+      function renderEditor(row = null){
+        EDIT_MODE = row ? "update" : "create";
+        EDIT_ORIGINAL = row ? deepClone(row) : null;
+        EDIT_CURRENT_ID = row ? String(row.id) : "";
+        q("editorBox").innerHTML = editorHtml(row);
+        bindEditor(row);
+        renderDiff();
+      }
+
+      function renderDiff(){
+        if(EDIT_MODE === "create"){
+          const draft = collectFormPayload();
+          q("diffBox").innerHTML = `
+            <div class="space-y-3">
+              <div class="text-xs text-slate-500">Create payload preview</div>
+              <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(draft))}</pre>
+            </div>
+          `;
+          return;
+        }
+
+        if(!EDIT_ORIGINAL){
+          q("diffBox").innerHTML = `<div class="text-sm text-slate-500">No diff.</div>`;
+          return;
+        }
+
+        const draft = collectFormPayload();
+        const changes = diffRows(EDIT_ORIGINAL, draft);
+
+        if(!changes.length){
+          q("diffBox").innerHTML = `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
+          return;
+        }
+
+        q("diffBox").innerHTML = `
+          <div class="space-y-3">
+            ${changes.map(ch => `
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-sm font-black">${esc(ch.field)}</div>
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">FROM</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.from))}</pre>
+                  </div>
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">TO</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.to))}</pre>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      function bindEditor(row = null){
+        const form = q("roleForm");
+        if(!form) return;
+
+        form.addEventListener("input", renderDiff);
+        form.addEventListener("change", renderDiff);
+
+        q("btnDeleteFromForm")?.addEventListener("click", ()=>{
+          if(!row) return;
+          openDelete(row);
+        });
+
+        const asyncEngine = afvCreateEngine(form, {
+          id: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              if(row?.id){
+                return { ok:true, message:"ID locked" };
+              }
+              const r = await Orland.api("/api/validate/role-code", {
+                method:"POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"ID available" }
+                : { ok:false, used:true, message:"ID already used" };
+            }
+          },
+          name: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/role-code", {
+                method:"POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"Role name available" }
+                : { ok:false, used:true, message:"Role name already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+
+          const payload = collectFormPayload();
+
+          clearAsyncState(form, "id");
+          clearAsyncState(form, "name");
+
+          const syncErrors = {};
+          if(!payload.id) syncErrors.id = "ID wajib diisi.";
+          else if(payload.id.length < 2) syncErrors.id = "ID minimal 2 karakter.";
+          else if(!/^[a-zA-Z0-9_\-]+$/.test(payload.id)) syncErrors.id = "ID hanya boleh huruf, angka, underscore, dash.";
+
+          if(!payload.name) syncErrors.name = "Role name wajib diisi.";
+          else if(payload.name.length < 2) syncErrors.name = "Role name minimal 2 karakter.";
+
+          if(syncErrors.id) setInlineError(form, "id", syncErrors.id);
+          if(syncErrors.name) setInlineError(form, "name", syncErrors.name);
+
+          if(Object.keys(syncErrors).length){
+            setMsg(host, "#msg", "error", "Periksa field role yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+
+          if(asyncHasError){
+            setMsg(host, "#msg", "error", "Masih ada unique field role yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg(host, "#msg", "warning", "Masih menunggu pengecekan field role.");
+            return;
+          }
+
+          setMsg(host, "#msg", "muted", "Saving...");
+          const r = await apiSave(payload);
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          setMsg(host, "#msg", "success", "Role saved.");
+          SELECTED_ID = payload.id;
+          await load(false);
+          const latest = getRoleById(payload.id);
+          renderEditor(latest || null);
+        };
+      }
+
+      function openDelete(row){
+        if(protectedRole(row.id)) return;
+        if(roleInUse(row)) return;
+
+        openConfirm(host, {
+          confirmTitle: "Delete Role",
+          confirmDesc: "Role akan dihapus dari sistem.",
+          confirmMeta: `<div class="font-black text-red-600">${esc(row.name || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.id)}</div>`
+        });
+
+        confirmAction = async ()=>{
+          setMsg(host, "#msg", "muted", "Deleting...");
+          const r = await apiSave({ action:"delete", id: row.id });
+          if(r.status !== "ok"){
+            const msg = r.data?.message || r.status;
+            if(msg === "role_in_use_by_menus"){
+              setMsg(host, "#msg", "error", \`Delete failed: role masih dipakai \${r.data?.menu_usage_count || 0} menu.\`);
+            }else{
+              setMsg(host, "#msg", "error", "Delete failed: " + msg);
+            }
+            return;
+          }
+          closeConfirm(host);
+          setMsg(host, "#msg", "success", "Role deleted.");
+          if(String(SELECTED_ID) === String(row.id)) SELECTED_ID = "";
+          renderEditor(null);
+          await load(false);
+        };
+      }
+
+      function bindListActions(){
+        q("listBox").querySelectorAll(".btnSelectRow").forEach(btn => {
+          btn.onclick = ()=>{
+            SELECTED_ID = String(btn.getAttribute("data-id") || "");
+            renderList();
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnInspect").forEach(btn => {
+          btn.onclick = ()=>{
+            SELECTED_ID = String(btn.getAttribute("data-id") || "");
+            renderList();
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getRoleById(btn.getAttribute("data-id"));
+            if(!row) return;
+            SELECTED_ID = String(row.id);
+            renderList();
+            renderEditor(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickDelete").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getRoleById(btn.getAttribute("data-id"));
+            if(row) openDelete(row);
+          };
+        });
+      }
+
+      function moveSelection(step){
+        if(!VISIBLE_ITEMS.length) return;
+        let idx = VISIBLE_ITEMS.findIndex(x => String(x.id) === String(SELECTED_ID));
+        if(idx < 0) idx = 0;
+        idx += step;
+        if(idx < 0) idx = 0;
+        if(idx >= VISIBLE_ITEMS.length) idx = VISIBLE_ITEMS.length - 1;
+        SELECTED_ID = String(VISIBLE_ITEMS[idx].id);
+        renderList();
+      }
+
+      function bindKeyboard(){
+        host.addEventListener("keydown", async (e)=>{
+          const tag = String(document.activeElement?.tagName || "").toLowerCase();
+          const inText = ["input","textarea","select"].includes(tag);
+
+          if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s"){
+            const form = q("roleForm");
+            if(form){
+              e.preventDefault();
+              form.requestSubmit();
+            }
+            return;
+          }
+
+          if(e.key === "Escape"){
+            e.preventDefault();
+            const row = getRoleById(EDIT_CURRENT_ID || SELECTED_ID);
+            renderEditor(row || null);
+            return;
+          }
+
+          if(inText) return;
+
+          if(e.key === "ArrowUp"){
+            e.preventDefault();
+            moveSelection(-1);
+            return;
+          }
+
+          if(e.key === "ArrowDown"){
+            e.preventDefault();
+            moveSelection(1);
+            return;
+          }
+
+          if(e.key === "Enter"){
+            e.preventDefault();
+            const row = getRoleById(SELECTED_ID);
+            if(row) renderEditor(row);
+          }
+        });
+      }
+
+      function processReturnUsageContext(){
+        const ctx = navConsumeReturnToRoleUsage();
+        if(!ctx) return;
+
+        const row = getRoleById(ctx.roleId);
+        if(!row) return;
+
+        SELECTED_ID = String(row.id);
+        renderList();
+        renderEditor(row);
+
+        navSetRoleMenuContext({
+          role_id: row.id,
+          role_name: row.name || row.id,
+          menu_id: "",
+          menu_label: "",
+          open_usage: true
+        });
+
+        setMsg(host, "#msg", "success", \`Returned to role usage: \${row.name || row.id}\`);
+      }
+
+      async function load(resetEditor = false){
+        setMsg(host, "#msg", "muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Load failed: " + r.status);
+          return;
+        }
+
+        ITEMS = Array.isArray(r.data?.items) ? r.data.items : [];
+        renderList();
+
+        if(resetEditor){
+          const row = getRoleById(SELECTED_ID);
+          renderEditor(row || null);
+        }else{
+          const row = EDIT_CURRENT_ID ? getRoleById(EDIT_CURRENT_ID) : getRoleById(SELECTED_ID);
+          renderEditor(row || null);
+        }
+
+        processReturnUsageContext();
+        setMsg(host, "#msg", "success", "Loaded.");
+      }
+
+      q("btnReload").onclick = ()=>load(false);
+
+      q("btnNew").onclick = ()=>{
+        EDIT_CURRENT_ID = "";
+        renderEditor(null);
+      };
+
+      q("btnResetEditor").onclick = ()=>{
+        const row = getRoleById(EDIT_CURRENT_ID || SELECTED_ID);
+        renderEditor(row || null);
+      };
+
+      q("btnClearSelection").onclick = ()=>{
+        SELECTED_ID = "";
+        renderList();
+        renderEditor(null);
+      };
+
+      q("btnEditSelected").onclick = ()=>{
+        const row = getRoleById(SELECTED_ID);
+        if(row) renderEditor(row);
+      };
+
+      q("btnDeleteSelected").onclick = ()=>{
+        const row = getRoleById(SELECTED_ID);
+        if(row) openDelete(row);
+      };
+
+      q("qSearch").oninput = ()=>renderList();
+
+      q("btnConfirmCancel").onclick = ()=>closeConfirm(host);
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
+      };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm(host);
+      });
+
+      bindKeyboard();
+      await load(true);
+    }
+  };
+}

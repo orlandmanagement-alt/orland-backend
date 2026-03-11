@@ -1,0 +1,197 @@
+export default function(Orland){
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+
+  const fmt = (n)=>{
+    try{ return new Intl.NumberFormat("id-ID").format(Number(n || 0)); }
+    catch{ return String(n || 0); }
+  };
+
+  async function apiSummary(days=30){
+    return await Orland.api("/api/verification/audit_summary?days=" + encodeURIComponent(days));
+  }
+
+  async function apiEvents(limit=30){
+    return await Orland.api("/api/verification/recent_events?limit=" + encodeURIComponent(limit));
+  }
+
+  function card(title, value, hint=""){
+    return `
+      <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+        <div class="text-[11px] font-bold text-slate-500">${esc(title)}</div>
+        <div class="text-2xl font-black mt-1">${esc(fmt(value))}</div>
+        ${hint ? `<div class="text-[11px] text-slate-500 mt-1">${esc(hint)}</div>` : ``}
+      </div>
+    `;
+  }
+
+  function badge(action){
+    const a = String(action || "");
+    if(a === "kyc_approved" || a === "verification_phone_completed" || a === "verification_email_completed" || a === "two_step_enabled"){
+      return `<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black">${esc(a)}</span>`;
+    }
+    if(a === "kyc_rejected" || a === "verification_policy_block"){
+      return `<span class="px-2 py-1 rounded-full bg-red-100 text-red-700 text-[11px] font-black">${esc(a)}</span>`;
+    }
+    return `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">${esc(a)}</span>`;
+  }
+
+  function metaText(item){
+    const m = item?.meta || {};
+    if(item.action === "verification_policy_block"){
+      return "required_actions: " + esc((m.required_actions || []).join(", ") || "-");
+    }
+    if(item.action === "kyc_approved" || item.action === "kyc_rejected"){
+      return "status_to: " + esc(m.status_to || "-");
+    }
+    if(item.action === "verification_phone_otp_requested"){
+      return "mode: " + esc(m.mode || "internal_otp_v1");
+    }
+    if(item.action === "verification_email_completed"){
+      return "mode: " + esc(m.mode || "internal_dev_v1");
+    }
+    return esc(JSON.stringify(m || {}));
+  }
+
+  return {
+    title:"Verification Dashboard",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">Verification Dashboard</div>
+                <div class="text-slate-500 mt-1">Audit summary dan event verifikasi untuk admin review.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <select id="daysSel" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  <option value="7">7 days</option>
+                  <option value="30" selected>30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+              </div>
+            </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4" id="cardsTop"></div>
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4" id="cardsBottom"></div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="xl:col-span-2 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Recent Verification Events</div>
+                  <div class="text-slate-500 text-sm mt-1">Feed audit event verifikasi terbaru.</div>
+                </div>
+                <button id="goReview" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Open Review Queue</button>
+              </div>
+              <div id="eventsBox" class="mt-5 space-y-3"></div>
+            </div>
+
+            <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Quick Links</div>
+              <div class="mt-4 grid grid-cols-1 gap-3">
+                <button id="goVerifyAdmin" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm text-left">
+                  Verification Review
+                </button>
+                <button id="goGlobalSettings" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm text-left">
+                  Global Settings
+                </button>
+                <button id="goSecurity" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm text-left">
+                  Security Module
+                </button>
+              </div>
+
+              <div class="mt-5 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-xs font-black text-slate-500">Note</div>
+                <div class="text-sm text-slate-500 mt-2">
+                  Dashboard ini fokus ke audit verifikasi, KYC review, OTP, email verify, dan policy block.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      async function render(){
+        const days = Number(q("daysSel").value || 30);
+
+        q("msg").className = "mt-4 text-sm text-slate-500";
+        q("msg").textContent = "Loading...";
+
+        const [sr, er] = await Promise.all([
+          apiSummary(days),
+          apiEvents(30)
+        ]);
+
+        if(sr.status !== "ok"){
+          q("msg").className = "mt-4 text-sm text-red-500";
+          q("msg").textContent = "Summary failed: " + sr.status;
+          return;
+        }
+
+        const s = sr.data || {};
+        q("cardsTop").innerHTML = [
+          card("Pending KYC", s.pending_kyc, "Current pending queue"),
+          card("Approved KYC", s.approved_kyc, "Approved / verified"),
+          card("Rejected KYC", s.rejected_kyc, "Rejected reviews"),
+          card("Policy Blocks", s.verification_policy_blocks, "Within selected window")
+        ].join("");
+
+        q("cardsBottom").innerHTML = [
+          card("Phone Verified", s.phone_verified_total, "All users"),
+          card("Email Verified", s.email_verified_total, "All users"),
+          card("2FA Enabled", s.two_step_enabled_total, "All users"),
+          card("KYC Submitted", s.kyc_submitted_window, "Within selected window")
+        ].join("");
+
+        const items = er.status === "ok" && Array.isArray(er.data?.items) ? er.data.items : [];
+        q("eventsBox").innerHTML = items.length ? items.map(item => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  ${badge(item.action)}
+                  <div class="text-sm font-black">${esc(item.actor_name || item.actor_email || item.actor_user_id || "system")}</div>
+                </div>
+                <div class="text-xs text-slate-500 mt-2 space-y-1">
+                  <div>actor_user_id: ${esc(item.actor_user_id || "-")}</div>
+                  <div>target_type: ${esc(item.target_type || "-")} • target_id: ${esc(item.target_id || "-")}</div>
+                  <div>created_at: ${esc(item.created_at || "-")}</div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 text-xs text-slate-600 dark:text-slate-300 break-words">
+              ${metaText(item)}
+            </div>
+          </div>
+        `).join("") : `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-5 text-sm text-slate-500">
+            No recent verification events.
+          </div>
+        `;
+
+        q("msg").className = "mt-4 text-sm text-emerald-600";
+        q("msg").textContent = "Loaded.";
+      }
+
+      q("btnReload").onclick = render;
+      q("daysSel").onchange = render;
+      q("goReview").onclick = ()=>Orland.navigate("/security/verification-review");
+      q("goVerifyAdmin").onclick = ()=>Orland.navigate("/security/verification-review");
+      q("goGlobalSettings").onclick = ()=>Orland.navigate("/config/global");
+      q("goSecurity").onclick = ()=>Orland.navigate("/security");
+
+      await render();
+    }
+  };
+}

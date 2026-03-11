@@ -1,0 +1,82 @@
+import { nowSec } from "../../_lib.js";
+
+const SETTINGS_KEY = "global_verification_policy";
+
+function defaults(){
+  return {
+    client: {
+      enable_two_step: 0,
+      verify_sms_wa: 0,
+      verify_email: 0,
+      verify_kyc: 0
+    },
+    talent: {
+      enable_two_step: 0,
+      verify_sms_wa: 0,
+      verify_email: 0,
+      verify_kyc: 0
+    },
+    updated_at: 0
+  };
+}
+
+function to01(v){
+  return v ? 1 : 0;
+}
+
+function normalizeScope(v = {}){
+  return {
+    enable_two_step: to01(v.enable_two_step),
+    verify_sms_wa: to01(v.verify_sms_wa),
+    verify_email: to01(v.verify_email),
+    verify_kyc: to01(v.verify_kyc)
+  };
+}
+
+function normalizePolicy(v = {}){
+  const d = defaults();
+  return {
+    client: normalizeScope(v.client || d.client),
+    talent: normalizeScope(v.talent || d.talent),
+    updated_at: Number(v.updated_at || nowSec())
+  };
+}
+
+export async function loadGlobalVerificationPolicy(env){
+  const row = await env.DB.prepare(`
+    SELECT v
+    FROM system_settings
+    WHERE k=?
+    LIMIT 1
+  `).bind(SETTINGS_KEY).first();
+
+  if(!row?.v) return defaults();
+
+  try{
+    return normalizePolicy(JSON.parse(String(row.v || "{}")));
+  }catch{
+    return defaults();
+  }
+}
+
+export function detectVerificationScopeFromRoles(roles = []){
+  const xs = Array.isArray(roles) ? roles.map(x => String(x || "").trim()) : [];
+  if(xs.includes("talent")) return "talent";
+  if(xs.includes("client")) return "client";
+  return "admin";
+}
+
+export function resolveVerificationRules(policy, roles = []){
+  const scope = detectVerificationScopeFromRoles(roles);
+  if(scope === "client") return { scope, rules: normalizeScope(policy?.client || {}) };
+  if(scope === "talent") return { scope, rules: normalizeScope(policy?.talent || {}) };
+  return {
+    scope: "admin",
+    rules: {
+      enable_two_step: 0,
+      verify_sms_wa: 0,
+      verify_email: 0,
+      verify_kyc: 0
+    }
+  };
+}

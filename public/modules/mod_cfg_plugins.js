@@ -26,7 +26,7 @@ export default function(Orland){
         <div class="space-y-4 max-w-6xl">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <div class="text-2xl font-extrabold">Plugins</div>
+              <div class="text-2xl font-extrabold ui-title-gradient">Plugins</div>
               <div class="text-slate-500 mt-1">Install / disable plugin entries.</div>
             </div>
             <div class="flex gap-2">

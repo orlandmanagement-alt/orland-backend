@@ -13,7 +13,7 @@ export default function(Orland){
       host.innerHTML = `
         <div class="space-y-4 max-w-5xl">
           <div>
-            <div class="text-2xl font-extrabold">OTP Settings</div>
+            <div class="text-2xl font-extrabold ui-title-gradient">OTP Settings</div>
             <div class="text-slate-500 mt-1">Konfigurasi OTP global berbasis config.</div>
           </div>
 

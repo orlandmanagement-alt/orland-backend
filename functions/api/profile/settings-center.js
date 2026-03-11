@@ -1,0 +1,144 @@
+import { json, readJson, requireAuth, nowSec } from "../../_lib.js";
+
+const NS = "settings_center";
+const MAX_FAVORITES = 20;
+const MAX_RECENTS = 12;
+
+async function ensureTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS user_profile_settings (
+      user_id TEXT NOT NULL,
+      namespace TEXT NOT NULL,
+      value_json TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, namespace)
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_user_profile_settings_updated_at
+    ON user_profile_settings(updated_at DESC)
+  `).run();
+}
+
+function cleanPathList(xs, max){
+  return Array.from(new Set(
+    (Array.isArray(xs) ? xs : [])
+      .map(x => String(x || "").trim())
+      .filter(Boolean)
+  )).slice(0, max);
+}
+
+function normalize(v = {}){
+  return {
+    favorites: cleanPathList(v.favorites, MAX_FAVORITES),
+    recents: cleanPathList(v.recents, MAX_RECENTS)
+  };
+}
+
+function mergeValue(serverValue = {}, clientValue = {}){
+  return {
+    favorites: cleanPathList([
+      ...(Array.isArray(clientValue.favorites) ? clientValue.favorites : []),
+      ...(Array.isArray(serverValue.favorites) ? serverValue.favorites : [])
+    ], MAX_FAVORITES),
+    recents: cleanPathList([
+      ...(Array.isArray(clientValue.recents) ? clientValue.recents : []),
+      ...(Array.isArray(serverValue.recents) ? serverValue.recents : [])
+    ], MAX_RECENTS)
+  };
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  await ensureTable(env);
+
+  const row = await env.DB.prepare(`
+    SELECT value_json, updated_at
+    FROM user_profile_settings
+    WHERE user_id=? AND namespace=?
+    LIMIT 1
+  `).bind(a.user.id, NS).first();
+
+  let value = {};
+  try{ value = JSON.parse(String(row?.value_json || "{}")); }catch{}
+
+  return json(200, "ok", {
+    namespace: NS,
+    value: normalize(value),
+    updated_at: Number(row?.updated_at || 0)
+  });
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  await ensureTable(env);
+
+  const body = await readJson(request) || {};
+  const clientValue = normalize(body.value || body);
+  const clientUpdatedAt = Number(body.client_updated_at || 0);
+  const strategy = String(body.strategy || "merge").trim().toLowerCase();
+
+  const current = await env.DB.prepare(`
+    SELECT value_json, updated_at
+    FROM user_profile_settings
+    WHERE user_id=? AND namespace=?
+    LIMIT 1
+  `).bind(a.user.id, NS).first();
+
+  let serverValue = {};
+  try{ serverValue = JSON.parse(String(current?.value_json || "{}")); }catch{}
+  serverValue = normalize(serverValue);
+
+  const serverUpdatedAt = Number(current?.updated_at || 0);
+  const hasConflict = serverUpdatedAt > 0 && clientUpdatedAt > 0 && serverUpdatedAt > clientUpdatedAt;
+
+  let finalValue = clientValue;
+  let resolution = "client_wins";
+
+  if(hasConflict){
+    if(strategy === "server_wins"){
+      finalValue = serverValue;
+      resolution = "server_wins";
+    }else if(strategy === "client_wins"){
+      finalValue = clientValue;
+      resolution = "client_wins";
+    }else{
+      finalValue = mergeValue(serverValue, clientValue);
+      resolution = "merge";
+    }
+  }else if(strategy === "merge"){
+    finalValue = mergeValue(serverValue, clientValue);
+    resolution = "merge";
+  }
+
+  const ts = nowSec();
+
+  await env.DB.prepare(`
+    INSERT INTO user_profile_settings (user_id, namespace, value_json, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, namespace) DO UPDATE SET
+      value_json=excluded.value_json,
+      updated_at=excluded.updated_at
+  `).bind(
+    a.user.id,
+    NS,
+    JSON.stringify(finalValue),
+    ts
+  ).run();
+
+  return json(200, "ok", {
+    saved: true,
+    namespace: NS,
+    value: finalValue,
+    updated_at: ts,
+    conflict: hasConflict,
+    resolution,
+    server_updated_at_before: serverUpdatedAt,
+    client_updated_at: clientUpdatedAt
+  });
+}

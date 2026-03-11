@@ -1,0 +1,281 @@
+export default function(Orland){
+  const ITEMS = [
+    {
+      title: "Global Settings",
+      desc: "Atur policy global verification untuk client dan talent.",
+      path: "/config/global",
+      icon: "fa-solid fa-sliders",
+      category: "verification",
+      tags: ["global", "verification", "client", "talent", "policy"]
+    },
+    {
+      title: "Cron Global",
+      desc: "Atur automation cleanup verification dan run status.",
+      path: "/config/cron-global",
+      icon: "fa-solid fa-clock-rotate-left",
+      category: "system",
+      tags: ["cron", "cleanup", "automation", "verification"]
+    },
+    {
+      title: "Security Policy",
+      desc: "Kelola security policy, rate limit, account lock, dan header.",
+      path: "/security/policy",
+      icon: "fa-solid fa-shield-halved",
+      category: "security",
+      tags: ["security", "policy", "rate limit", "lock", "headers"]
+    },
+    {
+      title: "Analytics Config",
+      desc: "Konfigurasi analytics dan pengaturan integrasi terkait.",
+      path: "/config/analytics",
+      icon: "fa-solid fa-chart-line",
+      category: "system",
+      tags: ["analytics", "config", "stats", "traffic"]
+    },
+    {
+      title: "Blogspot Settings",
+      desc: "Kelola integrasi Blogger, API config, dan sync behavior.",
+      path: "/integrations/blogspot/settings",
+      icon: "fa-brands fa-blogger-b",
+      category: "integrations",
+      tags: ["blogspot", "blogger", "integration", "api", "sync"]
+    },
+    {
+      title: "Verification Dashboard",
+      desc: "Audit summary dan event verifikasi untuk admin review.",
+      path: "/security/verification-dashboard",
+      icon: "fa-solid fa-chart-column",
+      category: "verification",
+      tags: ["verification", "dashboard", "audit", "kyc"]
+    },
+    {
+      title: "Verification Review",
+      desc: "Review request KYC, approve, reject, dan audit review.",
+      path: "/security/verification-review",
+      icon: "fa-solid fa-user-check",
+      category: "verification",
+      tags: ["verification", "review", "kyc", "approve", "reject"]
+    },
+    {
+      title: "Verify Center",
+      desc: "Pusat tindakan verifikasi untuk memenuhi global verification policy.",
+      path: "/verify-center",
+      icon: "fa-solid fa-badge-check",
+      category: "verification",
+      tags: ["verification", "otp", "email", "phone", "kyc"]
+    },
+    {
+      title: "Security Module",
+      desc: "Ringkasan keamanan, alert, policy, incident, dan quick actions.",
+      path: "/security",
+      icon: "fa-solid fa-lock",
+      category: "security",
+      tags: ["security", "module", "alerts", "incident"]
+    }
+  ];
+
+  const CATEGORY_META = {
+    all: { label: "All", icon: "fa-solid fa-border-all" },
+    security: { label: "Security", icon: "fa-solid fa-shield-halved" },
+    verification: { label: "Verification", icon: "fa-solid fa-badge-check" },
+    integrations: { label: "Integrations", icon: "fa-solid fa-plug" },
+    system: { label: "System", icon: "fa-solid fa-server" }
+  };
+
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
+
+  function cardHtml(x){
+    return `
+      <button
+        type="button"
+        class="settingsCard w-full text-left rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5 hover:bg-slate-50 dark:hover:bg-white/5 transition"
+        data-path="${esc(x.path)}"
+      >
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <i class="${esc(x.icon)} text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="text-lg font-extrabold text-slate-900 dark:text-white">${esc(x.title)}</div>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-black/20 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase">
+                ${esc(CATEGORY_META[x.category]?.label || x.category)}
+              </span>
+            </div>
+            <div class="text-sm text-slate-500 mt-1">${esc(x.desc)}</div>
+            <div class="text-xs text-primary font-black mt-4">${esc(x.path)}</div>
+          </div>
+        </div>
+      </button>
+    `;
+  }
+
+  function tabHtml(key, active){
+    const meta = CATEGORY_META[key] || { label:key, icon:"fa-solid fa-circle" };
+    return `
+      <button
+        type="button"
+        class="catTab px-4 py-2.5 rounded-2xl border text-sm font-black transition ${
+          active
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5"
+        }"
+        data-category="${esc(key)}"
+      >
+        <i class="${esc(meta.icon)} mr-2"></i>${esc(meta.label)}
+      </button>
+    `;
+  }
+
+  function emptyState(){
+    return `
+      <div class="col-span-full rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-8 text-center">
+        <div class="text-lg font-extrabold">No settings found</div>
+        <div class="text-sm text-slate-500 mt-2">Coba ubah kata kunci pencarian atau pilih kategori lain.</div>
+      </div>
+    `;
+  }
+
+  return {
+    title:"Settings Center",
+    async mount(host){
+      let activeCategory = "all";
+      let searchText = "";
+
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">Settings Center</div>
+                <div class="text-slate-500 mt-1">Pusat pengaturan enterprise untuk konfigurasi utama sistem.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="goSecurityModule" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  Security Module
+                </button>
+                <button id="goVerificationDashboard" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  Verification Dashboard
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-3">
+              <input
+                id="settingsSearch"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold"
+                placeholder="Cari settings, module, route, tag..."
+              >
+              <button id="btnClearSearch" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                Clear Search
+              </button>
+            </div>
+
+            <div id="catTabs" class="mt-4 flex gap-2 flex-wrap"></div>
+          </div>
+
+          <div id="settingsInfo" class="text-sm text-slate-500"></div>
+
+          <div id="cardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold">Notes</div>
+            <div class="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm text-slate-500">
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                Module lama tetap aktif, Settings Center hanya sebagai hub.
+              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                Search dan category tabs memudahkan navigasi enterprise app.
+              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                Tahap berikutnya bisa ditambah favorite, pin, dan recent settings.
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      function filteredItems(){
+        const kw = String(searchText || "").trim().toLowerCase();
+
+        return ITEMS.filter(item => {
+          const okCategory = activeCategory === "all" || item.category === activeCategory;
+
+          const haystack = [
+            item.title,
+            item.desc,
+            item.path,
+            item.category,
+            ...(Array.isArray(item.tags) ? item.tags : [])
+          ].join(" ").toLowerCase();
+
+          const okSearch = !kw || haystack.includes(kw);
+
+          return okCategory && okSearch;
+        });
+      }
+
+      function renderTabs(){
+        q("catTabs").innerHTML = Object.keys(CATEGORY_META)
+          .map(key => tabHtml(key, key === activeCategory))
+          .join("");
+
+        q("catTabs").querySelectorAll(".catTab").forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            activeCategory = btn.getAttribute("data-category") || "all";
+            renderAll();
+          });
+        });
+      }
+
+      function renderCards(){
+        const rows = filteredItems();
+        q("cardsGrid").innerHTML = rows.length ? rows.map(cardHtml).join("") : emptyState();
+
+        q("settingsInfo").textContent =
+          `${rows.length} setting item${rows.length === 1 ? "" : "s"} found` +
+          (activeCategory !== "all" ? ` • category: ${CATEGORY_META[activeCategory]?.label || activeCategory}` : "") +
+          (searchText ? ` • search: "${searchText}"` : "");
+
+        q("cardsGrid").querySelectorAll(".settingsCard").forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            const path = btn.getAttribute("data-path");
+            if(path) Orland.navigate(path);
+          });
+        });
+      }
+
+      function renderAll(){
+        renderTabs();
+        renderCards();
+      }
+
+      q("settingsSearch").addEventListener("input", ()=>{
+        searchText = q("settingsSearch").value || "";
+        renderCards();
+      });
+
+      q("btnClearSearch").addEventListener("click", ()=>{
+        searchText = "";
+        q("settingsSearch").value = "";
+        renderCards();
+      });
+
+      q("goSecurityModule")?.addEventListener("click", ()=>{
+        Orland.navigate("/security");
+      });
+
+      q("goVerificationDashboard")?.addEventListener("click", ()=>{
+        Orland.navigate("/security/verification-dashboard");
+      });
+
+      renderAll();
+    }
+  };
+}

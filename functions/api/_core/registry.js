@@ -43,6 +43,10 @@ function guessModuleByCodeOrPath(code, path){
     cfg_verify: "/modules/mod_cfg_verify.js",
     cfg_analytics: "/modules/mod_cfg_analytics.js",
     cfg_blogspot: "/modules/mod_cfg_blogspot.js",
+    cfg_global: "/modules/mod_cfg_global.js",
+    cfg_cron_global: "/modules/mod_cfg_cron_global.js",
+    settings_center: "/modules/mod_settings_center.js",
+    preferences_appearance: "/modules/mod_preferences_appearance.js",
 
     blogspot: "/modules/mod_blogspot.js",
     blogspot_posts: "/modules/mod_blogspot_posts.js",
@@ -56,6 +60,9 @@ function guessModuleByCodeOrPath(code, path){
 
     profile: "/modules/mod_profile.js",
     profile_security: "/modules/mod_profile_security.js",
+    verify_center: "/modules/mod_verify_center.js",
+    verification_admin: "/modules/mod_verification_admin.js",
+    verification_dashboard: "/modules/mod_verification_dashboard.js",
 
     plugins: "/modules/mod_plugins.js"
   };
@@ -92,6 +99,10 @@ function guessModuleByCodeOrPath(code, path){
     "/config/otp": "/modules/mod_cfg_otp.js",
     "/config/verify": "/modules/mod_cfg_verify.js",
     "/config/analytics": "/modules/mod_cfg_analytics.js",
+    "/config/global": "/modules/mod_cfg_global.js",
+    "/config/cron-global": "/modules/mod_cfg_cron_global.js",
+    "/settings-center": "/modules/mod_settings_center.js",
+    "/preferences/appearance": "/modules/mod_preferences_appearance.js",
 
     "/integrations/blogspot": "/modules/mod_blogspot.js",
     "/integrations/blogspot/settings": "/modules/mod_cfg_blogspot.js",
@@ -106,8 +117,13 @@ function guessModuleByCodeOrPath(code, path){
 
     "/profile": "/modules/mod_profile.js",
     "/profile/security": "/modules/mod_profile_security.js",
+    "/verify-center": "/modules/mod_verify_center.js",
+    "/security/verification-review": "/modules/mod_verification_admin.js",
+    "/security/verification-dashboard": "/modules/mod_verification_dashboard.js",
 
     "/plugins": "/modules/mod_plugins.js"
+    
+    
   };
 
   if(pathMap[p]) return pathMap[p];

@@ -15,7 +15,7 @@ export default function(Orland){
       host.innerHTML = `
         <div class="space-y-4 max-w-5xl">
           <div>
-            <div class="text-2xl font-extrabold">Blogspot Settings</div>
+            <div class="text-2xl font-extrabold ui-title-gradient">Blogspot Settings</div>
             <div class="text-slate-500 mt-1">Konfigurasi Blogger API via backend config.</div>
           </div>
 
