@@ -5,6 +5,60 @@ export default function(Orland){
     return await Orland.api("/api/blogspot/widgets", { method:"POST", body: JSON.stringify(payload) });
   }
 
+  const SECTIONS = ["dashboard","home","hero","sidebar","footer","main"];
+
+  const TEMPLATES = {
+    announcement: `<div class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+  <div class="text-lg font-bold text-sky-700">Announcement</div>
+  <div class="text-sm text-slate-600 mt-2">Tulis pengumuman penting di sini.</div>
+</div>`,
+    hero: `<div class="rounded-3xl border border-slate-200 bg-white p-6">
+  <div class="text-2xl font-extrabold">Welcome to ORLAND</div>
+  <div class="text-sm text-slate-500 mt-2">Enterprise operations dashboard starter hero block.</div>
+  <div class="mt-4">
+    <a href="/integrations/blogspot" class="inline-flex px-4 py-2 rounded-2xl bg-primary text-white font-bold">Open Blogspot CMS</a>
+  </div>
+</div>`,
+    cards: `<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 1</div>
+    <div class="text-lg font-extrabold mt-2">Value A</div>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 2</div>
+    <div class="text-lg font-extrabold mt-2">Value B</div>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 3</div>
+    <div class="text-lg font-extrabold mt-2">Value C</div>
+  </div>
+</div>`,
+    cta: `<div class="rounded-3xl bg-slate-900 text-white p-6">
+  <div class="text-xl font-extrabold">Need attention?</div>
+  <div class="text-sm text-slate-300 mt-2">Gunakan block ini untuk call to action.</div>
+  <div class="mt-4">
+    <a href="/ops/incidents" class="inline-flex px-4 py-2 rounded-2xl bg-white text-slate-900 font-bold">Open Incidents</a>
+  </div>
+</div>`
+  };
+
+  function sectionOptions(selected="main"){
+    return SECTIONS.map(x => `
+      <option value="${esc(x)}" ${String(selected) === String(x) ? "selected" : ""}>${esc(x)}</option>
+    `).join("");
+  }
+
+  function templateButtons(prefix){
+    return `
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="announcement">Announcement</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="hero">Hero</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="cards">Info Cards</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="cta">CTA Banner</button>
+      </div>
+    `;
+  }
+
   return {
     title:"Blogspot Widgets / Home",
     async mount(host){
@@ -31,11 +85,26 @@ export default function(Orland){
                 <input id="wid_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm" placeholder="id (auto create if empty)">
                 <input id="wid_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="widget key">
                 <input id="wid_title" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="title">
-                <input id="wid_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="section">
+                <select id="wid_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm">
+                  ${sectionOptions("main")}
+                </select>
+
+                <div>
+                  <div class="text-xs font-black text-slate-500 mb-2">STARTER TEMPLATES</div>
+                  ${templateButtons("widget")}
+                </div>
+
                 <textarea id="wid_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='hero'>Custom HTML</div>"></textarea>
+
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+                  <div class="text-xs font-black text-slate-500 mb-2">LIVE PREVIEW</div>
+                  <div id="wid_preview" class="rounded-2xl bg-slate-50 dark:bg-black/20 p-4 overflow-auto min-h-[120px]"></div>
+                </div>
+
                 <div class="flex gap-2 flex-wrap">
                   <button id="btnSaveWidget" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save Widget</button>
                   <button id="btnDeleteWidget" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+                  <button id="btnClearWidget" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Clear</button>
                 </div>
               </div>
             </div>
@@ -44,13 +113,28 @@ export default function(Orland){
               <div class="text-sm font-extrabold">Home Block Editor</div>
               <div class="space-y-3 mt-4">
                 <input id="blk_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm" placeholder="id (auto create if empty)">
-                <input id="blk_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="section">
+                <select id="blk_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm">
+                  ${sectionOptions("dashboard")}
+                </select>
                 <input id="blk_title" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="title">
                 <input id="blk_sort" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="sort order">
+
+                <div>
+                  <div class="text-xs font-black text-slate-500 mb-2">STARTER TEMPLATES</div>
+                  ${templateButtons("block")}
+                </div>
+
                 <textarea id="blk_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='home-block'>HTML block</div>"></textarea>
+
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+                  <div class="text-xs font-black text-slate-500 mb-2">LIVE PREVIEW</div>
+                  <div id="blk_preview" class="rounded-2xl bg-slate-50 dark:bg-black/20 p-4 overflow-auto min-h-[120px]"></div>
+                </div>
+
                 <div class="flex gap-2 flex-wrap">
                   <button id="btnSaveBlock" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save Block</button>
                   <button id="btnDeleteBlock" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+                  <button id="btnClearBlock" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Clear</button>
                 </div>
               </div>
             </div>
@@ -58,11 +142,24 @@ export default function(Orland){
 
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-              <div class="text-sm font-extrabold">Widgets</div>
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-extrabold">Widgets</div>
+                <select id="filterWidgetSection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs">
+                  <option value="">All sections</option>
+                  ${sectionOptions("")}
+                </select>
+              </div>
               <div id="widgetsBox" class="space-y-3 mt-4"></div>
             </div>
+
             <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-              <div class="text-sm font-extrabold">Home Blocks</div>
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-extrabold">Home Blocks</div>
+                <select id="filterBlockSection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs">
+                  <option value="">All sections</option>
+                  ${sectionOptions("")}
+                </select>
+              </div>
               <div id="blocksBox" class="space-y-3 mt-4"></div>
             </div>
           </div>
@@ -70,35 +167,65 @@ export default function(Orland){
       `;
 
       const q = (id)=>host.querySelector("#"+id);
+      let LAST = { widgets: [], blocks: [] };
+
+      function setMsg(text, ok=true){
+        q("msg").className = "text-sm " + (ok ? "text-emerald-600" : "text-red-500");
+        q("msg").textContent = text;
+      }
+
+      function renderWidgetPreview(){
+        q("wid_preview").innerHTML = q("wid_html").value || `<div class="text-xs text-slate-500">Empty widget preview.</div>`;
+      }
+
+      function renderBlockPreview(){
+        const title = q("blk_title").value.trim();
+        const html = q("blk_html").value || "";
+        q("blk_preview").innerHTML = `
+          ${title ? `<div class="text-sm font-extrabold mb-3">${esc(title)}</div>` : ``}
+          ${html || `<div class="text-xs text-slate-500">Empty block preview.</div>`}
+        `;
+      }
 
       function fillWidget(x = {}){
         const d = x.data_json || {};
         q("wid_id").value = x.id || "";
         q("wid_key").value = x.widget_key || "";
         q("wid_title").value = d.title || "";
-        q("wid_section").value = d.section || "";
+        q("wid_section").value = d.section || "main";
         q("wid_html").value = d.html || "";
+        renderWidgetPreview();
       }
 
       function fillBlock(x = {}){
         const d = x.payload_json || {};
         q("blk_id").value = x.id || "";
-        q("blk_section").value = x.section || "";
+        q("blk_section").value = x.section || "dashboard";
         q("blk_title").value = x.title || "";
         q("blk_sort").value = x.sort_order || 0;
         q("blk_html").value = d.html || "";
+        renderBlockPreview();
       }
 
-      async function render(){
-        const r = await load();
-        if(r.status !== "ok"){
-          q("widgetsBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r,null,2))}</pre>`;
-          q("blocksBox").innerHTML = "";
-          return;
-        }
+      function filteredWidgets(){
+        const sec = q("filterWidgetSection").value;
+        return LAST.widgets.filter(x => {
+          if(!sec) return true;
+          return String(x?.data_json?.section || "") === String(sec);
+        });
+      }
 
-        const widgets = r.data?.items || [];
-        const blocks = r.data?.home_blocks || [];
+      function filteredBlocks(){
+        const sec = q("filterBlockSection").value;
+        return LAST.blocks.filter(x => {
+          if(!sec) return true;
+          return String(x?.section || "") === String(sec);
+        });
+      }
+
+      function renderLists(){
+        const widgets = filteredWidgets();
+        const blocks = filteredBlocks();
 
         q("widgetsBox").innerHTML = widgets.length ? widgets.map(x => {
           const d = x.data_json || {};
@@ -119,22 +246,67 @@ export default function(Orland){
 
         q("widgetsBox").querySelectorAll(".itemWidget").forEach(btn => {
           btn.onclick = ()=>{
-            const row = widgets.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            const row = LAST.widgets.find(x => String(x.id) === String(btn.getAttribute("data-id")));
             if(row) fillWidget(row);
           };
         });
 
         q("blocksBox").querySelectorAll(".itemBlock").forEach(btn => {
           btn.onclick = ()=>{
-            const row = blocks.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            const row = LAST.blocks.find(x => String(x.id) === String(btn.getAttribute("data-id")));
             if(row) fillBlock(row);
           };
         });
       }
 
+      function bindTemplateButtons(){
+        host.querySelectorAll(".tplBtn").forEach(btn => {
+          btn.addEventListener("click", ()=>{
+            const target = btn.getAttribute("data-target");
+            const tpl = btn.getAttribute("data-template");
+            const html = TEMPLATES[tpl] || "";
+            if(target === "widget"){
+              q("wid_html").value = html;
+              renderWidgetPreview();
+            }else{
+              q("blk_html").value = html;
+              renderBlockPreview();
+            }
+          });
+        });
+      }
+
+      async function render(){
+        const r = await load();
+        if(r.status !== "ok"){
+          q("widgetsBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r,null,2))}</pre>`;
+          q("blocksBox").innerHTML = "";
+          setMsg("Load failed: " + r.status, false);
+          return;
+        }
+
+        LAST.widgets = r.data?.items || [];
+        LAST.blocks = r.data?.home_blocks || [];
+        renderLists();
+        setMsg("Loaded.");
+      }
+
+      q("wid_html").addEventListener("input", renderWidgetPreview);
+      q("wid_title").addEventListener("input", renderWidgetPreview);
+      q("wid_section").addEventListener("change", renderWidgetPreview);
+
+      q("blk_html").addEventListener("input", renderBlockPreview);
+      q("blk_title").addEventListener("input", renderBlockPreview);
+      q("blk_section").addEventListener("change", renderBlockPreview);
+
+      q("filterWidgetSection").addEventListener("change", renderLists);
+      q("filterBlockSection").addEventListener("change", renderLists);
+
       q("btnReload").onclick = render;
       q("btnNewWidget").onclick = ()=>fillWidget({});
       q("btnNewBlock").onclick = ()=>fillBlock({});
+      q("btnClearWidget").onclick = ()=>fillWidget({});
+      q("btnClearBlock").onclick = ()=>fillBlock({});
 
       q("btnSaveWidget").onclick = async ()=>{
         const payload = {
@@ -146,18 +318,25 @@ export default function(Orland){
           html: q("wid_html").value
         };
         const r = await save(payload);
-        q("msg").className = "text-sm " + (r.status === "ok" ? "text-emerald-600" : "text-red-500");
-        q("msg").textContent = r.status === "ok" ? "Widget saved." : ("Save failed: " + r.status);
-        if(r.status === "ok") await render();
+        if(r.status !== "ok"){
+          setMsg("Save failed: " + r.status, false);
+          return;
+        }
+        setMsg("Widget saved.");
+        await render();
       };
 
       q("btnDeleteWidget").onclick = async ()=>{
         const id = q("wid_id").value.trim();
         if(!id) return;
         const r = await save({ action:"delete", id });
-        q("msg").className = "text-sm " + (r.status === "ok" ? "text-emerald-600" : "text-red-500");
-        q("msg").textContent = r.status === "ok" ? "Widget deleted." : ("Delete failed: " + r.status);
-        if(r.status === "ok"){ fillWidget({}); await render(); }
+        if(r.status !== "ok"){
+          setMsg("Delete failed: " + r.status, false);
+          return;
+        }
+        fillWidget({});
+        setMsg("Widget deleted.");
+        await render();
       };
 
       q("btnSaveBlock").onclick = async ()=>{
@@ -170,20 +349,30 @@ export default function(Orland){
           html: q("blk_html").value
         };
         const r = await save(payload);
-        q("msg").className = "text-sm " + (r.status === "ok" ? "text-emerald-600" : "text-red-500");
-        q("msg").textContent = r.status === "ok" ? "Home block saved." : ("Save failed: " + r.status);
-        if(r.status === "ok") await render();
+        if(r.status !== "ok"){
+          setMsg("Save failed: " + r.status, false);
+          return;
+        }
+        setMsg("Home block saved.");
+        await render();
       };
 
       q("btnDeleteBlock").onclick = async ()=>{
         const id = q("blk_id").value.trim();
         if(!id) return;
         const r = await save({ action:"home_delete", id });
-        q("msg").className = "text-sm " + (r.status === "ok" ? "text-emerald-600" : "text-red-500");
-        q("msg").textContent = r.status === "ok" ? "Home block deleted." : ("Delete failed: " + r.status);
-        if(r.status === "ok"){ fillBlock({}); await render(); }
+        if(r.status !== "ok"){
+          setMsg("Delete failed: " + r.status, false);
+          return;
+        }
+        fillBlock({});
+        setMsg("Home block deleted.");
+        await render();
       };
 
+      fillWidget({});
+      fillBlock({});
+      bindTemplateButtons();
       await render();
     }
   };

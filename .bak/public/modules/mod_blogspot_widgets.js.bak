@@ -1,63 +1,302 @@
 export default function(Orland){
   const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
   async function load(){ return await Orland.api("/api/blogspot/widgets"); }
+  async function save(payload){
+    return await Orland.api("/api/blogspot/widgets", { method:"POST", body: JSON.stringify(payload) });
+  }
+
+  const SECTIONS = ["dashboard","home","hero","sidebar","footer","main"];
+
+  function sectionOptions(selected="main"){
+    return SECTIONS.map(x => `
+      <option value="${esc(x)}" ${String(selected) === String(x) ? "selected" : ""}>${esc(x)}</option>
+    `).join("");
+  }
 
   return {
     title:"Blogspot Widgets / Home",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
+        <div class="space-y-4 max-w-6xl">
+          <div class="flex items-center justify-between flex-wrap gap-3">
             <div>
               <div class="text-xl font-extrabold text-slate-900 dark:text-white">Blogspot Widgets / Home</div>
-              <div class="text-sm text-slate-500">Fallback home data dari Blogger API.</div>
+              <div class="text-sm text-slate-500">Custom HTML widgets dan home blocks berbasis div.</div>
             </div>
-            <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder">Reload</button>
+            <div class="flex gap-2 flex-wrap">
+              <button id="btnReload" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder">Reload</button>
+              <button id="btnNewWidget" class="px-3 py-2 rounded-xl text-xs font-black bg-primary text-white">New Widget</button>
+              <button id="btnNewBlock" class="px-3 py-2 rounded-xl text-xs font-black border border-emerald-200 text-emerald-700">New Home Block</button>
+            </div>
           </div>
-          <div id="box" class="space-y-4"></div>
+
+          <div id="msg" class="text-sm text-slate-500"></div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="text-sm font-extrabold">Widget Editor</div>
+              <div class="space-y-3 mt-4">
+                <input id="wid_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm" placeholder="id (auto create if empty)">
+                <input id="wid_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="widget key">
+                <input id="wid_title" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="title">
+                <select id="wid_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm">
+                  ${sectionOptions("main")}
+                </select>
+                <textarea id="wid_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='hero'>Custom HTML</div>"></textarea>
+
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+                  <div class="text-xs font-black text-slate-500 mb-2">LIVE PREVIEW</div>
+                  <div id="wid_preview" class="rounded-2xl bg-slate-50 dark:bg-black/20 p-4 overflow-auto min-h-[120px]"></div>
+                </div>
+
+                <div class="flex gap-2 flex-wrap">
+                  <button id="btnSaveWidget" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save Widget</button>
+                  <button id="btnDeleteWidget" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+                  <button id="btnClearWidget" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Clear</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="text-sm font-extrabold">Home Block Editor</div>
+              <div class="space-y-3 mt-4">
+                <input id="blk_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm" placeholder="id (auto create if empty)">
+                <select id="blk_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm">
+                  ${sectionOptions("dashboard")}
+                </select>
+                <input id="blk_title" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="title">
+                <input id="blk_sort" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="sort order">
+                <textarea id="blk_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='home-block'>HTML block</div>"></textarea>
+
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+                  <div class="text-xs font-black text-slate-500 mb-2">LIVE PREVIEW</div>
+                  <div id="blk_preview" class="rounded-2xl bg-slate-50 dark:bg-black/20 p-4 overflow-auto min-h-[120px]"></div>
+                </div>
+
+                <div class="flex gap-2 flex-wrap">
+                  <button id="btnSaveBlock" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save Block</button>
+                  <button id="btnDeleteBlock" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+                  <button id="btnClearBlock" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-extrabold">Widgets</div>
+                <select id="filterWidgetSection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs">
+                  <option value="">All sections</option>
+                  ${sectionOptions("")}
+                </select>
+              </div>
+              <div id="widgetsBox" class="space-y-3 mt-4"></div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-extrabold">Home Blocks</div>
+                <select id="filterBlockSection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-xs">
+                  <option value="">All sections</option>
+                  ${sectionOptions("")}
+                </select>
+              </div>
+              <div id="blocksBox" class="space-y-3 mt-4"></div>
+            </div>
+          </div>
         </div>
       `;
 
-      const box = host.querySelector("#box");
+      const q = (id)=>host.querySelector("#"+id);
+      let LAST = { widgets: [], blocks: [] };
 
-      async function render(){
-        box.innerHTML = "Loading...";
-        const r = await load();
-        if(r.status!=="ok"){
-          box.innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r,null,2))}</pre>`;
-          return;
-        }
+      function setMsg(text, ok=true){
+        q("msg").className = "text-sm " + (ok ? "text-emerald-600" : "text-red-500");
+        q("msg").textContent = text;
+      }
 
-        const d = r.data || {};
-        const blog = d.blog || {};
-        const posts = d.recent_posts || [];
-        const pages = d.recent_pages || [];
+      function renderWidgetPreview(){
+        q("wid_preview").innerHTML = q("wid_html").value || `<div class="text-xs text-slate-500">Empty widget preview.</div>`;
+      }
 
-        box.innerHTML = `
-          <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-            <div class="text-sm font-extrabold">${esc(blog.name || "Blog")}</div>
-            <div class="text-[11px] text-slate-500 mt-1">${esc(blog.url || "")}</div>
-            <div class="text-[11px] text-slate-500 mt-1">${esc(d.note || "")}</div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-              <div class="text-sm font-extrabold">Recent Posts</div>
-              <div class="mt-3 space-y-2">
-                ${posts.map(x=>`<div class="text-xs"><a class="text-primary" href="${esc(x.url||"#")}" target="_blank">${esc(x.title||"Untitled")}</a></div>`).join("") || `<div class="text-xs text-slate-500">No posts.</div>`}
-              </div>
-            </div>
-            <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-              <div class="text-sm font-extrabold">Recent Pages</div>
-              <div class="mt-3 space-y-2">
-                ${pages.map(x=>`<div class="text-xs"><a class="text-primary" href="${esc(x.url||"#")}" target="_blank">${esc(x.title||"Untitled")}</a></div>`).join("") || `<div class="text-xs text-slate-500">No pages.</div>`}
-              </div>
-            </div>
-          </div>
+      function renderBlockPreview(){
+        const title = q("blk_title").value.trim();
+        const html = q("blk_html").value || "";
+        q("blk_preview").innerHTML = `
+          ${title ? `<div class="text-sm font-extrabold mb-3">${esc(title)}</div>` : ``}
+          ${html || `<div class="text-xs text-slate-500">Empty block preview.</div>`}
         `;
       }
 
-      host.querySelector("#btnReload").onclick = render;
+      function fillWidget(x = {}){
+        const d = x.data_json || {};
+        q("wid_id").value = x.id || "";
+        q("wid_key").value = x.widget_key || "";
+        q("wid_title").value = d.title || "";
+        q("wid_section").value = d.section || "main";
+        q("wid_html").value = d.html || "";
+        renderWidgetPreview();
+      }
+
+      function fillBlock(x = {}){
+        const d = x.payload_json || {};
+        q("blk_id").value = x.id || "";
+        q("blk_section").value = x.section || "dashboard";
+        q("blk_title").value = x.title || "";
+        q("blk_sort").value = x.sort_order || 0;
+        q("blk_html").value = d.html || "";
+        renderBlockPreview();
+      }
+
+      function filteredWidgets(){
+        const sec = q("filterWidgetSection").value;
+        return LAST.widgets.filter(x => {
+          if(!sec) return true;
+          return String(x?.data_json?.section || "") === String(sec);
+        });
+      }
+
+      function filteredBlocks(){
+        const sec = q("filterBlockSection").value;
+        return LAST.blocks.filter(x => {
+          if(!sec) return true;
+          return String(x?.section || "") === String(sec);
+        });
+      }
+
+      function renderLists(){
+        const widgets = filteredWidgets();
+        const blocks = filteredBlocks();
+
+        q("widgetsBox").innerHTML = widgets.length ? widgets.map(x => {
+          const d = x.data_json || {};
+          return `
+            <button class="w-full text-left rounded-2xl border border-slate-200 dark:border-darkBorder p-4 hover:bg-slate-50 dark:hover:bg-white/5 itemWidget" data-id="${esc(x.id)}">
+              <div class="text-sm font-extrabold">${esc(d.title || x.widget_key || "Widget")}</div>
+              <div class="text-[11px] text-slate-500 mt-1">${esc(x.widget_key || "")} • ${esc(d.section || "")}</div>
+            </button>
+          `;
+        }).join("") : `<div class="text-xs text-slate-500">No widgets.</div>`;
+
+        q("blocksBox").innerHTML = blocks.length ? blocks.map(x => `
+          <button class="w-full text-left rounded-2xl border border-slate-200 dark:border-darkBorder p-4 hover:bg-slate-50 dark:hover:bg-white/5 itemBlock" data-id="${esc(x.id)}">
+            <div class="text-sm font-extrabold">${esc(x.title || "Block")}</div>
+            <div class="text-[11px] text-slate-500 mt-1">${esc(x.section || "")} • sort ${esc(x.sort_order || 0)}</div>
+          </button>
+        `).join("") : `<div class="text-xs text-slate-500">No home blocks.</div>`;
+
+        q("widgetsBox").querySelectorAll(".itemWidget").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = LAST.widgets.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(row) fillWidget(row);
+          };
+        });
+
+        q("blocksBox").querySelectorAll(".itemBlock").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = LAST.blocks.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(row) fillBlock(row);
+          };
+        });
+      }
+
+      async function render(){
+        const r = await load();
+        if(r.status !== "ok"){
+          q("widgetsBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r,null,2))}</pre>`;
+          q("blocksBox").innerHTML = "";
+          setMsg("Load failed: " + r.status, false);
+          return;
+        }
+
+        LAST.widgets = r.data?.items || [];
+        LAST.blocks = r.data?.home_blocks || [];
+        renderLists();
+        setMsg("Loaded.");
+      }
+
+      q("wid_html").addEventListener("input", renderWidgetPreview);
+      q("wid_title").addEventListener("input", renderWidgetPreview);
+      q("wid_section").addEventListener("change", renderWidgetPreview);
+
+      q("blk_html").addEventListener("input", renderBlockPreview);
+      q("blk_title").addEventListener("input", renderBlockPreview);
+      q("blk_section").addEventListener("change", renderBlockPreview);
+
+      q("filterWidgetSection").addEventListener("change", renderLists);
+      q("filterBlockSection").addEventListener("change", renderLists);
+
+      q("btnReload").onclick = render;
+      q("btnNewWidget").onclick = ()=>fillWidget({});
+      q("btnNewBlock").onclick = ()=>fillBlock({});
+      q("btnClearWidget").onclick = ()=>fillWidget({});
+      q("btnClearBlock").onclick = ()=>fillBlock({});
+
+      q("btnSaveWidget").onclick = async ()=>{
+        const payload = {
+          action: q("wid_id").value.trim() ? "update" : "create",
+          id: q("wid_id").value.trim(),
+          widget_key: q("wid_key").value.trim(),
+          title: q("wid_title").value.trim(),
+          section: q("wid_section").value.trim(),
+          html: q("wid_html").value
+        };
+        const r = await save(payload);
+        if(r.status !== "ok"){
+          setMsg("Save failed: " + r.status, false);
+          return;
+        }
+        setMsg("Widget saved.");
+        await render();
+      };
+
+      q("btnDeleteWidget").onclick = async ()=>{
+        const id = q("wid_id").value.trim();
+        if(!id) return;
+        const r = await save({ action:"delete", id });
+        if(r.status !== "ok"){
+          setMsg("Delete failed: " + r.status, false);
+          return;
+        }
+        fillWidget({});
+        setMsg("Widget deleted.");
+        await render();
+      };
+
+      q("btnSaveBlock").onclick = async ()=>{
+        const payload = {
+          action: "home_upsert",
+          id: q("blk_id").value.trim(),
+          section: q("blk_section").value.trim(),
+          title: q("blk_title").value.trim(),
+          sort_order: Number(q("blk_sort").value || 0),
+          html: q("blk_html").value
+        };
+        const r = await save(payload);
+        if(r.status !== "ok"){
+          setMsg("Save failed: " + r.status, false);
+          return;
+        }
+        setMsg("Home block saved.");
+        await render();
+      };
+
+      q("btnDeleteBlock").onclick = async ()=>{
+        const id = q("blk_id").value.trim();
+        if(!id) return;
+        const r = await save({ action:"home_delete", id });
+        if(r.status !== "ok"){
+          setMsg("Delete failed: " + r.status, false);
+          return;
+        }
+        fillBlock({});
+        setMsg("Home block deleted.");
+        await render();
+      };
+
+      fillWidget({});
+      fillBlock({});
       await render();
     }
   };

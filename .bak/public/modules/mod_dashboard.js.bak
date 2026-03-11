@@ -28,10 +28,6 @@ export default function(Orland){
     return await Orland.api("/api/analytics/top-countries");
   }
 
-  async function loadHomeBlocks(){
-    return await Orland.api("/api/blogspot/home?section=dashboard");
-  }
-
   function sumOverview(items){
     let requests = 0;
     let pageViews = 0;
@@ -106,25 +102,6 @@ export default function(Orland){
     `;
   }
 
-  function renderHomeBlocks(items){
-    if(!items.length) return "";
-    return `
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        ${items.map(x => {
-          const html = String(x?.payload_json?.html || "");
-          return `
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
-              ${x?.title ? `<div class="text-xl font-extrabold mb-4">${esc(x.title)}</div>` : ``}
-              <div class="prose prose-sm max-w-none dark:prose-invert">
-                ${html}
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
-  }
-
   return {
     title:"Dashboard",
     async mount(host){
@@ -166,8 +143,6 @@ export default function(Orland){
             </div>
           </div>
 
-          <div id="homeBlocks"></div>
-
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xl font-extrabold">Visitor Chart</div>
@@ -197,11 +172,10 @@ export default function(Orland){
         q("msg").className = "text-sm text-slate-500";
         q("msg").textContent = "Loading analytics...";
 
-        const [overviewRes, pagesRes, countriesRes, homeRes] = await Promise.all([
+        const [overviewRes, pagesRes, countriesRes] = await Promise.all([
           loadOverview(days),
           loadTopPages(),
-          loadTopCountries(),
-          loadHomeBlocks()
+          loadTopCountries()
         ]);
 
         if(overviewRes.status !== "ok"){
@@ -248,11 +222,6 @@ export default function(Orland){
 
         q("pagesBox").innerHTML = renderSimpleTable(pageItems, "pages");
         q("countriesBox").innerHTML = renderSimpleTable(countryItems, "countries");
-
-        const homeItems = homeRes.status === "ok" && Array.isArray(homeRes.data?.items)
-          ? homeRes.data.items
-          : [];
-        q("homeBlocks").innerHTML = renderHomeBlocks(homeItems);
 
         q("msg").className = "text-sm text-emerald-600";
         q("msg").textContent = "Loaded.";
