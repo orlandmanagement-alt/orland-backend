@@ -1,173 +1,140 @@
 export default function(Orland){
-  const esc = (s)=>String(s??"").replace(/[&<>"']/g,m=>({
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[m]));
 
-  const fmtTs = (n)=>{
-    try{
-      return new Intl.DateTimeFormat("id-ID", {
-        dateStyle:"medium",
-        timeStyle:"short"
-      }).format(new Date(Number(n||0) * 1000));
-    }catch{
-      return String(n||"");
-    }
-  };
-
-  async function apiList(status="", severity=""){
+  async function apiLoad(params = {}){
     const q = new URLSearchParams();
-    if(status) q.set("status", status);
-    if(severity) q.set("severity", severity);
-    q.set("limit", "100");
-    return await Orland.api("/api/incidents/list?" + q.toString());
+    if(params.status) q.set("status", params.status);
+    if(params.severity) q.set("severity", params.severity);
+    if(params.q) q.set("q", params.q);
+    return await Orland.api("/api/ops_incidents?" + q.toString());
   }
 
-  async function apiCreate(payload){
-    return await Orland.api("/api/incidents/create", {
+  async function apiSave(payload){
+    return await Orland.api("/api/ops_incidents", {
       method:"POST",
       body: JSON.stringify(payload)
     });
   }
 
-  async function apiUpdate(payload){
-    return await Orland.api("/api/incidents/update", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
-  }
-
-  async function apiComments(incident_id){
-    return await Orland.api("/api/incidents/comments?incident_id=" + encodeURIComponent(incident_id));
+  async function apiComments(incidentId){
+    return await Orland.api("/api/ops_incident_comments?incident_id=" + encodeURIComponent(incidentId));
   }
 
   async function apiAddComment(payload){
-    return await Orland.api("/api/incidents/comments", {
+    return await Orland.api("/api/ops_incident_comments", {
       method:"POST",
       body: JSON.stringify(payload)
     });
   }
 
-  function sevBadge(sev){
-    const s = String(sev||"").toLowerCase();
-    if(s==="critical") return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-red-100 text-red-700 border border-red-200">critical</span>`;
-    if(s==="high") return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-700 border border-amber-200">high</span>`;
-    if(s==="medium") return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-sky-100 text-sky-700 border border-sky-200">medium</span>`;
-    return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${esc(s||"low")}</span>`;
+  function fmtTs(v){
+    const n = Number(v || 0);
+    if(!n) return "-";
+    try{ return new Date(n * 1000).toLocaleString("id-ID"); }
+    catch{ return String(v); }
   }
 
-  function statusBadge(st){
-    const s = String(st||"").toLowerCase();
-    if(s==="closed") return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">closed</span>`;
-    if(s==="acknowledged") return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-violet-100 text-violet-700 border border-violet-200">acknowledged</span>`;
-    return `<span class="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200">open</span>`;
+  function severityBadge(v){
+    const s = String(v || "").toLowerCase();
+    if(s === "critical") return `<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">critical</span>`;
+    if(s === "high") return `<span class="px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-black">high</span>`;
+    if(s === "medium") return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">medium</span>`;
+    return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">${esc(s || "low")}</span>`;
+  }
+
+  function statusBadge(v){
+    const s = String(v || "").toLowerCase();
+    if(s === "open") return `<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">open</span>`;
+    if(s === "acknowledged") return `<span class="px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-black">acknowledged</span>`;
+    if(s === "resolved") return `<span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">resolved</span>`;
+    if(s === "closed") return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">closed</span>`;
+    return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">${esc(s || "-")}</span>`;
   }
 
   return {
-    title:"Incidents",
+    title:"OPS Incidents",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-4">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="text-xl font-extrabold text-slate-900 dark:text-white">Incident Manager</div>
-              <div class="text-sm text-slate-500">Create, triage, acknowledge, close, and comment incidents.</div>
+        <div class="space-y-4 max-w-7xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold">OPS Incidents</div>
+                <div class="text-slate-500 mt-1">Incident CRUD, triage, dan discussion thread.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Incident
+                </button>
+              </div>
             </div>
-            <div class="flex gap-2">
-              <button id="btnReload" class="px-4 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder hover:bg-slate-50 dark:hover:bg-white/5">
-                Reload
-              </button>
+
+            <div class="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_180px_180px] gap-3">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari summary / id / type">
+              <select id="qStatus" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                <option value="">All status</option>
+                <option value="open">open</option>
+                <option value="acknowledged">acknowledged</option>
+                <option value="resolved">resolved</option>
+                <option value="closed">closed</option>
+              </select>
+              <select id="qSeverity" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                <option value="">All severity</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="critical">critical</option>
+              </select>
             </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
           </div>
 
-          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div class="xl:col-span-2 space-y-4">
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-500">Status</label>
-                    <select id="fStatus" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-                      <option value="">All</option>
-                      <option value="open">Open</option>
-                      <option value="acknowledged">Acknowledged</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-500">Severity</label>
-                    <select id="fSeverity" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-                      <option value="">All</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </div>
-                  <div class="md:col-span-2 flex items-end gap-2">
-                    <button id="btnApply" class="px-4 py-2 rounded-xl text-xs font-black bg-primary text-white">Apply Filter</button>
-                    <button id="btnClear" class="px-4 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-darkBorder">Reset</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-                <div class="text-sm font-extrabold">Create Incident</div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-500">Severity</label>
-                    <select id="cSeverity" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-                      <option value="low">Low</option>
-                      <option value="medium" selected>Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-500">Type</label>
-                    <input id="cType" value="security" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder">
-                  </div>
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-500">Owner User ID</label>
-                    <input id="cOwner" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="optional">
-                  </div>
-                  <div class="md:col-span-3">
-                    <label class="text-[11px] font-bold text-slate-500">Summary</label>
-                    <input id="cSummary" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="Suspicious login burst">
-                  </div>
-                  <div class="md:col-span-3">
-                    <label class="text-[11px] font-bold text-slate-500">Details JSON</label>
-                    <textarea id="cDetails" rows="4" class="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder='{"ip":"1.2.3.4","source":"manual"}'></textarea>
-                  </div>
-                </div>
-                <div class="mt-4 flex gap-2">
-                  <button id="btnCreate" class="px-4 py-2 rounded-xl text-xs font-black bg-primary text-white">Create Incident</button>
-                  <div id="createMsg" class="text-xs self-center"></div>
-                </div>
-              </div>
-
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl overflow-hidden">
-                <div class="px-4 py-3 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between">
-                  <div class="text-sm font-extrabold">Incident List</div>
-                  <div id="listInfo" class="text-[11px] text-slate-500">—</div>
-                </div>
-                <div id="listBox" class="divide-y divide-slate-100 dark:divide-darkBorder"></div>
-              </div>
+          <div class="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Incident List</div>
+              <div id="listBox" class="mt-4 space-y-3"></div>
             </div>
 
-            <div class="space-y-4">
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-                <div class="text-sm font-extrabold">Selected Incident</div>
-                <div id="selBox" class="mt-3 text-xs text-slate-500">No incident selected.</div>
-              </div>
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Detail & Comments</div>
+              <div id="detailBox" class="mt-4 text-sm text-slate-500">Pilih incident dari list.</div>
+            </div>
+          </div>
+        </div>
 
-              <div class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4">
-                <div class="text-sm font-extrabold">Comments</div>
-                <div id="commentsBox" class="mt-3 space-y-3 max-h-[380px] overflow-auto"></div>
-                <div class="mt-4">
-                  <textarea id="commentBody" rows="4" class="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-dark border border-slate-200 dark:border-darkBorder" placeholder="Add comment..."></textarea>
-                  <div class="mt-2 flex gap-2">
-                    <button id="btnComment" class="px-4 py-2 rounded-xl text-xs font-black bg-primary text-white">Add Comment</button>
-                    <div id="commentMsg" class="text-xs self-center"></div>
-                  </div>
+        <div id="modalBackdrop" class="hidden fixed inset-0 z-[100] bg-black/50 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-5xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-4 lg:px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
+                <div>
+                  <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Incident</div>
+                  <div class="text-xs text-slate-500 mt-1">Create / edit incident</div>
+                </div>
+                <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div id="modalBody" class="p-4 lg:p-5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
                 </div>
               </div>
             </div>
@@ -175,260 +142,344 @@ export default function(Orland){
         </div>
       `;
 
-      const q = (id)=>host.querySelector("#"+id);
+      const q = (id)=>host.querySelector("#" + id);
       let ITEMS = [];
-      let SELECTED = null;
+      let ACTIVE = null;
+      let confirmAction = null;
 
-      function parseDetails(v){
-        try{
-          if(!v) return null;
-          return typeof v === "string" ? JSON.parse(v) : v;
-        }catch{
-          return null;
-        }
+      function setMsg(kind, text){
+        const el = q("msg");
+        el.className = "mt-4 text-sm";
+        if(kind === "error") el.classList.add("text-red-500");
+        else if(kind === "success") el.classList.add("text-emerald-600");
+        else el.classList.add("text-slate-500");
+        el.textContent = text;
       }
 
-      function renderList(){
-        const box = q("listBox");
-        q("listInfo").textContent = ITEMS.length + " incident(s)";
+      function openModal(title, body){
+        q("modalTitle").textContent = title || "Incident";
+        q("modalBody").innerHTML = body || "";
+        q("modalBackdrop").classList.remove("hidden");
+      }
 
-        if(!ITEMS.length){
-          box.innerHTML = `<div class="p-4 text-xs text-slate-500">No incidents found.</div>`;
+      function closeModal(){
+        q("modalBackdrop").classList.add("hidden");
+        q("modalBody").innerHTML = "";
+      }
+
+      function openConfirm(title, desc, metaHtml, onOk){
+        q("confirmTitle").textContent = title || "Confirm";
+        q("confirmDesc").textContent = desc || "";
+        q("confirmMeta").innerHTML = metaHtml || "-";
+        confirmAction = onOk;
+        q("confirmBackdrop").classList.remove("hidden");
+      }
+
+      function closeConfirm(){
+        q("confirmBackdrop").classList.add("hidden");
+        q("confirmMeta").innerHTML = "";
+        confirmAction = null;
+      }
+
+      function editorHtml(row = {}){
+        const details = row.details_json && typeof row.details_json === "object" ? row.details_json : {};
+        return `
+          <form id="incidentForm" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="space-y-4">
+              <input type="hidden" name="mode" value="${row.id ? "update" : "create"}">
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+                <input name="id" value="${esc(row.id || "")}" ${row.id ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="inc_xxx">
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">SUMMARY</label>
+                <input name="summary" value="${esc(row.summary || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">SEVERITY</label>
+                  <select name="severity" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                    <option value="low" ${row.severity === "low" ? "selected" : ""}>low</option>
+                    <option value="medium" ${row.severity === "medium" || !row.severity ? "selected" : ""}>medium</option>
+                    <option value="high" ${row.severity === "high" ? "selected" : ""}>high</option>
+                    <option value="critical" ${row.severity === "critical" ? "selected" : ""}>critical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">TYPE</label>
+                  <input name="type" value="${esc(row.type || "general")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                </div>
+
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">STATUS</label>
+                  <select name="status" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                    <option value="open" ${row.status === "open" || !row.status ? "selected" : ""}>open</option>
+                    <option value="acknowledged" ${row.status === "acknowledged" ? "selected" : ""}>acknowledged</option>
+                    <option value="resolved" ${row.status === "resolved" ? "selected" : ""}>resolved</option>
+                    <option value="closed" ${row.status === "closed" ? "selected" : ""}>closed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">OWNER USER ID</label>
+                <input name="owner_user_id" value="${esc(row.owner_user_id || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+
+              <div class="flex gap-2 flex-wrap">
+                <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+                ${row.id ? `<button type="button" id="btnDeleteIncident" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>` : ``}
+                <button type="button" id="btnCancelIncident" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">DETAILS JSON</label>
+                <textarea id="detailsJson" rows="16" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-mono">${esc(JSON.stringify(details, null, 2))}</textarea>
+              </div>
+            </div>
+          </form>
+        `;
+      }
+
+      function openEditor(row = {}){
+        openModal(row.id ? "Edit Incident" : "Create Incident", editorHtml(row));
+
+        const form = q("incidentForm");
+        q("btnCancelIncident").onclick = closeModal;
+
+        q("btnDeleteIncident")?.addEventListener("click", ()=>{
+          openConfirm(
+            "Delete Incident",
+            "Incident dan comments akan dihapus.",
+            `<div class="font-black text-red-600">${esc(row.summary || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.id || "-")}</div>`,
+            async ()=>{
+              setMsg("muted", "Deleting...");
+              const r = await apiSave({ action:"delete", id: row.id });
+              if(r.status !== "ok"){
+                setMsg("error", "Delete failed: " + (r.data?.message || r.status));
+                return;
+              }
+              closeConfirm();
+              closeModal();
+              if(ACTIVE && ACTIVE.id === row.id) ACTIVE = null;
+              setMsg("success", "Incident deleted.");
+              await render();
+            }
+          );
+        });
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+
+          let details_json = {};
+          try{
+            details_json = JSON.parse(q("detailsJson").value || "{}");
+          }catch{
+            setMsg("error", "details_json invalid.");
+            return;
+          }
+
+          const payload = {
+            action: form.mode.value,
+            id: form.id.value.trim(),
+            summary: form.summary.value.trim(),
+            severity: form.severity.value,
+            type: form.type.value.trim(),
+            status: form.status.value,
+            owner_user_id: form.owner_user_id.value.trim(),
+            details_json
+          };
+
+          setMsg("muted", "Saving...");
+          const r = await apiSave(payload);
+          if(r.status !== "ok"){
+            setMsg("error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          closeModal();
+          setMsg("success", "Incident saved.");
+          await render();
+        };
+      }
+
+      async function renderDetail(){
+        if(!ACTIVE){
+          q("detailBox").innerHTML = `Pilih incident dari list.`;
           return;
         }
 
-        box.innerHTML = ITEMS.map(it=>`
-          <button data-id="${esc(it.id)}" class="incidentRow w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-white/5">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="text-sm font-extrabold truncate">${esc(it.summary || "Untitled incident")}</div>
-                <div class="text-[11px] text-slate-500 mt-1">
-                  <span>${esc(it.type || "-")}</span>
-                  <span class="mx-1">•</span>
-                  <span>${esc(fmtTs(it.updated_at || it.created_at))}</span>
-                </div>
+        q("detailBox").innerHTML = `
+          <div class="space-y-4">
+            <div>
+              <div class="flex gap-2 flex-wrap">
+                ${severityBadge(ACTIVE.severity)}
+                ${statusBadge(ACTIVE.status)}
               </div>
-              <div class="flex gap-2 shrink-0">
-                ${sevBadge(it.severity)}
-                ${statusBadge(it.status)}
+              <div class="text-lg font-extrabold mt-3">${esc(ACTIVE.summary || "-")}</div>
+              <div class="text-xs text-slate-500 mt-2">
+                ${esc(ACTIVE.id)} • ${esc(ACTIVE.type || "-")}
               </div>
             </div>
-          </button>
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-sm space-y-2">
+              <div><b>Owner:</b> ${esc(ACTIVE.owner_name || ACTIVE.owner_user_id || "-")}</div>
+              <div><b>Updated:</b> ${esc(fmtTs(ACTIVE.updated_at))}</div>
+              <div><b>Created:</b> ${esc(fmtTs(ACTIVE.created_at))}</div>
+              <div><b>Ack by:</b> ${esc(ACTIVE.ack_name || ACTIVE.acknowledged_by_user_id || "-")}</div>
+              <div><b>Closed by:</b> ${esc(ACTIVE.closed_name || ACTIVE.closed_by_user_id || "-")}</div>
+            </div>
+
+            <div>
+              <div class="text-sm font-black mb-2">Details</div>
+              <pre class="text-xs whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">${esc(JSON.stringify(ACTIVE.details_json || {}, null, 2))}</pre>
+            </div>
+
+            <div>
+              <div class="text-sm font-black mb-2">Comments</div>
+              <div id="commentList" class="space-y-3"></div>
+              <div class="mt-3">
+                <textarea id="commentBody" rows="3" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm" placeholder="Tulis komentar incident"></textarea>
+                <button id="btnAddComment" class="mt-3 px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Add Comment</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const commentsRes = await apiComments(ACTIVE.id);
+        const list = q("commentList");
+
+        if(commentsRes.status !== "ok"){
+          list.innerHTML = `<div class="text-sm text-red-500">Load comments failed: ${esc(commentsRes.status)}</div>`;
+        }else{
+          const items = Array.isArray(commentsRes.data?.items) ? commentsRes.data.items : [];
+          list.innerHTML = items.length ? items.map(x => `
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+              <div class="text-xs text-slate-500">${esc(x.author_name || x.author_email || x.author_user_id || "-")} • ${esc(fmtTs(x.created_at))}</div>
+              <div class="text-sm mt-2 whitespace-pre-wrap break-words">${esc(x.body || "")}</div>
+            </div>
+          `).join("") : `<div class="text-sm text-slate-500">No comments.</div>`;
+        }
+
+        q("btnAddComment").onclick = async ()=>{
+          const body = String(q("commentBody").value || "").trim();
+          if(!body){
+            setMsg("error", "Comment kosong.");
+            return;
+          }
+
+          setMsg("muted", "Saving comment...");
+          const r = await apiAddComment({
+            incident_id: ACTIVE.id,
+            body
+          });
+
+          if(r.status !== "ok"){
+            setMsg("error", "Comment save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          q("commentBody").value = "";
+          setMsg("success", "Comment saved.");
+          await render();
+        };
+      }
+
+      function renderList(){
+        if(!ITEMS.length){
+          q("listBox").innerHTML = `<div class="text-sm text-slate-500">No incidents found.</div>`;
+          return;
+        }
+
+        q("listBox").innerHTML = ITEMS.map(x => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 ${ACTIVE && ACTIVE.id === x.id ? 'ring-2 ring-primary/30' : ''}">
+            <div class="flex items-start justify-between gap-3">
+              <button class="incidentOpen min-w-0 flex-1 text-left" data-id="${esc(x.id)}">
+                <div class="flex gap-2 flex-wrap">
+                  ${severityBadge(x.severity)}
+                  ${statusBadge(x.status)}
+                </div>
+                <div class="text-base font-extrabold mt-3">${esc(x.summary || "-")}</div>
+                <div class="text-xs text-slate-500 mt-2">
+                  ${esc(x.id)} • ${esc(x.type || "-")} • updated ${esc(fmtTs(x.updated_at))}
+                </div>
+              </button>
+
+              <div class="flex gap-2 shrink-0">
+                <button class="incidentEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(x.id)}">
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         `).join("");
 
-        box.querySelectorAll(".incidentRow").forEach(btn=>{
+        q("listBox").querySelectorAll(".incidentOpen").forEach(btn => {
           btn.onclick = async ()=>{
-            const id = btn.getAttribute("data-id");
-            SELECTED = ITEMS.find(x => String(x.id) === String(id)) || null;
-            renderSelected();
-            await loadComments();
+            ACTIVE = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id"))) || null;
+            renderList();
+            await renderDetail();
+          };
+        });
+
+        q("listBox").querySelectorAll(".incidentEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(row) openEditor(row);
           };
         });
       }
 
-      function renderSelected(){
-        const box = q("selBox");
-        if(!SELECTED){
-          box.innerHTML = "No incident selected.";
-          return;
-        }
-
-        const details = parseDetails(SELECTED.details_json);
-        box.innerHTML = `
-          <div class="space-y-3">
-            <div>
-              <div class="text-sm font-extrabold">${esc(SELECTED.summary || "-")}</div>
-              <div class="text-[11px] text-slate-500 mt-1">${esc(SELECTED.type || "-")} • ${esc(fmtTs(SELECTED.created_at))}</div>
-            </div>
-
-            <div class="flex gap-2 flex-wrap">
-              ${sevBadge(SELECTED.severity)}
-              ${statusBadge(SELECTED.status)}
-            </div>
-
-            <div class="text-[11px] text-slate-500">
-              Owner: ${esc(SELECTED.owner_user_id || "-")}
-            </div>
-
-            <div>
-              <div class="text-[11px] font-bold text-slate-500">Details</div>
-              <pre class="mt-1 text-[11px] whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-xl p-3">${esc(JSON.stringify(details, null, 2) || "{}")}</pre>
-            </div>
-
-            <div class="flex gap-2 flex-wrap">
-              <button id="btnAck" class="px-3 py-2 rounded-xl text-xs font-black border border-violet-200 text-violet-700 hover:bg-violet-50">Acknowledge</button>
-              <button id="btnClose" class="px-3 py-2 rounded-xl text-xs font-black border border-emerald-200 text-emerald-700 hover:bg-emerald-50">Close</button>
-            </div>
-
-            <div id="selMsg" class="text-xs"></div>
-          </div>
-        `;
-
-        q("btnAck").onclick = async ()=>{
-          const r = await apiUpdate({ incident_id: SELECTED.id, status: "acknowledged" });
-          const m = q("selMsg");
-          if(r.status !== "ok"){
-            m.className = "text-xs text-red-500";
-            m.textContent = "Failed: " + r.status;
-            return;
-          }
-          m.className = "text-xs text-emerald-600";
-          m.textContent = "Incident acknowledged.";
-          await reloadList(true);
-        };
-
-        q("btnClose").onclick = async ()=>{
-          const r = await apiUpdate({ incident_id: SELECTED.id, status: "closed" });
-          const m = q("selMsg");
-          if(r.status !== "ok"){
-            m.className = "text-xs text-red-500";
-            m.textContent = "Failed: " + r.status;
-            return;
-          }
-          m.className = "text-xs text-emerald-600";
-          m.textContent = "Incident closed.";
-          await reloadList(true);
-        };
-      }
-
-      async function loadComments(){
-        const box = q("commentsBox");
-        if(!SELECTED){
-          box.innerHTML = `<div class="text-xs text-slate-500">Select an incident first.</div>`;
-          return;
-        }
-
-        box.innerHTML = `<div class="text-xs text-slate-500">Loading...</div>`;
-        const r = await apiComments(SELECTED.id);
+      async function render(){
+        setMsg("muted", "Loading incidents...");
+        const r = await apiLoad({
+          q: q("qSearch").value,
+          status: q("qStatus").value,
+          severity: q("qSeverity").value
+        });
 
         if(r.status !== "ok"){
-          box.innerHTML = `<div class="text-xs text-red-500">Failed: ${esc(r.status)}</div>`;
-          return;
-        }
-
-        const items = Array.isArray(r.data?.items) ? r.data.items : [];
-        if(!items.length){
-          box.innerHTML = `<div class="text-xs text-slate-500">No comments yet.</div>`;
-          return;
-        }
-
-        box.innerHTML = items.map(c=>`
-          <div class="rounded-xl border border-slate-200 dark:border-darkBorder p-3">
-            <div class="text-[11px] text-slate-500">${esc(c.author_user_id || "-")} • ${esc(fmtTs(c.created_at))}</div>
-            <div class="text-xs mt-2 whitespace-pre-wrap break-words">${esc(c.body || "")}</div>
-          </div>
-        `).join("");
-      }
-
-      async function reloadList(keepSelected=false){
-        const status = q("fStatus").value || "";
-        const severity = q("fSeverity").value || "";
-        const r = await apiList(status, severity);
-
-        if(r.status !== "ok"){
-          q("listBox").innerHTML = `<div class="p-4 text-xs text-red-500">Failed: ${esc(r.status)}</div>`;
+          setMsg("error", "Load failed: " + r.status);
+          q("listBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
           return;
         }
 
         ITEMS = Array.isArray(r.data?.items) ? r.data.items : [];
-        renderList();
-
-        if(keepSelected && SELECTED){
-          SELECTED = ITEMS.find(x => String(x.id) === String(SELECTED.id)) || null;
-        }else if(!SELECTED && ITEMS.length){
-          SELECTED = ITEMS[0];
+        if(ACTIVE){
+          ACTIVE = ITEMS.find(x => String(x.id) === String(ACTIVE.id)) || null;
         }
 
-        renderSelected();
-        await loadComments();
+        renderList();
+        await renderDetail();
+        setMsg("success", "Loaded.");
       }
 
-      q("btnReload").onclick = ()=>reloadList(true);
-      q("btnApply").onclick = ()=>reloadList(false);
-      q("btnClear").onclick = ()=>{
-        q("fStatus").value = "";
-        q("fSeverity").value = "";
-        reloadList(false);
+      q("btnReload").onclick = render;
+      q("btnNew").onclick = ()=>openEditor({});
+      q("qSearch").oninput = render;
+      q("qStatus").onchange = render;
+      q("qSeverity").onchange = render;
+
+      q("btnModalClose").onclick = closeModal;
+      q("modalBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("modalBackdrop")) closeModal();
+      });
+
+      q("btnConfirmCancel").onclick = closeConfirm;
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
       };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm();
+      });
 
-      q("btnCreate").onclick = async ()=>{
-        const msg = q("createMsg");
-        msg.className = "text-xs text-slate-500";
-        msg.textContent = "Creating...";
-
-        let details_json = null;
-        const raw = q("cDetails").value.trim();
-        if(raw){
-          try{
-            details_json = JSON.parse(raw);
-          }catch{
-            msg.className = "text-xs text-red-500";
-            msg.textContent = "Details JSON invalid.";
-            return;
-          }
-        }
-
-        const r = await apiCreate({
-          severity: q("cSeverity").value,
-          type: q("cType").value.trim(),
-          summary: q("cSummary").value.trim(),
-          owner_user_id: q("cOwner").value.trim(),
-          details_json
-        });
-
-        if(r.status !== "ok"){
-          msg.className = "text-xs text-red-500";
-          msg.textContent = "Failed: " + r.status;
-          return;
-        }
-
-        msg.className = "text-xs text-emerald-600";
-        msg.textContent = "Incident created.";
-
-        q("cSummary").value = "";
-        q("cDetails").value = "";
-        q("cOwner").value = "";
-
-        await reloadList(false);
-      };
-
-      q("btnComment").onclick = async ()=>{
-        const msg = q("commentMsg");
-        if(!SELECTED){
-          msg.className = "text-xs text-red-500";
-          msg.textContent = "Select an incident first.";
-          return;
-        }
-
-        const body = q("commentBody").value.trim();
-        if(!body){
-          msg.className = "text-xs text-red-500";
-          msg.textContent = "Comment required.";
-          return;
-        }
-
-        msg.className = "text-xs text-slate-500";
-        msg.textContent = "Sending...";
-
-        const r = await apiAddComment({
-          incident_id: SELECTED.id,
-          body
-        });
-
-        if(r.status !== "ok"){
-          msg.className = "text-xs text-red-500";
-          msg.textContent = "Failed: " + r.status;
-          return;
-        }
-
-        msg.className = "text-xs text-emerald-600";
-        msg.textContent = "Comment added.";
-        q("commentBody").value = "";
-        await loadComments();
-        await reloadList(true);
-      };
-
-      await reloadList(false);
+      await render();
     }
   };
 }

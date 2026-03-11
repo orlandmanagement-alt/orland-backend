@@ -20,16 +20,16 @@ export default function(Orland){
     return await Orland.api("/api/analytics/overview?days=" + encodeURIComponent(days));
   }
 
+  async function loadVisitors(days=7){
+    return await Orland.api("/api/analytics/visitors?days=" + encodeURIComponent(days));
+  }
+
   async function loadTopPages(){
     return await Orland.api("/api/analytics/top-pages");
   }
 
   async function loadTopCountries(){
     return await Orland.api("/api/analytics/top-countries");
-  }
-
-  async function loadHomeBlocks(){
-    return await Orland.api("/api/blogspot/home?section=dashboard");
   }
 
   function sumOverview(items){
@@ -49,19 +49,33 @@ export default function(Orland){
     return { requests, pageViews, bytes, cachedRequests };
   }
 
-  function renderMiniBars(items){
+  function sumVisitors(items){
+    let uniques = 0;
+    for(const row of (items || [])){
+      uniques += Number(row?.uniq?.uniques || 0);
+    }
+    return uniques;
+  }
+
+  function renderMiniBars(items, key = "requests"){
     if(!items.length){
       return `<div class="text-sm text-slate-500">No visitor data.</div>`;
     }
 
-    const vals = items.map(x => Number(x?.sum?.requests || 0));
+    const vals = items.map(x => {
+      if(key === "visitors") return Number(x?.uniq?.uniques || 0);
+      return Number(x?.sum?.requests || 0);
+    });
+
     const max = Math.max(...vals, 1);
 
     return `
       <div class="space-y-3">
         ${items.slice().reverse().map(row => {
           const d = row?.dimensions?.date || "-";
-          const v = Number(row?.sum?.requests || 0);
+          const v = key === "visitors"
+            ? Number(row?.uniq?.uniques || 0)
+            : Number(row?.sum?.requests || 0);
           const w = Math.max(4, Math.round((v / max) * 100));
           return `
             <div>
@@ -106,36 +120,27 @@ export default function(Orland){
     `;
   }
 
-  function renderHomeBlocks(items){
-    if(!items.length) return "";
-    return `
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        ${items.map(x => {
-          const html = String(x?.payload_json?.html || "");
-          return `
-            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
-              ${x?.title ? `<div class="text-xl font-extrabold mb-4">${esc(x.title)}</div>` : ``}
-              <div class="prose prose-sm max-w-none dark:prose-invert">
-                ${html}
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
+  function emptyCards(){
+    return {
+      requests: "—",
+      views: "—",
+      bytes: "—",
+      cached: "—",
+      visitors: "—"
+    };
   }
 
   return {
     title:"Dashboard",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-5">
-          <div class="flex items-start justify-between gap-3">
+        <div class="space-y-5 max-w-7xl">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <div class="text-2xl font-extrabold">Dashboard</div>
               <div class="text-slate-500 mt-1">Cloudflare visitor analytics overview.</div>
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-wrap">
               <select id="days" class="px-4 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter font-bold text-sm">
                 <option value="7" selected>7 days</option>
                 <option value="14">14 days</option>
@@ -147,7 +152,7 @@ export default function(Orland){
 
           <div id="msg" class="text-sm text-slate-500"></div>
 
-          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
             <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Requests</div>
               <div id="kRequests" class="text-2xl font-extrabold mt-2">—</div>
@@ -155,6 +160,10 @@ export default function(Orland){
             <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Page Views</div>
               <div id="kViews" class="text-2xl font-extrabold mt-2">—</div>
+            </div>
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xs text-slate-500 font-bold">Visitors</div>
+              <div id="kVisitors" class="text-2xl font-extrabold mt-2">—</div>
             </div>
             <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
               <div class="text-xs text-slate-500 font-bold">Bandwidth</div>
@@ -166,13 +175,17 @@ export default function(Orland){
             </div>
           </div>
 
-          <div id="homeBlocks"></div>
-
-          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
             <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
-              <div class="text-xl font-extrabold">Visitor Chart</div>
+              <div class="text-xl font-extrabold">Requests Chart</div>
               <div class="text-slate-500 text-sm mt-1">Requests per day</div>
               <div id="chartBox" class="mt-5"></div>
+            </div>
+
+            <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Visitors Chart</div>
+              <div class="text-slate-500 text-sm mt-1">Unique visitors per day</div>
+              <div id="visitorsBox" class="mt-5"></div>
             </div>
 
             <div class="xl:col-span-1 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
@@ -192,67 +205,84 @@ export default function(Orland){
 
       const q = (id)=>host.querySelector("#" + id);
 
+      function setCards(v){
+        q("kRequests").textContent = v.requests;
+        q("kViews").textContent = v.views;
+        q("kVisitors").textContent = v.visitors;
+        q("kBytes").textContent = v.bytes;
+        q("kCached").textContent = v.cached;
+      }
+
       async function render(){
         const days = Number(q("days").value || 7);
         q("msg").className = "text-sm text-slate-500";
         q("msg").textContent = "Loading analytics...";
 
-        const [overviewRes, pagesRes, countriesRes, homeRes] = await Promise.all([
+        setCards(emptyCards());
+        q("chartBox").innerHTML = `<div class="text-sm text-slate-500">Loading...</div>`;
+        q("visitorsBox").innerHTML = `<div class="text-sm text-slate-500">Loading...</div>`;
+        q("pagesBox").innerHTML = `<div class="text-sm text-slate-500">Loading...</div>`;
+        q("countriesBox").innerHTML = `<div class="text-sm text-slate-500">Loading...</div>`;
+
+        const [overviewRes, visitorsRes, pagesRes, countriesRes] = await Promise.all([
           loadOverview(days),
+          loadVisitors(days),
           loadTopPages(),
-          loadTopCountries(),
-          loadHomeBlocks()
+          loadTopCountries()
         ]);
 
+        const ov = overviewRes.data || {};
         if(overviewRes.status !== "ok"){
           q("msg").className = "text-sm text-red-500";
           q("msg").textContent = "Overview failed: " + overviewRes.status;
           return;
         }
 
-        const ov = overviewRes.data || {};
         if(ov.enabled === false){
           q("msg").className = "text-sm text-amber-600";
           q("msg").textContent = "Analytics is disabled.";
-          q("chartBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
-          q("pagesBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
-          q("countriesBox").innerHTML = `<div class="text-sm text-slate-500">Enable analytics first.</div>`;
+          return;
+        }
+
+        if(ov.configured === false){
+          q("msg").className = "text-sm text-amber-600";
+          q("msg").textContent = "Analytics config is incomplete.";
           return;
         }
 
         if(ov.upstream_ok === false){
           q("msg").className = "text-sm text-red-500";
-          q("msg").textContent = "Cloudflare upstream auth/query failed.";
-          q("chartBox").innerHTML = `<pre class="text-xs whitespace-pre-wrap break-words">${esc(JSON.stringify(ov, null, 2))}</pre>`;
-          q("pagesBox").innerHTML = `<div class="text-sm text-slate-500">No data.</div>`;
-          q("countriesBox").innerHTML = `<div class="text-sm text-slate-500">No data.</div>`;
+          q("msg").textContent = "Cloudflare upstream failed: " + String(ov.message || ov.kind || "unknown");
           return;
         }
 
         const items = Array.isArray(ov.items) ? ov.items : [];
         const sums = sumOverview(items);
 
-        q("kRequests").textContent = fmtNum(sums.requests);
-        q("kViews").textContent = fmtNum(sums.pageViews);
-        q("kBytes").textContent = fmtBytes(sums.bytes);
-        q("kCached").textContent = fmtNum(sums.cachedRequests);
-
-        q("chartBox").innerHTML = renderMiniBars(items);
-
-        const pageItems = pagesRes.status === "ok" && Array.isArray(pagesRes.data?.items)
-          ? pagesRes.data.items
+        const visitorItems = visitorsRes.status === "ok" && visitorsRes.data?.upstream_ok !== false
+          ? (Array.isArray(visitorsRes.data?.items) ? visitorsRes.data.items : [])
           : [];
-        const countryItems = countriesRes.status === "ok" && Array.isArray(countriesRes.data?.items)
-          ? countriesRes.data.items
+
+        setCards({
+          requests: fmtNum(sums.requests),
+          views: fmtNum(sums.pageViews),
+          visitors: fmtNum(sumVisitors(visitorItems)),
+          bytes: fmtBytes(sums.bytes),
+          cached: fmtNum(sums.cachedRequests)
+        });
+
+        q("chartBox").innerHTML = renderMiniBars(items, "requests");
+        q("visitorsBox").innerHTML = renderMiniBars(visitorItems, "visitors");
+
+        const pageItems = pagesRes.status === "ok" && pagesRes.data?.upstream_ok !== false
+          ? (Array.isArray(pagesRes.data?.items) ? pagesRes.data.items : [])
+          : [];
+        const countryItems = countriesRes.status === "ok" && countriesRes.data?.upstream_ok !== false
+          ? (Array.isArray(countriesRes.data?.items) ? countriesRes.data.items : [])
           : [];
 
         q("pagesBox").innerHTML = renderSimpleTable(pageItems, "pages");
         q("countriesBox").innerHTML = renderSimpleTable(countryItems, "countries");
-
-        const homeItems = homeRes.status === "ok" && Array.isArray(homeRes.data?.items)
-          ? homeRes.data.items
-          : [];
-        q("homeBlocks").innerHTML = renderHomeBlocks(homeItems);
 
         q("msg").className = "text-sm text-emerald-600";
         q("msg").textContent = "Loaded.";

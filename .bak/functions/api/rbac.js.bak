@@ -11,19 +11,9 @@ async function listRoles(env){
 
 async function listMenus(env){
   const r = await env.DB.prepare(`
-    SELECT
-      m.id,
-      m.code,
-      m.label,
-      m.path,
-      m.parent_id,
-      m.sort_order,
-      m.icon,
-      m.created_at,
-      p.label AS parent_label
-    FROM menus m
-    LEFT JOIN menus p ON p.id = m.parent_id
-    ORDER BY m.sort_order ASC, m.created_at ASC
+    SELECT id, code, label, path, parent_id, sort_order, icon, created_at
+    FROM menus
+    ORDER BY sort_order ASC, created_at ASC
   `).all();
   return r.results || [];
 }
@@ -40,15 +30,16 @@ async function listRoleMenus(env, roleId){
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
-  if(!hasRole(a.roles, ["super_admin","admin"])) return json(403, "forbidden", null);
+
+  if(!hasRole(a.roles, ["super_admin","admin"])){
+    return json(403, "forbidden", null);
+  }
 
   const url = new URL(request.url);
   const role_id = String(url.searchParams.get("role_id") || "").trim();
 
-  const [roles, menus] = await Promise.all([
-    listRoles(env),
-    listMenus(env)
-  ]);
+  const roles = await listRoles(env);
+  const menus = await listMenus(env);
 
   let menu_ids = [];
   if(role_id){
@@ -65,41 +56,36 @@ export async function onRequestGet({ request, env }){
 export async function onRequestPost({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
-  if(!hasRole(a.roles, ["super_admin","admin"])) return json(403, "forbidden", null);
+
+  if(!hasRole(a.roles, ["super_admin","admin"])){
+    return json(403, "forbidden", null);
+  }
 
   const body = await readJson(request) || {};
   const role_id = String(body.role_id || "").trim();
-  const menu_ids = Array.isArray(body.menu_ids) ? [...new Set(body.menu_ids.map(String).filter(Boolean))] : [];
+  const menu_ids = Array.isArray(body.menu_ids) ? body.menu_ids.map(String).filter(Boolean) : [];
 
   if(!role_id){
     return json(400, "invalid_input", { message:"role_id_required" });
   }
 
-  const role = await env.DB.prepare(`
-    SELECT id, name FROM roles WHERE id=? LIMIT 1
-  `).bind(role_id).first();
-
-  if(!role){
-    return json(404, "not_found", { message:"role_not_found" });
-  }
+  const now = nowSec();
 
   await env.DB.prepare(`
     DELETE FROM role_menus
     WHERE role_id=?
   `).bind(role_id).run();
 
-  const now = nowSec();
   for(const menu_id of menu_ids){
     await env.DB.prepare(`
       INSERT INTO role_menus (role_id, menu_id, created_at)
-      VALUES (?, ?, ?)
+      VALUES (?,?,?)
     `).bind(role_id, menu_id, now).run();
   }
 
   return json(200, "ok", {
     saved: true,
     role_id,
-    total: menu_ids.length,
     menu_ids
   });
 }

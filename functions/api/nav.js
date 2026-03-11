@@ -9,125 +9,72 @@ function normPath(p){
 }
 
 function sortMenus(a, b){
-  const sa = Number(a.sort_order ?? 999999);
-  const sb = Number(b.sort_order ?? 999999);
+  const sa = Number(a.sort_order ?? 9999);
+  const sb = Number(b.sort_order ?? 9999);
   if(sa !== sb) return sa - sb;
-
-  const ca = Number(a.created_at ?? 0);
-  const cb = Number(b.created_at ?? 0);
-  if(ca !== cb) return ca - cb;
-
-  return String(a.label || "").localeCompare(String(b.label || ""));
+  return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
 }
 
-function normalizeCode(code){
-  return String(code || "").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
-}
+function bucketOf(path){
+  const p = normPath(path);
 
-function bucketByCodeOrPath(item){
-  const code = normalizeCode(item?.code || "");
-  const path = normPath(item?.path || "/");
+  if (p.startsWith("/integrations") || p.startsWith("/plugins")) return "integrations";
 
-  if(
-    code === "blogspot" ||
-    code === "blogspot_posts" ||
-    code === "blogspot_pages" ||
-    code === "blogspot_widgets" ||
-    code === "blogspot_sync" ||
-    code === "cfg_blogspot" ||
-    path.startsWith("/integrations/")
-  ){
-    return "integrations";
-  }
+  if (
+    p.startsWith("/ops") ||
+    p.startsWith("/security") ||
+    p.startsWith("/audit") ||
+    p.startsWith("/data")
+  ) return "system";
 
-  if(
-    code === "security" ||
-    code === "security_policy" ||
-    code === "ops" ||
-    code === "ops_incidents" ||
-    code === "ops_oncall" ||
-    code === "audit" ||
-    code === "data" ||
-    code === "data_export" ||
-    code === "data_import" ||
-    path === "/audit" ||
-    path.startsWith("/security") ||
-    path.startsWith("/ops") ||
-    path.startsWith("/data")
-  ){
-    return "system";
-  }
-
-  if(
-    code === "config" ||
-    code === "menu_builder" ||
-    code === "menus" ||
-    code === "rbac" ||
-    code === "ipblocks" ||
-    code === "plugins" ||
-    code === "cfg_plugins" ||
-    code === "cfg_bulk_tools" ||
-    code === "cfg_otp" ||
-    code === "cfg_verify" ||
-    code === "cfg_sec_policy" ||
-    code === "cfg_analytics" ||
-    path === "/menu-builder" ||
-    path === "/menus" ||
-    path === "/rbac" ||
-    path === "/ipblocks" ||
-    path.startsWith("/config")
-  ){
-    return "config";
-  }
+  if (
+    p.startsWith("/config") ||
+    p.startsWith("/rbac") ||
+    p.startsWith("/menus") ||
+    p.startsWith("/menu-builder") ||
+    p.startsWith("/ipblocks") ||
+    p.startsWith("/profile") ||
+    p.startsWith("/users")
+  ) return "config";
 
   return "core";
 }
 
-async function getAllMenus(env){
-  const r = await env.DB.prepare(`
-    SELECT id, code, label, path, parent_id, sort_order, icon, created_at
-    FROM menus
-    ORDER BY sort_order ASC, created_at ASC
-  `).all();
-
-  return r.results || [];
-}
-
 async function getMenusForRoles(env, roles){
-  const allMenus = await getAllMenus(env);
-
   if(hasRole(roles, ["super_admin"])){
-    return allMenus;
+    const r = await env.DB.prepare(`
+      SELECT id, code, label, path, parent_id, sort_order, icon, created_at
+      FROM menus
+      ORDER BY sort_order ASC, created_at ASC
+    `).all();
+    return r.results || [];
   }
 
   const cleanRoles = (roles || []).map(String).filter(Boolean);
   if(!cleanRoles.length) return [];
 
   const ph = cleanRoles.map(() => "?").join(",");
-  const allowed = await env.DB.prepare(`
-    SELECT DISTINCT m.id
-    FROM role_menus rm
-    JOIN roles r ON r.id = rm.role_id
-    JOIN menus m ON m.id = rm.menu_id
-    WHERE r.name IN (${ph})
+  const r = await env.DB.prepare(`
+    WITH allowed AS (
+      SELECT DISTINCT m.id, m.code, m.label, m.path, m.parent_id, m.sort_order, m.icon, m.created_at
+      FROM role_menus rm
+      JOIN roles r ON r.id = rm.role_id
+      JOIN menus m ON m.id = rm.menu_id
+      WHERE r.name IN (${ph})
+    ),
+    tree AS (
+      SELECT * FROM allowed
+      UNION
+      SELECT p.id, p.code, p.label, p.path, p.parent_id, p.sort_order, p.icon, p.created_at
+      FROM menus p
+      JOIN tree t ON t.parent_id = p.id
+    )
+    SELECT DISTINCT id, code, label, path, parent_id, sort_order, icon, created_at
+    FROM tree
+    ORDER BY sort_order ASC, created_at ASC
   `).bind(...cleanRoles).all();
 
-  const allowedIds = new Set((allowed.results || []).map(x => String(x.id)));
-  if(!allowedIds.size) return [];
-
-  const byId = new Map(allMenus.map(row => [String(row.id), row]));
-
-  for(const id of Array.from(allowedIds)){
-    let cur = byId.get(id);
-    while(cur && cur.parent_id){
-      const pid = String(cur.parent_id);
-      if(allowedIds.has(pid)) break;
-      allowedIds.add(pid);
-      cur = byId.get(pid);
-    }
-  }
-
-  return allMenus.filter(row => allowedIds.has(String(row.id)));
+  return r.results || [];
 }
 
 function buildTree(rows){
@@ -141,7 +88,7 @@ function buildTree(rows){
       path: normPath(row.path || "/"),
       icon: row.icon || "fa-solid fa-circle-dot",
       parent_id: row.parent_id || null,
-      sort_order: Number(row.sort_order ?? 999999),
+      sort_order: Number(row.sort_order ?? 9999),
       created_at: Number(row.created_at ?? 0),
       submenus: []
     });
@@ -165,8 +112,8 @@ function buildTree(rows){
       }
     }
   };
-
   walk(roots);
+
   return roots;
 }
 
@@ -207,8 +154,7 @@ export async function onRequestGet({ request, env }){
   };
 
   for(const item of tree){
-    const bucket = bucketByCodeOrPath(item);
-    if(!grouped[bucket]) grouped[bucket] = [];
+    const bucket = bucketOf(item.path);
     grouped[bucket].push(item);
   }
 

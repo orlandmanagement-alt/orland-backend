@@ -33,7 +33,7 @@ function guessModuleByCodeOrPath(code, path){
     rbac: "/modules/mod_rbac.js",
     rbac_manager: "/modules/mod_rbac_manager.js",
 
-    menus: "/modules/mod_menus.js",
+    menus: "/modules/mod_menu_builder.js",
     menu_builder: "/modules/mod_menu_builder.js",
 
     cfg_plugins: "/modules/mod_cfg_plugins.js",
@@ -83,7 +83,7 @@ function guessModuleByCodeOrPath(code, path){
     "/rbac": "/modules/mod_rbac.js",
     "/rbac/manager": "/modules/mod_rbac_manager.js",
 
-    "/menus": "/modules/mod_menus.js",
+    "/menus": "/modules/mod_menu_builder.js",
     "/menu-builder": "/modules/mod_menu_builder.js",
 
     "/config/plugins": "/modules/mod_cfg_plugins.js",
