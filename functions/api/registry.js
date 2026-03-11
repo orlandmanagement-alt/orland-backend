@@ -1,1 +1,1 @@
-export { onRequestGet, onRequestPost, onRequest } from "./_core/registry.js";
+export { onRequestGet } from "./_core/registry.js";

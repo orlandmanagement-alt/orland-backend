@@ -1,1 +1,1 @@
-export { onRequestGet, onRequestPost, onRequest } from "./_core/menus.js";
+export { onRequestGet, onRequestPost } from "./_core/menus.js";

@@ -1,1 +1,1 @@
-export { onRequestGet, onRequestPost, onRequest } from "./_core/logout.js";
+export { onRequestPost } from "./_core/logout.js";

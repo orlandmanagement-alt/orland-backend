@@ -1,1 +1,1 @@
-export { onRequestGet, onRequestPost, onRequest } from "./_core/me.js";
+export { onRequestGet } from "./_core/me.js";

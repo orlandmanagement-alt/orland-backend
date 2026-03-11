@@ -1,1 +1,1 @@
-export { onRequestGet, onRequestPost, onRequest } from "./_core/nav.js";
+export { onRequestGet } from "./_core/nav.js";
