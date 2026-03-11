@@ -58,7 +58,7 @@ function guessModuleByCodeOrPath(code, path){
     blogspot_posts: "/modules/mod_blogspot_posts.js",
     blogspot_pages: "/modules/mod_blogspot_pages.js",
     blogspot_widgets: "/modules/mod_blogspot_widgets.js",
-    blogspot_sync: "/modules/mod_placeholder.js",
+    blogspot_sync: "/modules/mod_blogspot_sync.js",
 
     profile: "/modules/mod_profile.js",
     profile_security: "/modules/mod_profile_security.js",
@@ -110,7 +110,7 @@ function guessModuleByCodeOrPath(code, path){
     "/integrations/blogspot/posts": "/modules/mod_blogspot_posts.js",
     "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
     "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
-    "/integrations/blogspot/sync": "/modules/mod_placeholder.js",
+    "/integrations/blogspot/sync": "/modules/mod_blogspot_sync.js",
 
     "/profile": "/modules/mod_profile.js",
     "/profile/security": "/modules/mod_profile_security.js",

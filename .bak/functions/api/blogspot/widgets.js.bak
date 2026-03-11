@@ -4,6 +4,21 @@ import { requireBlogspotAccess, getBlogspotConfig, makeId, safeJsonParse } from 
 function s(v){ return String(v || "").trim(); }
 function n(v, d = 0){ const x = Number(v); return Number.isFinite(x) ? x : d; }
 
+function sanitizeAdminHtml(input){
+  let html = String(input || "");
+
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  html = html.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "");
+  html = html.replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, "");
+  html = html.replace(/<embed\b[^>]*>/gi, "");
+  html = html.replace(/<link\b[^>]*>/gi, "");
+  html = html.replace(/<meta\b[^>]*>/gi, "");
+  html = html.replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, "");
+  html = html.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "");
+  html = html.replace(/javascript:/gi, "");
+  return html.trim();
+}
+
 export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);
   if(!a.ok) return a.res;
@@ -65,7 +80,7 @@ export async function onRequestPost({ request, env }){
     const id = s(body.id) || makeId("homeblk");
     const section = s(body.section || "main");
     const title = s(body.title || "Block");
-    const html = String(body.html || "");
+    const html = sanitizeAdminHtml(body.html || "");
     const sort_order = n(body.sort_order, 0);
     const status = s(body.status || "active") || "active";
 
@@ -109,7 +124,7 @@ export async function onRequestPost({ request, env }){
 
   const widget_key = s(body.widget_key || id);
   const title = s(body.title || widget_key);
-  const html = String(body.html || "");
+  const html = sanitizeAdminHtml(body.html || "");
   const section = s(body.section || "main");
   const status = s(body.status || "active") || "active";
   const exists = await env.DB.prepare(`SELECT id FROM cms_widgets WHERE id=? LIMIT 1`).bind(id).first();

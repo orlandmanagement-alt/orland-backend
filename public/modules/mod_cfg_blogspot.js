@@ -1,34 +1,22 @@
 export default function(Orland){
-  async function apiGet(){
-    return await Orland.api("/api/config/blogspot");
-  }
+  async function apiGet(){ return await Orland.api("/api/config/blogspot"); }
   async function apiSave(payload){
-    return await Orland.api("/api/config/blogspot", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
+    return await Orland.api("/api/config/blogspot", { method:"POST", body: JSON.stringify(payload) });
   }
-  async function apiGetSync(){
-    return await Orland.api("/api/blogspot/sync_config");
-  }
+  async function apiGetSync(){ return await Orland.api("/api/blogspot/sync_config"); }
   async function apiSaveSync(payload){
-    return await Orland.api("/api/blogspot/sync_config", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
+    return await Orland.api("/api/blogspot/sync_config", { method:"POST", body: JSON.stringify(payload) });
   }
   async function apiRunSync(){
-    return await Orland.api("/api/blogspot/sync_run", {
-      method:"POST",
-      body: JSON.stringify({})
-    });
+    return await Orland.api("/api/blogspot/sync_run", { method:"POST", body: JSON.stringify({}) });
   }
-  async function apiStatus(){
-    return await Orland.api("/api/blogspot/sync_status");
+  async function apiStatus(){ return await Orland.api("/api/blogspot/sync_status"); }
+  async function apiTest(){ return await Orland.api("/api/blogspot/posts?source=remote&maxResults=5"); }
+  async function apiGetOAuth(){ return await Orland.api("/api/config/blogspot_oauth"); }
+  async function apiSaveOAuth(payload){
+    return await Orland.api("/api/config/blogspot_oauth", { method:"POST", body: JSON.stringify(payload) });
   }
-  async function apiTest(){
-    return await Orland.api("/api/blogspot/posts?source=remote&maxResults=5");
-  }
+  async function apiStartOAuth(){ return await Orland.api("/api/blogspot/oauth_start"); }
 
   return {
     title:"Blogspot Settings",
@@ -37,7 +25,7 @@ export default function(Orland){
         <div class="space-y-4 max-w-6xl">
           <div>
             <div class="text-2xl font-extrabold">Blogspot Settings</div>
-            <div class="text-slate-500 mt-1">Read-only Blogger API + local CMS bundle + sync settings.</div>
+            <div class="text-slate-500 mt-1">Read-only API + OAuth Publisher Mode + sync settings.</div>
           </div>
 
           <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
@@ -70,8 +58,49 @@ export default function(Orland){
               </div>
 
               <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-                API Key hanya untuk read-only Blogger API. Write ke Blogger nanti butuh OAuth user auth.
+                API Key hanya untuk read-only Blogger API. Create / update / delete remote butuh OAuth 2.0.
               </div>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-xl font-extrabold">OAuth Publisher Mode</div>
+            <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <input id="oauth_enabled" type="checkbox">
+                <div>
+                  <div class="font-black">Enable OAuth 2.0</div>
+                  <div class="text-xs text-slate-500">Required for remote publish/update/delete</div>
+                </div>
+              </label>
+
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-xs text-slate-500 font-bold">CALLBACK URL</div>
+                <div id="oauth_callback" class="text-sm font-black mt-2 break-all">-</div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">Client ID</label>
+                <input id="oauth_client_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark" placeholder="Google OAuth client id">
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">Client Secret</label>
+                <input id="oauth_client_secret" type="password" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark" placeholder="Isi hanya saat update">
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">CLIENT ID</div><div id="oauth_client_id_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">CLIENT SECRET</div><div id="oauth_client_secret_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">REFRESH TOKEN</div><div id="oauth_refresh_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">ACCESS TOKEN</div><div id="oauth_access_state" class="text-sm font-black mt-2">-</div></div>
+            </div>
+
+            <div class="mt-5 flex gap-3 flex-wrap">
+              <button id="btnSaveOAuth" class="px-6 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black">Save OAuth Config</button>
+              <button id="btnConnectOAuth" class="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black">Connect Google</button>
+              <button id="btnClearOAuthToken" class="px-6 py-3 rounded-2xl border border-red-200 text-red-600 font-black">Clear Refresh Token</button>
             </div>
           </div>
 
@@ -80,18 +109,12 @@ export default function(Orland){
             <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
               <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
                 <input id="sync_enabled" type="checkbox">
-                <div>
-                  <div class="font-black">Enable Sync</div>
-                  <div class="text-xs text-slate-500">Aktifkan sync runner</div>
-                </div>
+                <div><div class="font-black">Enable Sync</div><div class="text-xs text-slate-500">Aktifkan sync runner</div></div>
               </label>
 
               <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
                 <input id="auto_sync_enabled" type="checkbox">
-                <div>
-                  <div class="font-black">Auto Sync</div>
-                  <div class="text-xs text-slate-500">Untuk cron / worker trigger</div>
-                </div>
+                <div><div class="font-black">Auto Sync</div><div class="text-xs text-slate-500">Untuk cron / worker trigger</div></div>
               </label>
 
               <div>
@@ -108,20 +131,9 @@ export default function(Orland){
                 </select>
               </div>
 
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_posts_enabled" type="checkbox">
-                <div><div class="font-black">Sync Posts</div></div>
-              </label>
-
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_pages_enabled" type="checkbox">
-                <div><div class="font-black">Sync Pages</div></div>
-              </label>
-
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_widgets_enabled" type="checkbox">
-                <div><div class="font-black">Sync Widgets</div></div>
-              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_posts_enabled" type="checkbox"><div><div class="font-black">Sync Posts</div></div></label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_pages_enabled" type="checkbox"><div><div class="font-black">Sync Pages</div></div></label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_widgets_enabled" type="checkbox"><div><div class="font-black">Sync Widgets</div></div></label>
 
               <div>
                 <label class="block text-sm font-bold text-slate-500 mb-2">Cron Driver</label>
@@ -160,15 +172,55 @@ export default function(Orland){
             <pre id="testResult" class="mt-4 text-xs whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">{}</pre>
           </div>
         </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       `;
 
       const q = (id)=>host.querySelector("#"+id);
+      let confirmAction = null;
+
+      function yesNo(v){ return v ? "configured" : "missing"; }
+
+      function openConfirm(title, desc, metaHtml, onOk, danger = true){
+        q("confirmTitle").textContent = title || "Confirm";
+        q("confirmDesc").textContent = desc || "";
+        q("confirmMeta").innerHTML = metaHtml || "-";
+        confirmAction = onOk;
+        q("btnConfirmOk").className = danger
+          ? "px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm"
+          : "px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-sm";
+        q("btnConfirmOk").textContent = danger ? "Confirm" : "Continue";
+        q("confirmBackdrop").classList.remove("hidden");
+      }
+
+      function closeConfirm(){
+        q("confirmBackdrop").classList.add("hidden");
+        q("confirmMeta").innerHTML = "";
+        confirmAction = null;
+      }
 
       async function loadData(){
-        const [cfg, sync, status] = await Promise.all([
+        const [cfg, sync, status, oauth] = await Promise.all([
           apiGet(),
           apiGetSync(),
-          apiStatus()
+          apiStatus(),
+          apiGetOAuth()
         ]);
 
         if(cfg.status !== "ok"){
@@ -193,6 +245,16 @@ export default function(Orland){
           q("sync_widgets_enabled").checked = s.sync_widgets_enabled !== "0";
           q("cron_driver").value = s.cron_driver || "cron_trigger";
           q("cron_endpoint").value = s.cron_endpoint || "";
+        }
+
+        if(oauth.status === "ok"){
+          const o = oauth.data || {};
+          q("oauth_enabled").checked = !!o.enabled;
+          q("oauth_callback").textContent = o.callback_url || "-";
+          q("oauth_client_id_state").textContent = yesNo(o.client_id_configured);
+          q("oauth_client_secret_state").textContent = yesNo(o.client_secret_configured);
+          q("oauth_refresh_state").textContent = yesNo(o.refresh_token_configured);
+          q("oauth_access_state").textContent = yesNo(o.access_token_configured);
         }
 
         q("statusBox").textContent = JSON.stringify(status, null, 2);
@@ -221,6 +283,71 @@ export default function(Orland){
         await loadData();
       };
 
+      q("btnSaveOAuth").onclick = async ()=>{
+        q("msg").className = "text-sm text-slate-500 mt-4";
+        q("msg").textContent = "Saving OAuth config...";
+        const r = await apiSaveOAuth({
+          enabled: q("oauth_enabled").checked,
+          client_id: q("oauth_client_id").value.trim(),
+          client_secret: q("oauth_client_secret").value.trim()
+        });
+        if(r.status !== "ok"){
+          q("msg").className = "text-sm text-red-500 mt-4";
+          q("msg").textContent = "Save OAuth failed: " + r.status;
+          return;
+        }
+        q("oauth_client_secret").value = "";
+        q("msg").className = "text-sm text-emerald-600 mt-4";
+        q("msg").textContent = "OAuth config saved.";
+        await loadData();
+      };
+
+      q("btnConnectOAuth").onclick = async ()=>{
+        q("msg").className = "text-sm text-slate-500 mt-4";
+        q("msg").textContent = "Generating Google OAuth URL...";
+        const r = await apiStartOAuth();
+        if(r.status !== "ok"){
+          q("msg").className = "text-sm text-red-500 mt-4";
+          q("msg").textContent = "OAuth start failed: " + r.status;
+          q("testResult").textContent = JSON.stringify(r, null, 2);
+          return;
+        }
+        const url = r.data?.authorize_url || "";
+        q("testResult").textContent = JSON.stringify(r, null, 2);
+        if(!url){
+          q("msg").className = "text-sm text-red-500 mt-4";
+          q("msg").textContent = "OAuth URL missing.";
+          return;
+        }
+        location.href = url;
+      };
+
+      q("btnClearOAuthToken").onclick = ()=>{
+        openConfirm(
+          "Clear Refresh Token",
+          "This action will remove saved OAuth refresh/access token.",
+          `<div class="font-black text-red-600">Blogspot OAuth token will be cleared</div><div class="text-xs text-slate-500 mt-2">You will need to connect Google again before remote publish/delete.</div>`,
+          async ()=>{
+            q("msg").className = "text-sm text-slate-500 mt-4";
+            q("msg").textContent = "Clearing refresh token...";
+            const r = await apiSaveOAuth({
+              enabled: q("oauth_enabled").checked,
+              clear_refresh_token: true
+            });
+            if(r.status !== "ok"){
+              q("msg").className = "text-sm text-red-500 mt-4";
+              q("msg").textContent = "Clear token failed: " + r.status;
+              return;
+            }
+            closeConfirm();
+            q("msg").className = "text-sm text-emerald-600 mt-4";
+            q("msg").textContent = "OAuth token cleared.";
+            await loadData();
+          },
+          true
+        );
+      };
+
       q("btnSaveSync").onclick = async ()=>{
         q("msg").className = "text-sm text-slate-500 mt-4";
         q("msg").textContent = "Saving sync config...";
@@ -245,11 +372,20 @@ export default function(Orland){
         await loadData();
       };
 
-      q("btnRunSync").onclick = async ()=>{
-        q("statusBox").textContent = "Running...";
-        const r = await apiRunSync();
-        q("statusBox").textContent = JSON.stringify(r, null, 2);
-        await loadData();
+      q("btnRunSync").onclick = ()=>{
+        openConfirm(
+          "Run Sync Now",
+          "This action will execute manual sync summary/runner.",
+          `<div class="font-black text-emerald-700">Manual sync execution</div><div class="text-xs text-slate-500 mt-2">Direction: ${q("sync_direction").value} • Interval: ${q("sync_interval_min").value || "15"} min</div>`,
+          async ()=>{
+            q("statusBox").textContent = "Running...";
+            const r = await apiRunSync();
+            q("statusBox").textContent = JSON.stringify(r, null, 2);
+            closeConfirm();
+            await loadData();
+          },
+          false
+        );
       };
 
       q("btnTest").onclick = async ()=>{
@@ -257,6 +393,10 @@ export default function(Orland){
         const r = await apiTest();
         q("testResult").textContent = JSON.stringify(r, null, 2);
       };
+
+      q("btnConfirmCancel").onclick = closeConfirm;
+      q("btnConfirmOk").onclick = async ()=>{ if(typeof confirmAction === "function") await confirmAction(); };
+      q("confirmBackdrop").addEventListener("click", (e)=>{ if(e.target === q("confirmBackdrop")) closeConfirm(); });
 
       await loadData();
     }

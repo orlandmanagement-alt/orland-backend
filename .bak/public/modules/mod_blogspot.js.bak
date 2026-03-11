@@ -3,28 +3,36 @@ export default function(Orland){
     title:"Blogspot CMS",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-4">
+        <div class="space-y-4 max-w-6xl">
           <div>
             <div class="text-xl font-extrabold text-slate-900 dark:text-white">Blogspot CMS</div>
             <div class="text-sm text-slate-500">Hub integrasi Blogger.</div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             <button id="goSettings" class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
               <div class="text-sm font-extrabold">API Settings</div>
-              <div class="text-[11px] text-slate-500 mt-1">Blog ID, API key, service account</div>
+              <div class="text-[11px] text-slate-500 mt-1">Blog ID, API key, OAuth, sync</div>
             </button>
+
             <button id="goPosts" class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
               <div class="text-sm font-extrabold">Manage Posts</div>
-              <div class="text-[11px] text-slate-500 mt-1">List post dari Blogger API</div>
+              <div class="text-[11px] text-slate-500 mt-1">Local CMS + remote publish</div>
             </button>
+
             <button id="goPages" class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
               <div class="text-sm font-extrabold">Static Pages</div>
-              <div class="text-[11px] text-slate-500 mt-1">List static pages</div>
+              <div class="text-[11px] text-slate-500 mt-1">Page builder + remote publish</div>
             </button>
+
             <button id="goWidgets" class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
               <div class="text-sm font-extrabold">Widgets / Home</div>
-              <div class="text-[11px] text-slate-500 mt-1">Home fallback</div>
+              <div class="text-[11px] text-slate-500 mt-1">Widget placeholder / home blocks</div>
+            </button>
+
+            <button id="goSync" class="bg-white dark:bg-darkLighter border border-slate-200 dark:border-darkBorder rounded-2xl p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+              <div class="text-sm font-extrabold">Sync Monitor</div>
+              <div class="text-[11px] text-slate-500 mt-1">Logs, state, latest runner activity</div>
             </button>
           </div>
         </div>
@@ -34,6 +42,7 @@ export default function(Orland){
       host.querySelector("#goPosts").onclick = ()=>Orland.navigate("/integrations/blogspot/posts");
       host.querySelector("#goPages").onclick = ()=>Orland.navigate("/integrations/blogspot/pages");
       host.querySelector("#goWidgets").onclick = ()=>Orland.navigate("/integrations/blogspot/widgets");
+      host.querySelector("#goSync").onclick = ()=>Orland.navigate("/integrations/blogspot/sync");
     }
   };
 }

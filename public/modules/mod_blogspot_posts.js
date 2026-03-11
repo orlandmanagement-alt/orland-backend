@@ -11,6 +11,24 @@ export default function(Orland){
       body: JSON.stringify(payload)
     });
   }
+  async function publishPost(id){
+    return await Orland.api("/api/blogspot/publish_post", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
+  async function deleteRemotePost(id){
+    return await Orland.api("/api/blogspot/delete_remote_post", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
+  async function refreshRemotePost(id){
+    return await Orland.api("/api/blogspot/refresh_remote_post", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
 
   const TEMPLATES = {
     article: `<div class="space-y-4">
@@ -37,13 +55,31 @@ export default function(Orland){
     return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">draft</span>`;
   }
 
+  function syncBadge(row){
+    const hasRemote = !!String(row.map_remote_id || row.external_id || "").trim();
+    if(hasRemote){
+      return `<span class="px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-black">remote linked</span>`;
+    }
+    return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">local only</span>`;
+  }
+
+  function dirtyBadge(row){
+    const dirty = Number(row.map_dirty || 0);
+    const deletedRemote = Number(row.map_deleted_remote || 0);
+
+    if(deletedRemote){
+      return `<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">remote deleted</span>`;
+    }
+    if(dirty){
+      return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">dirty</span>`;
+    }
+    return `<span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">synced</span>`;
+  }
+
   function fmtDate(v){
     if(!v) return "-";
-    try{
-      return new Date(v).toLocaleString("id-ID");
-    }catch{
-      return String(v);
-    }
+    try{ return new Date(v).toLocaleString("id-ID"); }
+    catch{ return String(v); }
   }
 
   function renderRemoteItems(items){
@@ -54,20 +90,12 @@ export default function(Orland){
     return items.map(x => `
       <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
         <div class="text-sm font-extrabold">${esc(x.title || "Untitled")}</div>
-
         <div class="mt-2 space-y-1 text-[11px] text-slate-500">
           <div><span class="font-bold">ID:</span> ${esc(x.id || "-")}</div>
           <div><span class="font-bold">Published:</span> ${esc(fmtDate(x.published))}</div>
           <div><span class="font-bold">Updated:</span> ${esc(fmtDate(x.updated))}</div>
         </div>
-
-        ${x.url ? `
-          <div class="mt-3">
-            <a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-primary break-all">
-              ${esc(x.url)}
-            </a>
-          </div>
-        ` : ""}
+        ${x.url ? `<div class="mt-3"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-primary break-all">${esc(x.url)}</a></div>` : ``}
       </div>
     `).join("");
   }
@@ -83,15 +111,9 @@ export default function(Orland){
               <div class="text-sm text-slate-500">Local CMS posts + remote Blogger preview.</div>
             </div>
             <div class="flex gap-2 flex-wrap">
-              <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
-                <i class="fa-solid fa-rotate mr-2"></i>Reload
-              </button>
-              <button id="btnRemote" class="px-4 py-3 rounded-2xl border border-amber-200 text-amber-700 font-black text-sm">
-                <i class="fa-solid fa-cloud-arrow-down mr-2"></i>Remote Preview
-              </button>
-              <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
-                <i class="fa-solid fa-plus mr-2"></i>New Post
-              </button>
+              <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm"><i class="fa-solid fa-rotate mr-2"></i>Reload</button>
+              <button id="btnRemote" class="px-4 py-3 rounded-2xl border border-amber-200 text-amber-700 font-black text-sm"><i class="fa-solid fa-cloud-arrow-down mr-2"></i>Remote Preview</button>
+              <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm"><i class="fa-solid fa-plus mr-2"></i>New Post</button>
             </div>
           </div>
 
@@ -133,11 +155,27 @@ export default function(Orland){
                   <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Post</div>
                   <div class="text-xs text-slate-500 mt-1">Create / edit post</div>
                 </div>
-                <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
+                <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder"><i class="fa-solid fa-xmark"></i></button>
               </div>
               <div id="modalBody" class="p-4 lg:p-5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -146,7 +184,7 @@ export default function(Orland){
       const q = (id)=>host.querySelector("#" + id);
       let ITEMS = [];
       let PAGE = 1;
-      const PAGE_SIZE = 8;
+      let confirmAction = null;
 
       function setMsg(kind, text){
         q("msg").className = "text-sm";
@@ -167,43 +205,103 @@ export default function(Orland){
         q("modalBody").innerHTML = "";
       }
 
-      function openDeleteModal(row){
-        openModal("Delete Post", `
-          <div class="space-y-4">
-            <div class="rounded-2xl border border-red-200 bg-red-50 p-4">
-              <div class="font-black text-red-600">Confirm delete</div>
-              <div class="text-sm text-slate-700 mt-2">
-                Post <span class="font-black">${esc(row.title || row.id)}</span> akan dihapus.
-              </div>
-              <div class="text-xs text-slate-500 mt-2">${esc(row.slug || "")}</div>
-            </div>
-            <div class="flex justify-end gap-2">
-              <button id="btnCancelDelete" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
-              <button id="btnConfirmDelete" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Delete</button>
-            </div>
-          </div>
-        `);
+      function openConfirm(title, desc, metaHtml, onOk, danger = true){
+        q("confirmTitle").textContent = title || "Confirm";
+        q("confirmDesc").textContent = desc || "";
+        q("confirmMeta").innerHTML = metaHtml || "-";
+        confirmAction = onOk;
+        q("btnConfirmOk").className = danger
+          ? "px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm"
+          : "px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-sm";
+        q("btnConfirmOk").textContent = danger ? "Confirm" : "Continue";
+        q("confirmBackdrop").classList.remove("hidden");
+      }
 
-        q("btnCancelDelete").onclick = closeModal;
-        q("btnConfirmDelete").onclick = async ()=>{
-          setMsg("muted", "Deleting...");
-          const r = await save({ action:"delete", id: row.id });
-          if(r.status !== "ok"){
-            setMsg("error", "Delete failed: " + r.status);
-            return;
-          }
-          closeModal();
-          setMsg("success", "Post deleted.");
-          await render();
-        };
+      function closeConfirm(){
+        q("confirmBackdrop").classList.add("hidden");
+        q("confirmMeta").innerHTML = "";
+        confirmAction = null;
+      }
+
+      function openDeleteLocal(row){
+        openConfirm(
+          "Delete Local Post",
+          "This action will remove the local post from D1.",
+          `<div class="font-black text-red-600">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.slug || "-")}</div>`,
+          async ()=>{
+            setMsg("muted", "Deleting...");
+            const r = await save({ action:"delete", id: row.id });
+            if(r.status !== "ok"){
+              setMsg("error", "Delete failed: " + r.status);
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Post deleted.");
+            await render();
+          },
+          true
+        );
+      }
+
+      function openDeleteRemote(row){
+        openConfirm(
+          "Delete Remote Blogger Post",
+          "This action will remove the post from Blogger remote.",
+          `<div class="font-black text-rose-700">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">Remote ID: ${esc(row.external_id || row.map_remote_id || "-")}</div>${row.url ? `<div class="text-xs text-slate-500 mt-1 break-all">${esc(row.url)}</div>` : ``}`,
+          async ()=>{
+            setMsg("muted", "Deleting remote Blogger post...");
+            const r = await deleteRemotePost(row.id);
+            if(r.status !== "ok"){
+              setMsg("error", "Remote delete failed: " + r.status);
+              q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Remote Blogger post deleted.");
+            await render();
+          },
+          true
+        );
+      }
+
+      function openPublishRemote(row){
+        openConfirm(
+          "Publish Post to Blogger",
+          "This action will create or update the remote Blogger post.",
+          `<div class="font-black text-emerald-700">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.slug || "-")}</div><div class="mt-3 flex gap-2 flex-wrap">${statusBadge(row.status)}${syncBadge(row)}${dirtyBadge(row)}</div>`,
+          async ()=>{
+            setMsg("muted", "Publishing to Blogger...");
+            const r = await publishPost(row.id);
+            if(r.status !== "ok"){
+              setMsg("error", "Publish failed: " + r.status);
+              q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Post published to Blogger.");
+            await render();
+          },
+          false
+        );
       }
 
       function formHtml(row = {}){
         const labels = Array.isArray(row.labels_json) ? row.labels_json.join(", ") : "";
+        const hasRemote = !!String(row.external_id || row.map_remote_id || "").trim();
+
         return `
           <form id="postForm" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div class="space-y-4">
               <input type="hidden" name="mode" value="${row.id ? "update" : "create"}">
+
+              <div class="flex flex-wrap gap-2">
+                ${statusBadge(row.status)}
+                ${syncBadge(row)}
+                ${dirtyBadge(row)}
+              </div>
 
               <div>
                 <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
@@ -234,6 +332,8 @@ export default function(Orland){
                 <input name="labels" value="${esc(labels)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="news, update, campaign">
               </div>
 
+              ${row.url ? `<div class="rounded-2xl border border-sky-200 bg-sky-50 p-4"><div class="text-xs font-black text-sky-700">REMOTE URL</div><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" class="mt-2 block text-sm font-bold text-primary break-all">${esc(row.url)}</a></div>` : ``}
+
               <div>
                 <div class="text-sm font-bold text-slate-500 mb-2">STARTER TEMPLATES</div>
                 <div class="flex flex-wrap gap-2">
@@ -245,6 +345,9 @@ export default function(Orland){
 
               <div class="flex gap-2 flex-wrap">
                 <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+                ${row.id ? `<button type="button" id="btnPublishPost" class="px-4 py-2.5 rounded-2xl border border-emerald-200 text-emerald-700 font-black text-sm">Publish to Blogger</button>` : ``}
+                ${hasRemote ? `<button type="button" id="btnRefreshRemotePost" class="px-4 py-2.5 rounded-2xl border border-sky-200 text-sky-700 font-black text-sm">Refresh Remote</button>` : ``}
+                ${hasRemote ? `<button type="button" id="btnDeleteRemotePost" class="px-4 py-2.5 rounded-2xl border border-rose-200 text-rose-700 font-black text-sm">Delete Remote</button>` : ``}
                 ${row.id ? `<button type="button" id="btnDeletePost" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>` : ``}
                 <button type="button" id="btnCancelPost" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
               </div>
@@ -278,10 +381,29 @@ export default function(Orland){
         htmlEl.addEventListener("input", renderPreview);
 
         q("btnCancelPost")?.addEventListener("click", closeModal);
+        q("btnDeletePost")?.addEventListener("click", ()=> openDeleteLocal(row));
+        q("btnDeleteRemotePost")?.addEventListener("click", ()=> openDeleteRemote(row));
+        q("btnPublishPost")?.addEventListener("click", ()=> openPublishRemote(row));
 
-        q("btnDeletePost")?.addEventListener("click", ()=>{
+        q("btnRefreshRemotePost")?.addEventListener("click", async ()=>{
+          if(!row.id){
+            setMsg("error", "Invalid post id.");
+            return;
+          }
+          setMsg("muted", "Refreshing remote Blogger post...");
+          const r = await refreshRemotePost(row.id);
+          if(r.status !== "ok"){
+            setMsg("error", "Remote refresh failed: " + r.status);
+            q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+            return;
+          }
           closeModal();
-          openDeleteModal(row);
+          if(r.data?.remote_deleted){
+            setMsg("success", "Remote post not found. Local map updated.");
+          }else{
+            setMsg("success", "Remote post refreshed.");
+          }
+          await render();
         });
 
         q("modalBody").querySelectorAll(".tplBtn").forEach(btn => {
@@ -294,7 +416,6 @@ export default function(Orland){
 
         form.addEventListener("submit", async (ev)=>{
           ev.preventDefault();
-
           const payload = {
             action: form.mode.value,
             id: form.id.value.trim(),
@@ -325,11 +446,10 @@ export default function(Orland){
 
       function filteredItems(){
         const qv = String(q("qSearch").value || "").trim().toLowerCase();
-        const rows = !qv ? ITEMS : ITEMS.filter(x => {
-          const hay = [x.title, x.slug, x.status].join(" ").toLowerCase();
+        return !qv ? ITEMS : ITEMS.filter(x => {
+          const hay = [x.title, x.slug, x.status, x.external_id ? "remote linked" : "local only"].join(" ").toLowerCase();
           return hay.includes(qv);
         });
-        return rows;
       }
 
       function pagedItems(rows){
@@ -337,10 +457,7 @@ export default function(Orland){
         if(PAGE > totalPages) PAGE = totalPages;
         if(PAGE < 1) PAGE = 1;
         const start = (PAGE - 1) * 8;
-        return {
-          totalPages,
-          items: rows.slice(start, start + 8)
-        };
+        return { totalPages, items: rows.slice(start, start + 8) };
       }
 
       function renderList(){
@@ -359,8 +476,12 @@ export default function(Orland){
               <div class="min-w-0">
                 <div class="text-base font-extrabold">${esc(x.title || "Untitled")}</div>
                 <div class="text-xs text-slate-500 mt-1">${esc(x.slug || "")}</div>
+                <div class="flex gap-2 flex-wrap mt-3">
+                  ${statusBadge(x.status)}
+                  ${syncBadge(x)}
+                  ${dirtyBadge(x)}
+                </div>
               </div>
-              <div>${statusBadge(x.status)}</div>
             </div>
           </button>
         `).join("");
@@ -397,11 +518,7 @@ export default function(Orland){
       q("qSearch").oninput = ()=>{ PAGE = 1; renderList(); };
       q("btnPrev").onclick = ()=>{ PAGE--; renderList(); };
       q("btnNext").onclick = ()=>{ PAGE++; renderList(); };
-
-      q("btnNew").onclick = ()=>{
-        openModal("Create Post", formHtml({}));
-        bindModal({});
-      };
+      q("btnNew").onclick = ()=>{ openModal("Create Post", formHtml({})); bindModal({}); };
 
       q("btnRemote").onclick = async ()=>{
         q("remoteBox").innerHTML = `<div class="text-sm text-slate-500">Loading remote posts...</div>`;
@@ -420,9 +537,10 @@ export default function(Orland){
       };
 
       q("btnModalClose").onclick = closeModal;
-      q("modalBackdrop").addEventListener("click", (e)=>{
-        if(e.target === q("modalBackdrop")) closeModal();
-      });
+      q("modalBackdrop").addEventListener("click", (e)=>{ if(e.target === q("modalBackdrop")) closeModal(); });
+      q("btnConfirmCancel").onclick = closeConfirm;
+      q("btnConfirmOk").onclick = async ()=>{ if(typeof confirmAction === "function") await confirmAction(); };
+      q("confirmBackdrop").addEventListener("click", (e)=>{ if(e.target === q("confirmBackdrop")) closeConfirm(); });
 
       await render();
     }

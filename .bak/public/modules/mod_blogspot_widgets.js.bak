@@ -7,10 +7,56 @@ export default function(Orland){
 
   const SECTIONS = ["dashboard","home","hero","sidebar","footer","main"];
 
+  const TEMPLATES = {
+    announcement: `<div class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+  <div class="text-lg font-bold text-sky-700">Announcement</div>
+  <div class="text-sm text-slate-600 mt-2">Tulis pengumuman penting di sini.</div>
+</div>`,
+    hero: `<div class="rounded-3xl border border-slate-200 bg-white p-6">
+  <div class="text-2xl font-extrabold">Welcome to ORLAND</div>
+  <div class="text-sm text-slate-500 mt-2">Enterprise operations dashboard starter hero block.</div>
+  <div class="mt-4">
+    <a href="/integrations/blogspot" class="inline-flex px-4 py-2 rounded-2xl bg-primary text-white font-bold">Open Blogspot CMS</a>
+  </div>
+</div>`,
+    cards: `<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 1</div>
+    <div class="text-lg font-extrabold mt-2">Value A</div>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 2</div>
+    <div class="text-lg font-extrabold mt-2">Value B</div>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="text-xs text-slate-500 font-bold">CARD 3</div>
+    <div class="text-lg font-extrabold mt-2">Value C</div>
+  </div>
+</div>`,
+    cta: `<div class="rounded-3xl bg-slate-900 text-white p-6">
+  <div class="text-xl font-extrabold">Need attention?</div>
+  <div class="text-sm text-slate-300 mt-2">Gunakan block ini untuk call to action.</div>
+  <div class="mt-4">
+    <a href="/ops/incidents" class="inline-flex px-4 py-2 rounded-2xl bg-white text-slate-900 font-bold">Open Incidents</a>
+  </div>
+</div>`
+  };
+
   function sectionOptions(selected="main"){
     return SECTIONS.map(x => `
       <option value="${esc(x)}" ${String(selected) === String(x) ? "selected" : ""}>${esc(x)}</option>
     `).join("");
+  }
+
+  function templateButtons(prefix){
+    return `
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="announcement">Announcement</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="hero">Hero</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="cards">Info Cards</button>
+        <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-target="${esc(prefix)}" data-template="cta">CTA Banner</button>
+      </div>
+    `;
   }
 
   return {
@@ -42,6 +88,12 @@ export default function(Orland){
                 <select id="wid_section" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm">
                   ${sectionOptions("main")}
                 </select>
+
+                <div>
+                  <div class="text-xs font-black text-slate-500 mb-2">STARTER TEMPLATES</div>
+                  ${templateButtons("widget")}
+                </div>
+
                 <textarea id="wid_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='hero'>Custom HTML</div>"></textarea>
 
                 <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
@@ -66,6 +118,12 @@ export default function(Orland){
                 </select>
                 <input id="blk_title" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="title">
                 <input id="blk_sort" type="number" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm" placeholder="sort order">
+
+                <div>
+                  <div class="text-xs font-black text-slate-500 mb-2">STARTER TEMPLATES</div>
+                  ${templateButtons("block")}
+                </div>
+
                 <textarea id="blk_html" rows="10" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-black/20 text-sm font-mono" placeholder="<div class='home-block'>HTML block</div>"></textarea>
 
                 <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
@@ -201,6 +259,23 @@ export default function(Orland){
         });
       }
 
+      function bindTemplateButtons(){
+        host.querySelectorAll(".tplBtn").forEach(btn => {
+          btn.addEventListener("click", ()=>{
+            const target = btn.getAttribute("data-target");
+            const tpl = btn.getAttribute("data-template");
+            const html = TEMPLATES[tpl] || "";
+            if(target === "widget"){
+              q("wid_html").value = html;
+              renderWidgetPreview();
+            }else{
+              q("blk_html").value = html;
+              renderBlockPreview();
+            }
+          });
+        });
+      }
+
       async function render(){
         const r = await load();
         if(r.status !== "ok"){
@@ -297,6 +372,7 @@ export default function(Orland){
 
       fillWidget({});
       fillBlock({});
+      bindTemplateButtons();
       await render();
     }
   };

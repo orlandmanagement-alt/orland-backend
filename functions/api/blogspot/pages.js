@@ -25,16 +25,32 @@ export async function onRequestGet({ request, env }){
 
   const cfg = await getBlogspotConfig(env);
   const rows = await env.DB.prepare(`
-    SELECT id, provider, account_id, external_id, blog_id, title, slug, status, url,
-           content_html, meta_json, published_at, updated_at, created_at
-    FROM cms_pages
-    WHERE provider = 'blogspot'
-    ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC
+    SELECT
+      p.id, p.provider, p.account_id, p.external_id, p.blog_id, p.title, p.slug, p.status, p.url,
+      p.content_html, p.meta_json, p.published_at, p.updated_at, p.created_at,
+      m.remote_id AS map_remote_id,
+      m.remote_updated AS map_remote_updated,
+      m.last_synced_at AS map_last_synced_at,
+      m.last_pushed_at AS map_last_pushed_at,
+      m.dirty AS map_dirty,
+      m.deleted_local AS map_deleted_local,
+      m.deleted_remote AS map_deleted_remote
+    FROM cms_pages p
+    LEFT JOIN blogspot_post_map m
+      ON m.local_id = p.id
+     AND m.kind = 'page'
+    WHERE p.provider = 'blogspot'
+    ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.created_at DESC
   `).all();
 
   const items = (rows.results || []).map(x => ({
     ...x,
-    meta_json: safeJsonParse(x.meta_json, {})
+    meta_json: safeJsonParse(x.meta_json, {}),
+    map_dirty: Number(x.map_dirty || 0),
+    map_deleted_local: Number(x.map_deleted_local || 0),
+    map_deleted_remote: Number(x.map_deleted_remote || 0),
+    map_last_synced_at: Number(x.map_last_synced_at || 0),
+    map_last_pushed_at: Number(x.map_last_pushed_at || 0)
   }));
 
   return json(200, "ok", {
@@ -141,6 +157,7 @@ export async function onRequestPost({ request, env }){
     slug,
     dirty: 1,
     deleted_local: 0,
+    deleted_remote: 0,
     action: mode,
     message: "local page changed"
   });
