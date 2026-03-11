@@ -89,11 +89,11 @@ export default function(Orland){
     async mount(host){
       host.innerHTML = `
         <div class="space-y-4">
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4 lg:p-5 max-w-6xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4 lg:p-5 max-w-5xl">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div class="text-xl lg:text-2xl font-extrabold">Menu Builder</div>
-                <div class="text-slate-500 mt-1 text-sm">Manage menu, urutan, parent-child, dan role menus.</div>
+                <div class="text-slate-500 mt-1 text-sm">Manage menu, sort, parent-child, dan role menus.</div>
               </div>
               <div class="flex gap-2 flex-wrap">
                 <button id="btnReload" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
@@ -107,7 +107,7 @@ export default function(Orland){
 
             <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
-                <div class="text-[11px] font-bold text-slate-500">TOTAL MENUS</div>
+                <div class="text-[11px] font-bold text-slate-500">TOTAL</div>
                 <div id="statTotal" class="text-xl font-extrabold mt-1">0</div>
               </div>
               <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
@@ -125,7 +125,7 @@ export default function(Orland){
             </div>
 
             <div class="mt-4 flex flex-col lg:flex-row gap-3">
-              <input id="qSearch" class="w-full lg:max-w-sm px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Search label / code / path / id">
+              <input id="qSearch" class="w-full lg:max-w-sm px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Search label / path / role">
               <select id="filterKind" class="w-full lg:w-48 px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
                 <option value="all">All menus</option>
                 <option value="root">Root only</option>
@@ -136,24 +136,23 @@ export default function(Orland){
             <div id="msg" class="mt-4 text-sm text-slate-500"></div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-3 lg:p-4 max-w-6xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-3 lg:p-4 max-w-5xl">
             <div id="listWrap" class="space-y-2"></div>
           </div>
         </div>
 
         <div id="modalBackdrop" class="hidden fixed inset-0 z-[100] bg-black/50 p-3 lg:p-6 overflow-auto">
           <div class="min-h-full flex items-start lg:items-center justify-center">
-            <div id="modalCard" class="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+            <div class="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
               <div class="px-4 lg:px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
                 <div>
                   <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Menu</div>
-                  <div id="modalSub" class="text-xs text-slate-500 mt-1">Create / edit menu</div>
+                  <div id="modalSub" class="text-xs text-slate-500 mt-1">Create / edit / delete menu</div>
                 </div>
                 <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder">
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
-
               <div id="modalBody" class="p-4 lg:p-5"></div>
             </div>
           </div>
@@ -166,6 +165,7 @@ export default function(Orland){
       let MENUS = [];
       let TREE = [];
       let FLAT = [];
+      let BY_ID = new Map();
 
       function setMsg(kind, text){
         const el = q("msg");
@@ -220,16 +220,20 @@ export default function(Orland){
                 <button type="button" id="btnRolesNone" class="px-3 py-2 rounded-2xl border border-slate-200 dark:border-darkBorder text-xs font-bold">Uncheck all</button>
               </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
-              ${ROLES.map(r => `
-                <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-3 py-3">
-                  <input type="checkbox" name="roles" value="${esc(r.name)}" ${picked.has(r.name) ? "checked" : ""}>
-                  <div class="min-w-0">
-                    <div class="font-black text-sm">${esc(r.name)}</div>
-                    <div class="text-[11px] text-slate-500 truncate">${esc(r.id)}</div>
-                  </div>
-                </label>
-              `).join("")}
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-auto">
+                ${ROLES.length ? ROLES.map(r => `
+                  <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder px-3 py-3">
+                    <input type="checkbox" name="roles" value="${esc(r.name)}" ${picked.has(r.name) ? "checked" : ""}>
+                    <div class="min-w-0">
+                      <div class="font-black text-sm">${esc(r.name)}</div>
+                    </div>
+                  </label>
+                `).join("") : `
+                  <div class="text-sm text-slate-500">No roles available.</div>
+                `}
+              </div>
             </div>
           </div>
         `;
@@ -243,18 +247,22 @@ export default function(Orland){
 
       function bindRoleCheckButtons(){
         q("btnRolesAll")?.addEventListener("click", ()=>{
-          q("modalBody").querySelectorAll('input[name="roles"]').forEach(el => el.checked = true);
+          q("modalBody").querySelectorAll('input[name="roles"]').forEach(el => {
+            el.checked = true;
+          });
         });
 
         q("btnRolesNone")?.addEventListener("click", ()=>{
-          q("modalBody").querySelectorAll('input[name="roles"]').forEach(el => el.checked = false);
+          q("modalBody").querySelectorAll('input[name="roles"]').forEach(el => {
+            el.checked = false;
+          });
         });
       }
 
       function showCreateModal(){
         openModal(
           "Create Menu",
-          "Buat menu baru dan set role menus",
+          "Buat menu baru dan pilih role menus",
           `
             <form id="menuForm" class="space-y-4">
               <input type="hidden" name="mode" value="create">
@@ -266,7 +274,7 @@ export default function(Orland){
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
-                  <input name="code" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="menu_builder">
+                  <input name="code" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="menus">
                 </div>
               </div>
 
@@ -277,7 +285,7 @@ export default function(Orland){
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
-                  <input name="path" value="/" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/menu-builder">
+                  <input name="path" value="/" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/menus">
                 </div>
               </div>
 
@@ -294,7 +302,7 @@ export default function(Orland){
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
-                  <input name="icon" value="fa-solid fa-circle-dot" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
+                  <input name="icon" value="fa-solid fa-circle-dot" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
                 </div>
               </div>
 
@@ -317,7 +325,7 @@ export default function(Orland){
       function showEditModal(row){
         openModal(
           "Edit Menu",
-          "Edit menu, urutan, parent, dan role menus",
+          "Edit menu dan role menus sesuai database",
           `
             <form id="menuForm" class="space-y-4">
               <input type="hidden" name="mode" value="update">
@@ -387,9 +395,6 @@ export default function(Orland){
                 <div class="font-black text-red-600">Confirm delete</div>
                 <div class="text-sm text-slate-600 dark:text-slate-300 mt-2">
                   Menu <span class="font-black">${esc(row.label || row.id)}</span> akan dihapus.
-                </div>
-                <div class="text-xs text-slate-500 mt-2 break-all">
-                  ${esc(row.code || "-")} • ${esc(row.id || "-")} • ${esc(row.path || "/")}
                 </div>
               </div>
 
@@ -504,6 +509,14 @@ export default function(Orland){
         await load();
       }
 
+      function roleBadgeLine(roleNames){
+        const names = Array.isArray(roleNames) ? roleNames : [];
+        if(!names.length){
+          return `<div class="text-[11px] text-slate-400">[no roles]</div>`;
+        }
+        return `<div class="text-[11px] lg:text-xs text-slate-500 mt-2">[${esc(names.join(", "))}]</div>`;
+      }
+
       function filteredRows(){
         const keyword = String(q("qSearch").value || "").trim().toLowerCase();
         const kind = String(q("filterKind").value || "all");
@@ -514,13 +527,12 @@ export default function(Orland){
 
           if(!keyword) return true;
 
+          const parentLabel = row.parent_id ? (BY_ID.get(String(row.parent_id))?.label || "") : "";
           const hay = [
-            row.id,
-            row.code,
             row.label,
             row.path,
-            row.parent_id,
-            ...(row.role_names || [])
+            ...(row.role_names || []),
+            parentLabel
           ].join(" ").toLowerCase();
 
           return hay.includes(keyword);
@@ -535,60 +547,66 @@ export default function(Orland){
           return;
         }
 
-        q("listWrap").innerHTML = rows.map(row => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
-            <div class="flex items-start gap-3">
-              <div class="pt-1 text-slate-400">
-                <i class="${esc(row.icon || "fa-solid fa-circle-dot")}"></i>
-              </div>
+        q("listWrap").innerHTML = rows.map(row => {
+          const parentLabel = row.parent_id ? (BY_ID.get(String(row.parent_id))?.label || row.parent_id) : "";
+          const title = row._depth > 0 ? `${"— ".repeat(row._depth)}${row.label}` : row.label;
 
-              <div class="min-w-0 flex-1">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="font-black text-sm lg:text-base">${esc("— ".repeat(row._depth) + row.label)}</div>
-                    <div class="text-[11px] lg:text-xs text-slate-500 mt-1 break-all">
-                      ${esc(row.code)} • ${esc(row.id)}
-                    </div>
-                    <div class="text-[11px] lg:text-xs text-slate-500 mt-1 break-all">
-                      ${esc(row.path || "/")} ${row.parent_id ? "• parent " + esc(row.parent_id) : "• root"}
-                    </div>
-                    <div class="flex flex-wrap gap-1.5 mt-2">
-                      ${(row.role_names || []).map(name => `
-                        <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-black/20 text-[10px] font-bold">${esc(name)}</span>
-                      `).join("") || `<span class="text-[11px] text-slate-400">No roles</span>`}
-                    </div>
-                  </div>
+          return `
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+              <div class="flex items-start gap-3">
+                <div class="pt-1 text-slate-400">
+                  <i class="${esc(row.icon || "fa-solid fa-circle-dot")}"></i>
+                </div>
 
-                  <div class="shrink-0 flex flex-col items-end gap-2">
-                    <div class="flex items-center gap-1.5">
-                      <input
-                        class="sortInput w-16 px-2 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-center text-xs font-black"
-                        type="number"
-                        value="${esc(row.sort_order)}"
-                        data-id="${esc(row.id)}"
-                      >
-                      <button class="btnMove px-2.5 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs" data-dir="up" data-id="${esc(row.id)}" title="Move up">
-                        <i class="fa-solid fa-arrow-up"></i>
-                      </button>
-                      <button class="btnMove px-2.5 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs" data-dir="down" data-id="${esc(row.id)}" title="Move down">
-                        <i class="fa-solid fa-arrow-down"></i>
-                      </button>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="font-black text-sm lg:text-base">${esc(title)}</div>
+
+                      ${row._depth > 0 ? `
+                        <div class="text-[11px] lg:text-xs text-slate-500 mt-1">
+                          Parent [${esc(parentLabel)}]
+                        </div>
+                      ` : ""}
+
+                      ${row.path && row.path !== "/" ? `
+                        <div class="text-[11px] lg:text-xs text-slate-500 mt-1 break-all">${esc(row.path)}</div>
+                      ` : ""}
+
+                      ${roleBadgeLine(row.role_names)}
                     </div>
 
-                    <div class="flex items-center gap-1.5">
-                      <button class="btnEdit w-10 h-10 rounded-xl border border-slate-200 dark:border-darkBorder" data-id="${esc(row.id)}" title="Edit">
-                        <i class="fa-solid fa-pen"></i>
-                      </button>
-                      <button class="btnDelete w-10 h-10 rounded-xl border border-red-200 text-red-600" data-id="${esc(row.id)}" title="Delete">
-                        <i class="fa-solid fa-trash"></i>
-                      </button>
+                    <div class="shrink-0 flex flex-col items-end gap-2">
+                      <div class="flex items-center gap-1.5">
+                        <input
+                          class="sortInput w-16 px-2 py-2 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-center text-xs font-black"
+                          type="number"
+                          value="${esc(row.sort_order)}"
+                          data-id="${esc(row.id)}"
+                        >
+                        <button class="btnMove px-2.5 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs" data-dir="up" data-id="${esc(row.id)}" title="Move up">
+                          <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                        <button class="btnMove px-2.5 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs" data-dir="down" data-id="${esc(row.id)}" title="Move down">
+                          <i class="fa-solid fa-arrow-down"></i>
+                        </button>
+                      </div>
+
+                      <div class="flex items-center gap-1.5">
+                        <button class="btnEdit w-10 h-10 rounded-xl border border-slate-200 dark:border-darkBorder" data-id="${esc(row.id)}" title="Edit">
+                          <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btnDelete w-10 h-10 rounded-xl border border-red-200 text-red-600" data-id="${esc(row.id)}" title="Delete">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        `).join("");
+          `;
+        }).join("");
 
         q("listWrap").querySelectorAll(".btnEdit").forEach(btn => {
           btn.addEventListener("click", ()=>{
@@ -659,6 +677,7 @@ export default function(Orland){
         MENUS = Array.isArray(r.data?.menus) ? r.data.menus.slice().sort(bySort) : [];
         TREE = buildTree(MENUS);
         FLAT = flattenTree(TREE, 0, []);
+        BY_ID = new Map(MENUS.map(x => [String(x.id), x]));
 
         renderStats();
         renderRows();
