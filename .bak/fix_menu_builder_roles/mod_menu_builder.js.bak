@@ -12,27 +12,6 @@ export default function(Orland){
     });
   }
 
-  const FALLBACK_ROLES = [
-    { id: "role_super_admin", name: "super_admin" },
-    { id: "role_admin", name: "admin" },
-    { id: "role_staff", name: "staff" },
-    { id: "role_client", name: "client" },
-    { id: "role_talent", name: "talent" }
-  ];
-
-  function normalizeRoles(items){
-    const rows = Array.isArray(items) ? items : [];
-    const out = rows
-      .map(r => ({
-        id: String(r?.id || "").trim(),
-        name: String(r?.name || r?.label || "").trim()
-      }))
-      .filter(r => r.id && r.name);
-
-    if(out.length) return out;
-    return FALLBACK_ROLES.slice();
-  }
-
   function bySort(a, b){
     const sa = Number(a.sort_order ?? 9999);
     const sb = Number(b.sort_order ?? 9999);
@@ -362,12 +341,12 @@ export default function(Orland){
                     <button type="button" id="btnRoleNone" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Uncheck all</button>
                   </div>
                   <div id="roleChecks" class="space-y-2">
-                    ${ROLES.length ? ROLES.map(r => `
+                    ${ROLES.map(r => `
                       <label class="flex items-center gap-3 text-sm">
                         <input class="roleCheck" type="checkbox" value="${esc(r.id)}" ${row.id ? (selectedRoleIds.has(String(r.id)) ? "checked" : "") : "checked"}>
                         <span class="font-semibold">${esc(r.name)}</span>
                       </label>
-                    `).join("") : `<div class="text-sm text-slate-500">No roles available.</div>`}
+                    `).join("")}
                   </div>
                 </div>
               </div>
@@ -430,16 +409,10 @@ export default function(Orland){
         }
 
         MENUS = Array.isArray(r.data?.menus) ? r.data.menus : [];
-        ROLES = normalizeRoles(r.data?.roles);
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
 
         renderRoleFilter();
         renderList();
-
-        if(!ROLES.length){
-          setMsg(host, "#msg", "error", "Roles not loaded.");
-          return;
-        }
-
         setMsg(host, "#msg", "success", "Loaded.");
       }
 
