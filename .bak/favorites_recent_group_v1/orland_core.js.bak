@@ -5,17 +5,6 @@ import {
   bindSidebarGroupToggle
 } from "./group_key_sidebar.js";
 
-import {
-  getFavorites,
-  toggleFavorite,
-  isFavorite,
-  addRecent,
-  getRecent,
-  clearRecent,
-  groupSavedItems,
-  renderSavedGroupedSection
-} from "./group_key_favorites.js";
-
 function qs(id){ return document.getElementById(id); }
 
 async function api(path, opt = {}) {
@@ -260,76 +249,6 @@ function renderLegacyFallbackNav(activePath){
   mkGroup("nav-config", m.config, activePath);
 }
 
-function currentNavItem(path){
-  const p = String(path || "").trim();
-  const allItems = Array.isArray(window.Orland.state.nav?.items) ? window.Orland.state.nav.items : [];
-  return allItems.find(x => String(x.path || "") === p) || null;
-}
-
-function bindFavRecentSection(root){
-  root.querySelectorAll(".favRecentItem").forEach(el => {
-    el.addEventListener("click", ()=>{
-      const path = String(el.getAttribute("data-path") || "").trim();
-      if(path) window.Orland.navigate(path);
-    });
-  });
-
-  root.querySelectorAll(".favToggleBtn").forEach(btn => {
-    btn.addEventListener("click", ()=>{
-      const path = String(btn.getAttribute("data-path") || "").trim();
-      const item = currentNavItem(path);
-      if(!item) return;
-      toggleFavorite(item);
-      window.Orland.renderNav(window.Orland.state.path);
-    });
-  });
-
-  root.querySelectorAll(".groupedNavFavBtn").forEach(btn => {
-    btn.addEventListener("click", (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      const path = String(btn.getAttribute("data-path") || "").trim();
-      const item = currentNavItem(path);
-      if(!item) return;
-      toggleFavorite(item);
-      window.Orland.renderNav(window.Orland.state.path);
-    });
-  });
-
-  root.querySelectorAll(".btnClearRecent").forEach(btn => {
-    btn.addEventListener("click", ()=>{
-      clearRecent();
-      window.Orland.renderNav(window.Orland.state.path);
-    });
-  });
-}
-
-function renderFavoriteRecentBlocks(target){
-  const favorites = groupSavedItems(getFavorites());
-  const recent = groupSavedItems(getRecent());
-
-  return `
-    <div class="space-y-3 mb-4">
-      ${renderSavedGroupedSection({
-        title: "Favorites",
-        sections: favorites,
-        emptyText: "No favorites yet.",
-        itemClass: "favRecentItem",
-        actionLabel: "saved"
-      })}
-      ${renderSavedGroupedSection({
-        title: "Recent",
-        sections: recent,
-        emptyText: "No recent access yet.",
-        itemClass: "favRecentItem",
-        actionLabel: "recent",
-        showClear: true,
-        clearId: "btnClearRecent"
-      })}
-    </div>
-  `;
-}
-
 function renderGroupedNav(activePath){
   const allItems = Array.isArray(window.Orland.state.nav?.items)
     ? window.Orland.state.nav.items
@@ -356,38 +275,12 @@ function renderGroupedNav(activePath){
     ));
   }
 
-  const sidebarHtml = renderGroupedSidebarHtml({
+  navCore.innerHTML = renderGroupedSidebarHtml({
     items: allItems,
     currentPath,
     expandedGroups: window.Orland.state.sidebarGroupsExpanded,
     onPathPrefix: ""
   });
-
-  const activeItem = currentNavItem(currentPath);
-  const favBar = activeItem ? `
-    <div class="mb-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-3">
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[11px] font-black uppercase tracking-wide text-slate-500">Current</div>
-          <div class="text-xs font-semibold truncate mt-1">${activeItem.label}</div>
-          <div class="text-[10px] text-slate-500 mt-1 truncate">${activeItem.path}</div>
-        </div>
-        <button
-          type="button"
-          class="groupedNavFavBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black"
-          data-path="${activeItem.path}"
-        >
-          ${isFavorite(activeItem.path) ? "Unfavorite" : "Favorite"}
-        </button>
-      </div>
-    </div>
-  ` : "";
-
-  navCore.innerHTML = `
-    ${favBar}
-    ${renderFavoriteRecentBlocks(navCore)}
-    <div class="space-y-3">${sidebarHtml}</div>
-  `;
 
   bindSidebarGroupToggle(
     navCore,
@@ -399,16 +292,12 @@ function renderGroupedNav(activePath){
   );
 
   navCore.querySelectorAll("[data-path]").forEach(el => {
-    if(el.classList.contains("favRecentItem")) return;
-    if(el.classList.contains("groupedNavFavBtn")) return;
     el.addEventListener("click", (e)=>{
       e.preventDefault();
       const path = String(el.getAttribute("data-path") || "").trim() || "/dashboard";
       window.Orland.navigate(path);
     });
   });
-
-  bindFavRecentSection(navCore);
 }
 
 window.Orland = {
@@ -487,9 +376,6 @@ window.Orland = {
     }
 
     this.state.path = p;
-
-    const navItem = currentNavItem(p);
-    if(navItem) addRecent(navItem);
 
     if(replace) history.replaceState({}, "", p);
     else history.pushState({}, "", p);

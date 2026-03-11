@@ -1,0 +1,220 @@
+import { json, readJson, requireAuth, hasRole, nowSec } from "../_lib.js";
+
+const GROUP_ORDER = [
+  "dashboard",
+  "access",
+  "users",
+  "security",
+  "content",
+  "ops",
+  "data",
+  "settings",
+  "audit"
+];
+
+const ALLOWED_GROUP_KEYS = new Set(GROUP_ORDER);
+
+function normalizeGroupKey(v){
+  const x = String(v || "").trim().toLowerCase();
+  return ALLOWED_GROUP_KEYS.has(x) ? x : "settings";
+}
+
+function safeJsonArray(v){
+  if(Array.isArray(v)) return v;
+  if(v == null || v === "") return [];
+  try{
+    const x = JSON.parse(String(v));
+    return Array.isArray(x) ? x : [];
+  }catch{
+    return [];
+  }
+}
+
+async function listRoles(env){
+  const r = await env.DB.prepare(`
+    SELECT
+      r.id,
+      r.name,
+      r.description,
+      r.created_at,
+      COALESCE((
+        SELECT COUNT(1)
+        FROM role_menus rm
+        WHERE rm.role_id = r.id
+      ), 0) AS menu_usage_count,
+      COALESCE((
+        SELECT json_group_array(json_object(
+          'id', m.id,
+          'code', m.code,
+          'label', m.label,
+          'path', m.path,
+          'group_key', COALESCE(NULLIF(TRIM(LOWER(m.group_key)), ''), 'settings')
+        ))
+        FROM (
+          SELECT
+            m.id,
+            m.code,
+            m.label,
+            m.path,
+            m.group_key
+          FROM role_menus rm
+          JOIN menus m ON m.id = rm.menu_id
+          WHERE rm.role_id = r.id
+          ORDER BY m.sort_order ASC, m.created_at ASC
+        ) m
+      ), '[]') AS menu_usage_items_json
+    FROM roles r
+    ORDER BY r.name ASC
+  `).all();
+
+  return (r.results || []).map(row => {
+    const usageItems = safeJsonArray(row.menu_usage_items_json).map(x => ({
+      id: String(x?.id || ""),
+      code: String(x?.code || ""),
+      label: String(x?.label || ""),
+      path: String(x?.path || ""),
+      group_key: normalizeGroupKey(x?.group_key)
+    }));
+
+    const byGroup = new Map();
+    for(const key of GROUP_ORDER) byGroup.set(key, 0);
+    for(const item of usageItems){
+      const key = normalizeGroupKey(item.group_key);
+      byGroup.set(key, Number(byGroup.get(key) || 0) + 1);
+    }
+
+    const group_usage_summary = GROUP_ORDER
+      .map(group_key => ({
+        group_key,
+        count: Number(byGroup.get(group_key) || 0)
+      }))
+      .filter(x => x.count > 0);
+
+    return {
+      id: String(row.id || ""),
+      name: String(row.name || ""),
+      description: String(row.description || ""),
+      created_at: Number(row.created_at ?? 0),
+      menu_usage_count: Number(row.menu_usage_count ?? 0),
+      menu_usage_items: usageItems,
+      group_usage_summary
+    };
+  });
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  if(!hasRole(a.roles, ["super_admin", "admin"])){
+    return json(403, "forbidden", null);
+  }
+
+  const items = await listRoles(env);
+  return json(200, "ok", { items });
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  if(!hasRole(a.roles, ["super_admin", "admin"])){
+    return json(403, "forbidden", null);
+  }
+
+  const body = await readJson(request) || {};
+  const action = String(body.action || "").trim().toLowerCase();
+  const id = String(body.id || "").trim();
+  const name = String(body.name || "").trim();
+  const description = String(body.description || "").trim();
+  const now = nowSec();
+
+  if(!["create", "update", "delete"].includes(action)){
+    return json(400, "invalid_input", { message:"invalid_action" });
+  }
+
+  if(action === "delete"){
+    if(!id){
+      return json(400, "invalid_input", { message:"id_required" });
+    }
+
+    if(["super_admin","admin","staff","client","talent"].includes(id)){
+      return json(400, "invalid_input", { message:"protected_role" });
+    }
+
+    const inUse = await env.DB.prepare(`
+      SELECT COUNT(1) AS c
+      FROM role_menus
+      WHERE role_id=?
+    `).bind(id).first();
+
+    const usageCount = Number(inUse?.c || 0);
+    if(usageCount > 0){
+      return json(400, "invalid_input", {
+        message:"role_in_use_by_menus",
+        menu_usage_count: usageCount
+      });
+    }
+
+    await env.DB.prepare(`DELETE FROM roles WHERE id=?`).bind(id).run();
+    return json(200, "ok", { deleted:true, id });
+  }
+
+  if(!id || !name){
+    return json(400, "invalid_input", { message:"id_name_required" });
+  }
+
+  if(action === "create"){
+    const exists = await env.DB.prepare(`
+      SELECT id
+      FROM roles
+      WHERE id=? OR name=?
+      LIMIT 1
+    `).bind(id, name).first();
+
+    if(exists){
+      return json(400, "invalid_input", { message:"role_id_or_name_exists" });
+    }
+
+    await env.DB.prepare(`
+      INSERT INTO roles (id, name, description, created_at)
+      VALUES (?, ?, ?, ?)
+    `).bind(id, name, description || null, now).run();
+
+    return json(200, "ok", { created:true, id });
+  }
+
+  const exists = await env.DB.prepare(`
+    SELECT id
+    FROM roles
+    WHERE id=?
+    LIMIT 1
+  `).bind(id).first();
+
+  if(!exists){
+    return json(404, "not_found", { message:"role_not_found" });
+  }
+
+  const nameConflict = await env.DB.prepare(`
+    SELECT id
+    FROM roles
+    WHERE name=? AND id<>?
+    LIMIT 1
+  `).bind(name, id).first();
+
+  if(nameConflict){
+    return json(400, "invalid_input", { message:"role_name_exists" });
+  }
+
+  await env.DB.prepare(`
+    UPDATE roles
+    SET name=?, description=?
+    WHERE id=?
+  `).bind(
+    name,
+    description || null,
+    id
+  ).run();
+
+  return json(200, "ok", { updated:true, id });
+}

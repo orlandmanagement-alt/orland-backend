@@ -23,30 +23,6 @@ function groupLabel(v){
   return GROUP_LABELS[String(v || "").trim()] || String(v || "Settings");
 }
 
-function deepClone(v){
-  try{ return JSON.parse(JSON.stringify(v)); }
-  catch{ return v; }
-}
-
-function jsonPretty(v){
-  try{ return JSON.stringify(v, null, 2); }
-  catch{ return String(v); }
-}
-
-function diffRows(original, draft){
-  const out = [];
-
-  if(String(original.name || "") !== String(draft.name || "")){
-    out.push({ field:"name", from: original.name || "", to: draft.name || "" });
-  }
-
-  if(String(original.description || "") !== String(draft.description || "")){
-    out.push({ field:"description", from: original.description || "", to: draft.description || "" });
-  }
-
-  return out;
-}
-
 export default function(Orland){
   async function apiLoad(){
     return await Orland.api("/api/roles");
@@ -75,22 +51,34 @@ export default function(Orland){
     return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">unused</span>`;
   }
 
-  function auditBadges(row){
-    const flags = Array.isArray(row?.audit?.flags) ? row.audit.flags : [];
-    const map = {
-      protected_role: ["amber", "protected"],
-      unused_role: ["slate", "unused"],
-      broad_access: ["rose", "broad access"],
-      single_domain_role: ["violet", "single domain"],
-      cross_domain_role: ["sky", "cross domain"]
-    };
+  function deepClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v));
+    }catch{
+      return v;
+    }
+  }
 
-    return flags.map(f => {
-      const conf = map[f];
-      if(!conf) return "";
-      const [tone, label] = conf;
-      return `<span class="px-2 py-1 rounded-full bg-${tone}-100 text-${tone}-700 text-[11px] font-black">${esc(label)}</span>`;
-    }).join("");
+  function jsonPretty(v){
+    try{
+      return JSON.stringify(v, null, 2);
+    }catch{
+      return String(v);
+    }
+  }
+
+  function diffRows(original, draft){
+    const out = [];
+
+    if(String(original.name || "") !== String(draft.name || "")){
+      out.push({ field:"name", from: original.name || "", to: draft.name || "" });
+    }
+
+    if(String(original.description || "") !== String(draft.description || "")){
+      out.push({ field:"description", from: original.description || "", to: draft.description || "" });
+    }
+
+    return out;
   }
 
   return {
@@ -102,7 +90,7 @@ export default function(Orland){
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div class="text-2xl font-extrabold ui-title-gradient">Role Builder</div>
-                <div class="text-slate-500 mt-1">Hybrid builder: role audit, usage inspector, permission template, editor, diff preview.</div>
+                <div class="text-slate-500 mt-1">Split view editor, usage inspector, and group summary.</div>
               </div>
               <div class="flex gap-2 flex-wrap">
                 <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
@@ -115,29 +103,32 @@ export default function(Orland){
             </div>
 
             <div class="mt-4">
-              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari id / name / description / usage / group / audit flag">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari id / name / description / usage / group">
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">↑ ↓ pilih role</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Enter edit</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Ctrl/Cmd+S save</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Esc reset</span>
             </div>
 
             <div id="msg" class="mt-4 text-sm text-slate-500"></div>
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-[1.05fr_0.95fr] gap-4 ui-gap-grid">
-            <div class="space-y-4">
-              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-                <div class="text-xl font-extrabold">Audit Summary</div>
-                <div id="auditSummaryBox" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3"></div>
-              </div>
-
-              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <div class="text-xl font-extrabold">Role Explorer</div>
-                    <div class="text-xs text-slate-500 mt-1">Click role to inspect, edit, and audit.</div>
-                  </div>
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Role Explorer</div>
+                  <div class="text-xs text-slate-500 mt-1">Klik role untuk select, Enter untuk edit.</div>
+                </div>
+                <div class="flex gap-2 flex-wrap">
                   <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
                 </div>
-                <div id="listBox" class="mt-5 space-y-3"></div>
               </div>
+
+              <div id="listBox" class="mt-5 space-y-3"></div>
             </div>
 
             <div class="space-y-4">
@@ -145,13 +136,14 @@ export default function(Orland){
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <div class="text-xl font-extrabold">Inspector</div>
-                    <div class="text-xs text-slate-500 mt-1">Usage inspector + group summary + permission template preview.</div>
+                    <div class="text-xs text-slate-500 mt-1">Usage inspector + group summary.</div>
                   </div>
                   <div class="flex gap-2 flex-wrap">
                     <button id="btnEditSelected" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Edit Selected</button>
                     <button id="btnDeleteSelected" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black">Delete Selected</button>
                   </div>
                 </div>
+
                 <div id="inspectorBox" class="mt-4"></div>
               </div>
 
@@ -159,15 +151,24 @@ export default function(Orland){
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <div class="text-xl font-extrabold">Editor</div>
-                    <div class="text-xs text-slate-500 mt-1">Create/update role.</div>
+                    <div class="text-xs text-slate-500 mt-1">Create/update role tanpa modal.</div>
                   </div>
-                  <button id="btnResetEditor" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reset</button>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnResetEditor" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reset</button>
+                  </div>
                 </div>
+
                 <div id="editorBox" class="mt-4"></div>
               </div>
 
               <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-                <div class="text-xl font-extrabold">Diff Preview</div>
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Diff Preview</div>
+                    <div class="text-xs text-slate-500 mt-1">Preview perubahan sebelum save.</div>
+                  </div>
+                </div>
+
                 <div id="diffBox" class="mt-4"></div>
               </div>
             </div>
@@ -176,7 +177,7 @@ export default function(Orland){
 
         <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
           <div class="min-h-full flex items-start lg:items-center justify-center">
-            <div class="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
               <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
                 <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
                 <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
@@ -196,8 +197,6 @@ export default function(Orland){
       const q = (id)=>host.querySelector("#" + id);
 
       let ITEMS = [];
-      let TEMPLATE_CATALOG = [];
-      let AUDIT_SUMMARY = {};
       let VISIBLE_ITEMS = [];
       let SELECTED_ID = "";
       let EDIT_MODE = "create";
@@ -207,119 +206,6 @@ export default function(Orland){
 
       function getRoleById(id){
         return ITEMS.find(x => String(x.id) === String(id)) || null;
-      }
-
-      function renderAuditSummary(){
-        const cards = [
-          ["Total Roles", AUDIT_SUMMARY.total_roles || 0],
-          ["Protected", AUDIT_SUMMARY.protected_roles || 0],
-          ["Unused", AUDIT_SUMMARY.unused_roles || 0],
-          ["Broad", AUDIT_SUMMARY.broad_access_roles || 0],
-          ["Single Domain", AUDIT_SUMMARY.single_domain_roles || 0],
-          ["Cross Domain", AUDIT_SUMMARY.cross_domain_roles || 0]
-        ];
-
-        q("auditSummaryBox").innerHTML = cards.map(([label, value]) => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-            <div class="text-xs text-slate-500 font-bold">${esc(label)}</div>
-            <div class="text-2xl font-extrabold mt-2">${esc(value)}</div>
-          </div>
-        `).join("");
-      }
-
-      function filteredItems(){
-        const kw = String(q("qSearch").value || "").trim().toLowerCase();
-        if(!kw) return ITEMS;
-
-        return ITEMS.filter(x => {
-          const usageItems = Array.isArray(x.menu_usage_items) ? x.menu_usage_items : [];
-          const usageText = usageItems.map(m => [m.id, m.code, m.label, m.path, m.group_key].join(" ")).join(" ");
-          const groupText = (Array.isArray(x.group_usage_summary) ? x.group_usage_summary : [])
-            .map(g => [g.group_key, groupLabel(g.group_key), g.count].join(" "))
-            .join(" ");
-          const auditText = (Array.isArray(x.audit?.flags) ? x.audit.flags : []).join(" ");
-          const hay = [
-            x.id, x.name, x.description, String(x.menu_usage_count ?? 0),
-            usageText, groupText, auditText
-          ].join(" ").toLowerCase();
-
-          return hay.includes(kw);
-        });
-      }
-
-      function ensureSelectionStillValid(){
-        if(SELECTED_ID && getRoleById(SELECTED_ID)) return;
-        const first = VISIBLE_ITEMS[0];
-        SELECTED_ID = first ? String(first.id) : "";
-      }
-
-      function renderList(){
-        VISIBLE_ITEMS = filteredItems();
-        ensureSelectionStillValid();
-
-        q("listBox").innerHTML = VISIBLE_ITEMS.length ? VISIBLE_ITEMS.map(row => {
-          const isSelected = String(row.id) === String(SELECTED_ID);
-          return `
-            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}">
-              <div class="px-4 py-4 ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : "bg-white dark:bg-darkLighter"}">
-                <div class="flex items-start justify-between gap-3">
-                  <button class="btnSelectRow min-w-0 flex-1 text-left" data-id="${esc(row.id)}">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <div class="font-black text-sm">${esc(row.name || row.id)}</div>
-                      ${usageBadge(row)}
-                      ${auditBadges(row)}
-                    </div>
-                    <div class="mt-2 text-xs text-slate-500 space-y-1">
-                      <div>id: ${esc(row.id)}</div>
-                      ${row.description ? `<div>${esc(row.description)}</div>` : ``}
-                    </div>
-                    ${
-                      Array.isArray(row.group_usage_summary) && row.group_usage_summary.length
-                        ? `<div class="mt-3 flex gap-2 flex-wrap">
-                            ${row.group_usage_summary.map(g => `
-                              <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(g.group_key))}: ${esc(g.count)}</span>
-                            `).join("")}
-                          </div>`
-                        : ``
-                    }
-                  </button>
-
-                  <div class="flex gap-2">
-                    <button class="btnQuickEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btnQuickDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(row.id)}" ${(protectedRole(row.id) || roleInUse(row)) ? "disabled" : ""}><i class="fa-solid fa-trash"></i></button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        }).join("") : emptyState("No role data.");
-
-        q("listBox").querySelectorAll(".btnSelectRow").forEach(btn => {
-          btn.onclick = ()=>{
-            SELECTED_ID = String(btn.getAttribute("data-id") || "");
-            renderList();
-            renderInspector();
-          };
-        });
-
-        q("listBox").querySelectorAll(".btnQuickEdit").forEach(btn => {
-          btn.onclick = ()=>{
-            const row = getRoleById(btn.getAttribute("data-id"));
-            if(!row) return;
-            SELECTED_ID = String(row.id);
-            renderList();
-            renderEditor(row);
-          };
-        });
-
-        q("listBox").querySelectorAll(".btnQuickDelete").forEach(btn => {
-          btn.onclick = ()=>{
-            const row = getRoleById(btn.getAttribute("data-id"));
-            if(row) openDelete(row);
-          };
-        });
-
-        renderInspector();
       }
 
       function validationHint(name, hintText){
@@ -361,143 +247,82 @@ export default function(Orland){
         }
       }
 
-      function renderTemplateBox(row){
-        const catalogMap = new Map(
-          (Array.isArray(TEMPLATE_CATALOG) ? TEMPLATE_CATALOG : []).map(x => [String(x.group_key || ""), Number(x.menu_count || 0)])
-        );
-        const activeGroups = new Set(
-          (Array.isArray(row?.group_usage_summary) ? row.group_usage_summary : []).map(x => String(x.group_key || ""))
-        );
+      function filteredItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        if(!kw) return ITEMS;
 
-        return `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-            <div class="text-sm font-bold text-slate-500">Permission Template by Group</div>
-
-            <div id="tplChecks" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-              ${Object.keys(GROUP_LABELS).map(group_key => `
-                <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-darkBorder px-3 py-3 text-sm">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <input class="tplGroupCheck" type="checkbox" value="${esc(group_key)}" ${activeGroups.has(group_key) ? "checked" : ""}>
-                    <span class="font-semibold truncate">${esc(groupLabel(group_key))}</span>
-                  </div>
-                  <span class="text-[11px] text-slate-500 shrink-0">${esc(catalogMap.get(group_key) || 0)} menu</span>
-                </label>
-              `).join("")}
-            </div>
-
-            <div class="mt-4 flex gap-2 flex-wrap">
-              <button type="button" id="btnTplPreviewReplace" class="px-3 py-2 rounded-xl border border-primary text-primary text-xs font-black">Preview Replace</button>
-              <button type="button" id="btnTplPreviewAdd" class="px-3 py-2 rounded-xl border border-emerald-200 text-emerald-700 text-xs font-black">Preview Add</button>
-              <button type="button" id="btnTplPreviewRemove" class="px-3 py-2 rounded-xl border border-rose-200 text-rose-700 text-xs font-black">Preview Remove</button>
-            </div>
-
-            <div id="tplPreviewBox" class="mt-4"></div>
-          </div>
-        `;
+        return ITEMS.filter(x => {
+          const usageItems = Array.isArray(x.menu_usage_items) ? x.menu_usage_items : [];
+          const usageText = usageItems.map(m => [m.id, m.code, m.label, m.path, m.group_key].join(" ")).join(" ");
+          const groupText = (Array.isArray(x.group_usage_summary) ? x.group_usage_summary : [])
+            .map(g => [g.group_key, groupLabel(g.group_key), g.count].join(" "))
+            .join(" ");
+          const hay = [x.id, x.name, x.description, String(x.menu_usage_count ?? 0), usageText, groupText].join(" ").toLowerCase();
+          return hay.includes(kw);
+        });
       }
 
-      function selectedTemplateGroups(){
-        return Array.from(q("inspectorBox")?.querySelectorAll(".tplGroupCheck") || [])
-          .filter(x => x.checked)
-          .map(x => String(x.value || ""));
+      function ensureSelectionStillValid(){
+        if(SELECTED_ID && getRoleById(SELECTED_ID)) return;
+        const first = VISIBLE_ITEMS[0];
+        SELECTED_ID = first ? String(first.id) : "";
       }
 
-      function renderTemplatePreview(diff){
-        if(!diff){
-          return `<div class="text-sm text-slate-500">Belum ada preview.</div>`;
-        }
+      function renderList(){
+        VISIBLE_ITEMS = filteredItems();
+        ensureSelectionStillValid();
 
-        const section = (title, items, tone) => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-            <div class="text-sm font-black ${tone}">${esc(title)} (${esc(items.length)})</div>
-            <div class="mt-3 space-y-2">
-              ${
-                items.length
-                  ? items.map(x => `
-                    <div class="rounded-xl border border-slate-200 dark:border-darkBorder px-3 py-2">
-                      <div class="text-sm font-semibold">${esc(x.label || x.id || "Menu")}</div>
-                      <div class="text-[11px] text-slate-500 mt-1">${esc(x.path || "-")} • ${esc(groupLabel(x.group_key))}</div>
+        q("listBox").innerHTML = VISIBLE_ITEMS.length ? VISIBLE_ITEMS.map(row => {
+          const isSelected = String(row.id) === String(SELECTED_ID);
+          return `
+            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}" data-role-row="${esc(row.id)}">
+              <div class="px-4 py-4 bg-white dark:bg-darkLighter ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : ""}">
+                <div class="flex items-start justify-between gap-3">
+                  <button class="btnSelectRow min-w-0 flex-1 text-left" data-id="${esc(row.id)}">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <div class="font-black text-sm">${esc(row.name || row.id)}</div>
+                      ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
+                      ${usageBadge(row)}
+                      ${isSelected ? `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">selected</span>` : ``}
                     </div>
-                  `).join("")
-                  : `<div class="text-sm text-slate-500">None.</div>`
-              }
-            </div>
-          </div>
-        `;
+                    <div class="mt-2 text-xs text-slate-500 space-y-1">
+                      <div>id: ${esc(row.id)}</div>
+                      ${row.description ? `<div>${esc(row.description)}</div>` : ``}
+                    </div>
+                    ${
+                      Array.isArray(row.group_usage_summary) && row.group_usage_summary.length
+                        ? `<div class="mt-3 flex gap-2 flex-wrap">
+                            ${row.group_usage_summary.map(g => `
+                              <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(g.group_key))}: ${esc(g.count)}</span>
+                            `).join("")}
+                          </div>`
+                        : ``
+                    }
+                  </button>
 
-        return `
-          <div class="space-y-3">
-            <div class="flex gap-2 flex-wrap">
-              <span class="px-3 py-2 rounded-2xl bg-emerald-100 text-emerald-700 text-xs font-black">to add: ${esc(diff.counts?.to_add || 0)}</span>
-              <span class="px-3 py-2 rounded-2xl bg-rose-100 text-rose-700 text-xs font-black">to remove: ${esc(diff.counts?.to_remove || 0)}</span>
-              <span class="px-3 py-2 rounded-2xl bg-slate-100 text-slate-700 text-xs font-black">unchanged: ${esc(diff.counts?.unchanged || 0)}</span>
+                  <div class="flex gap-2 shrink-0 flex-wrap justify-end">
+                    <button class="btnInspect px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-diagram-project"></i></button>
+                    <button class="btnQuickEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(row.id)}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btnQuickDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(row.id)}" ${(protectedRole(row.id) || roleInUse(row)) ? "disabled" : ""}><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
             </div>
-            ${section("Will Add", diff.to_add || [], "text-emerald-700")}
-            ${section("Will Remove", diff.to_remove || [], "text-rose-700")}
-            ${section("Unchanged", diff.unchanged || [], "text-slate-700")}
-            <div class="flex gap-2 flex-wrap">
-              <button type="button" id="btnTplApplyNow" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Apply Now</button>
-            </div>
-          </div>
-        `;
+          `;
+        }).join("") : emptyState("No role data.");
+
+        bindListActions();
+        renderInspector();
+        scrollSelectedIntoView();
       }
 
-      async function previewTemplate(row, mode){
-        const groups = selectedTemplateGroups();
-        if(!groups.length){
-          setMsg(host, "#msg", "warning", "Pilih minimal 1 group.");
-          return;
-        }
-
-        setMsg(host, "#msg", "muted", "Building diff preview...");
-        const r = await apiSave({
-          action: "preview_template",
-          role_id: row.id,
-          mode,
-          groups
-        });
-
-        if(r.status !== "ok"){
-          setMsg(host, "#msg", "error", "Preview failed: " + (r.data?.message || r.status));
-          return;
-        }
-
-        q("tplPreviewBox").innerHTML = renderTemplatePreview(r.data?.diff || null);
-        q("btnTplApplyNow")?.addEventListener("click", ()=>applyTemplate(row, mode, groups));
-        setMsg(host, "#msg", "success", "Preview ready.");
-      }
-
-      async function applyTemplate(row, mode, groups){
-        openConfirm(host, {
-          confirmTitle: "Apply Permission Template",
-          confirmDesc: `Mode: ${mode}`,
-          confirmMeta: `
-            <div class="space-y-2">
-              <div><span class="font-black">Role:</span> ${esc(row.name || row.id)}</div>
-              <div><span class="font-black">Mode:</span> ${esc(mode)}</div>
-              <div><span class="font-black">Groups:</span> ${esc(groups.map(groupLabel).join(", "))}</div>
-            </div>
-          `
-        });
-
-        confirmAction = async ()=>{
-          setMsg(host, "#msg", "muted", "Applying permission template...");
-          const r = await apiSave({
-            action: "apply_template",
-            role_id: row.id,
-            mode,
-            groups
-          });
-
-          if(r.status !== "ok"){
-            setMsg(host, "#msg", "error", "Apply failed: " + (r.data?.message || r.status));
-            return;
-          }
-
-          closeConfirm(host);
-          setMsg(host, "#msg", "success", `Template applied. Affected menus: ${r.data?.affected_menus || 0}`);
-          await load(false);
-        };
+      function scrollSelectedIntoView(){
+        if(!SELECTED_ID) return;
+        const el = q("listBox").querySelector(`[data-role-row="${CSS.escape(String(SELECTED_ID))}"]`);
+        if(!el) return;
+        try{
+          el.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        }catch{}
       }
 
       function renderInspector(){
@@ -515,8 +340,8 @@ export default function(Orland){
             <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
               <div class="flex items-center gap-2 flex-wrap">
                 <div class="text-lg font-extrabold">${esc(row.name || row.id)}</div>
+                ${protectedRole(row.id) ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
                 ${usageBadge(row)}
-                ${auditBadges(row)}
               </div>
               <div class="mt-3 text-sm text-slate-500 space-y-1">
                 <div><span class="font-bold">ID:</span> ${esc(row.id)}</div>
@@ -536,8 +361,6 @@ export default function(Orland){
                   : `<div class="text-sm text-slate-500">Belum ada menu usage by group.</div>`
               }
             </div>
-
-            ${renderTemplateBox(row)}
 
             <div>
               <div class="text-sm font-bold text-slate-500 mb-2">Menus using this role</div>
@@ -595,13 +418,6 @@ export default function(Orland){
             }
           };
         });
-
-        q("btnTplPreviewReplace")?.addEventListener("click", ()=>previewTemplate(row, "replace"));
-        q("btnTplPreviewAdd")?.addEventListener("click", ()=>previewTemplate(row, "add"));
-        q("btnTplPreviewRemove")?.addEventListener("click", ()=>previewTemplate(row, "remove"));
-
-        q("btnEditSelected").onclick = ()=>renderEditor(row);
-        q("btnDeleteSelected").onclick = ()=>openDelete(row);
       }
 
       function editorHtml(row = null){
@@ -620,7 +436,6 @@ export default function(Orland){
             <div class="flex flex-wrap gap-2">
               ${isProtected ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">core role</span>` : ``}
               ${row ? usageBadge(row) : ``}
-              ${row ? auditBadges(row) : ``}
             </div>
 
             <div>
@@ -632,7 +447,7 @@ export default function(Orland){
             <div>
               <label class="block text-sm font-bold text-slate-500 mb-2">NAME</label>
               <input name="name" value="${esc(row?.name || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Marketing Manager">
-              ${validationHint("name", "Role name harus unik.")}
+              ${validationHint("name", "Role name harus unik. Live check ke backend.")}
             </div>
 
             <div>
@@ -685,8 +500,12 @@ export default function(Orland){
 
       function renderDiff(){
         if(EDIT_MODE === "create"){
+          const draft = collectFormPayload();
           q("diffBox").innerHTML = `
-            <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(collectFormPayload()))}</pre>
+            <div class="space-y-3">
+              <div class="text-xs text-slate-500">Create payload preview</div>
+              <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(draft))}</pre>
+            </div>
           `;
           return;
         }
@@ -696,22 +515,33 @@ export default function(Orland){
           return;
         }
 
-        const changes = diffRows(EDIT_ORIGINAL, collectFormPayload());
+        const draft = collectFormPayload();
+        const changes = diffRows(EDIT_ORIGINAL, draft);
 
         if(!changes.length){
           q("diffBox").innerHTML = `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
           return;
         }
 
-        q("diffBox").innerHTML = changes.map(ch => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 mb-3">
-            <div class="text-sm font-black">${esc(ch.field)}</div>
-            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.from))}</pre>
-              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.to))}</pre>
-            </div>
+        q("diffBox").innerHTML = `
+          <div class="space-y-3">
+            ${changes.map(ch => `
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-sm font-black">${esc(ch.field)}</div>
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">FROM</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.from))}</pre>
+                  </div>
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">TO</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(String(ch.to))}</pre>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
           </div>
-        `).join("");
+        `;
       }
 
       function bindEditor(row = null){
@@ -722,7 +552,8 @@ export default function(Orland){
         form.addEventListener("change", renderDiff);
 
         q("btnDeleteFromForm")?.addEventListener("click", ()=>{
-          if(row) openDelete(row);
+          if(!row) return;
+          openDelete(row);
         });
 
         const asyncEngine = afvCreateEngine(form, {
@@ -779,6 +610,7 @@ export default function(Orland){
 
         form.onsubmit = async (ev)=>{
           ev.preventDefault();
+
           const payload = collectFormPayload();
 
           clearAsyncState(form, "id");
@@ -824,12 +656,14 @@ export default function(Orland){
           setMsg(host, "#msg", "success", "Role saved.");
           SELECTED_ID = payload.id;
           await load(false);
-          renderEditor(getRoleById(payload.id) || null);
+          const latest = getRoleById(payload.id);
+          renderEditor(latest || null);
         };
       }
 
       function openDelete(row){
-        if(protectedRole(row.id) || roleInUse(row)) return;
+        if(protectedRole(row.id)) return;
+        if(roleInUse(row)) return;
 
         openConfirm(host, {
           confirmTitle: "Delete Role",
@@ -840,18 +674,54 @@ export default function(Orland){
         confirmAction = async ()=>{
           setMsg(host, "#msg", "muted", "Deleting...");
           const r = await apiSave({ action:"delete", id: row.id });
-
           if(r.status !== "ok"){
-            setMsg(host, "#msg", "error", "Delete failed: " + (r.data?.message || r.status));
+            const msg = r.data?.message || r.status;
+            if(msg === "role_in_use_by_menus"){
+              setMsg(host, "#msg", "error", `Delete failed: role masih dipakai ${r.data?.menu_usage_count || 0} menu.`);
+            }else{
+              setMsg(host, "#msg", "error", "Delete failed: " + msg);
+            }
             return;
           }
-
           closeConfirm(host);
           setMsg(host, "#msg", "success", "Role deleted.");
           if(String(SELECTED_ID) === String(row.id)) SELECTED_ID = "";
           renderEditor(null);
           await load(false);
         };
+      }
+
+      function bindListActions(){
+        q("listBox").querySelectorAll(".btnSelectRow").forEach(btn => {
+          btn.onclick = ()=>{
+            SELECTED_ID = String(btn.getAttribute("data-id") || "");
+            renderList();
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnInspect").forEach(btn => {
+          btn.onclick = ()=>{
+            SELECTED_ID = String(btn.getAttribute("data-id") || "");
+            renderList();
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getRoleById(btn.getAttribute("data-id"));
+            if(!row) return;
+            SELECTED_ID = String(row.id);
+            renderList();
+            renderEditor(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickDelete").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getRoleById(btn.getAttribute("data-id"));
+            if(row) openDelete(row);
+          };
+        });
       }
 
       function moveSelection(step){
@@ -881,7 +751,8 @@ export default function(Orland){
 
           if(e.key === "Escape"){
             e.preventDefault();
-            renderEditor(getRoleById(EDIT_CURRENT_ID || SELECTED_ID) || null);
+            const row = getRoleById(EDIT_CURRENT_ID || SELECTED_ID);
+            renderEditor(row || null);
             return;
           }
 
@@ -939,16 +810,14 @@ export default function(Orland){
         }
 
         ITEMS = Array.isArray(r.data?.items) ? r.data.items : [];
-        TEMPLATE_CATALOG = Array.isArray(r.data?.template_catalog) ? r.data.template_catalog : [];
-        AUDIT_SUMMARY = r.data?.audit_summary || {};
-
-        renderAuditSummary();
         renderList();
 
         if(resetEditor){
-          renderEditor(getRoleById(SELECTED_ID) || null);
+          const row = getRoleById(SELECTED_ID);
+          renderEditor(row || null);
         }else{
-          renderEditor(getRoleById(EDIT_CURRENT_ID || SELECTED_ID) || null);
+          const row = EDIT_CURRENT_ID ? getRoleById(EDIT_CURRENT_ID) : getRoleById(SELECTED_ID);
+          renderEditor(row || null);
         }
 
         processReturnUsageContext();
@@ -956,25 +825,31 @@ export default function(Orland){
       }
 
       q("btnReload").onclick = ()=>load(false);
+
       q("btnNew").onclick = ()=>{
         EDIT_CURRENT_ID = "";
         renderEditor(null);
       };
+
+      q("btnResetEditor").onclick = ()=>{
+        const row = getRoleById(EDIT_CURRENT_ID || SELECTED_ID);
+        renderEditor(row || null);
+      };
+
       q("btnClearSelection").onclick = ()=>{
         SELECTED_ID = "";
         renderList();
         renderEditor(null);
       };
+
       q("btnEditSelected").onclick = ()=>{
         const row = getRoleById(SELECTED_ID);
         if(row) renderEditor(row);
       };
+
       q("btnDeleteSelected").onclick = ()=>{
         const row = getRoleById(SELECTED_ID);
         if(row) openDelete(row);
-      };
-      q("btnResetEditor").onclick = ()=>{
-        renderEditor(getRoleById(EDIT_CURRENT_ID || SELECTED_ID) || null);
       };
 
       q("qSearch").oninput = ()=>renderList();

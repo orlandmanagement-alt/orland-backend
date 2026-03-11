@@ -1,0 +1,1319 @@
+import { esc, emptyState, openConfirm, closeConfirm, setMsg } from "../../assets/js/orland_ui.js";
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+import {
+  navGetRoleMenuContext,
+  navSetRoleMenuContext,
+  navSetReturnToRoleUsage,
+  navConsumeMenuJumpTarget,
+  navGoModule
+} from "../../assets/js/role_menu_nav_bridge.js";
+
+const GROUP_LABELS = {
+  dashboard: "Dashboard",
+  access: "Access Control",
+  users: "Users",
+  security: "Security",
+  content: "Content",
+  ops: "Operations",
+  data: "Data",
+  settings: "Settings",
+  audit: "Audit"
+};
+
+const GROUP_ORDER = [
+  "dashboard",
+  "access",
+  "users",
+  "security",
+  "content",
+  "ops",
+  "data",
+  "settings",
+  "audit"
+];
+
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/menus");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/menus", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function bySort(a, b){
+    const sa = Number(a.sort_order ?? 9999);
+    const sb = Number(b.sort_order ?? 9999);
+    if(sa !== sb) return sa - sb;
+    return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
+  }
+
+  function buildTree(items){
+    const byId = new Map();
+    const roots = [];
+
+    for(const row of (items || [])){
+      byId.set(String(row.id), {
+        ...row,
+        id: String(row.id),
+        parent_id: row.parent_id ? String(row.parent_id) : null,
+        sort_order: Number(row.sort_order ?? 9999),
+        created_at: Number(row.created_at ?? 0),
+        children: []
+      });
+    }
+
+    for(const item of byId.values()){
+      if(item.parent_id && byId.has(item.parent_id)){
+        byId.get(item.parent_id).children.push(item);
+      }else{
+        roots.push(item);
+      }
+    }
+
+    const walk = (arr)=>{
+      arr.sort(bySort);
+      for(const x of arr) walk(x.children || []);
+    };
+    walk(roots);
+
+    return roots;
+  }
+
+  function flattenTree(nodes, out = []){
+    for(const node of (nodes || [])){
+      out.push(node);
+      flattenTree(node.children || [], out);
+    }
+    return out;
+  }
+
+  function deepClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v));
+    }catch{
+      return v;
+    }
+  }
+
+  function uniqStrings(arr){
+    return Array.from(new Set((Array.isArray(arr) ? arr : []).map(x => String(x || "").trim()).filter(Boolean)));
+  }
+
+  function arraysEqual(a, b){
+    const aa = uniqStrings(a).sort();
+    const bb = uniqStrings(b).sort();
+    if(aa.length !== bb.length) return false;
+    for(let i=0;i<aa.length;i++) if(aa[i] !== bb[i]) return false;
+    return true;
+  }
+
+  function jsonPretty(v){
+    try{
+      return JSON.stringify(v, null, 2);
+    }catch{
+      return String(v);
+    }
+  }
+
+  function normalizeGroupKey(v){
+    const x = String(v || "").trim().toLowerCase();
+    return GROUP_ORDER.includes(x) ? x : "settings";
+  }
+
+  function groupLabel(v){
+    return GROUP_LABELS[normalizeGroupKey(v)] || "Settings";
+  }
+
+  function diffRows(original, draft){
+    const out = [];
+
+    if(String(original.code || "") !== String(draft.code || "")){
+      out.push({ field:"code", from: original.code || "", to: draft.code || "" });
+    }
+    if(String(original.label || "") !== String(draft.label || "")){
+      out.push({ field:"label", from: original.label || "", to: draft.label || "" });
+    }
+    if(String(original.path || "") !== String(draft.path || "")){
+      out.push({ field:"path", from: original.path || "", to: draft.path || "" });
+    }
+    if(String(original.parent_id || "") !== String(draft.parent_id || "")){
+      out.push({ field:"parent_id", from: original.parent_id || "", to: draft.parent_id || "" });
+    }
+    if(String(original.sort_order ?? "") !== String(draft.sort_order ?? "")){
+      out.push({ field:"sort_order", from: original.sort_order ?? "", to: draft.sort_order ?? "" });
+    }
+    if(String(original.icon || "") !== String(draft.icon || "")){
+      out.push({ field:"icon", from: original.icon || "", to: draft.icon || "" });
+    }
+    if(String(normalizeGroupKey(original.group_key)) !== String(normalizeGroupKey(draft.group_key))){
+      out.push({
+        field:"group_key",
+        from: normalizeGroupKey(original.group_key),
+        to: normalizeGroupKey(draft.group_key)
+      });
+    }
+
+    const oldRoleIds = uniqStrings(original.role_ids_json || []);
+    const newRoleIds = uniqStrings(draft.role_ids || []);
+    if(!arraysEqual(oldRoleIds, newRoleIds)){
+      out.push({
+        field:"role_ids",
+        from: oldRoleIds,
+        to: newRoleIds
+      });
+    }
+
+    return out;
+  }
+
+  function mapRoleNamesByIds(roleIds, roles){
+    const ids = uniqStrings(roleIds);
+    return ids.map(id => {
+      const found = (roles || []).find(r => String(r.id) === String(id));
+      return found ? found.name : id;
+    });
+  }
+
+  return {
+    title:"Menu Builder",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Menu Builder</div>
+                <div class="text-slate-500 mt-1">Group key activated for category grouping, search, and registry alignment.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Menu
+                </button>
+                <button id="btnBackRoleUsage" class="hidden px-4 py-3 rounded-2xl border border-sky-200 text-sky-700 font-black text-sm">
+                  <i class="fa-solid fa-arrow-left mr-2"></i>Back to Role Usage
+                </button>
+              </div>
+            </div>
+
+            <div id="contextBar" class="hidden mt-4 rounded-2xl border border-sky-200 bg-sky-50 dark:bg-sky-950/20 dark:border-sky-900 px-4 py-3">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="text-sm font-black text-sky-700 dark:text-sky-300">
+                  <span id="ctxRoleName">Role</span>
+                  <span class="opacity-60 mx-2">/</span>
+                  <span id="ctxMenuLabel">Menu</span>
+                </div>
+                <button id="btnCtxOpenRole" class="px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black">
+                  Open Role Builder
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari label / path / id / code / group">
+              <select id="qRole" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                <option value="">All roles</option>
+              </select>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">↑ ↓ pilih item</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Enter edit</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Ctrl/Cmd+S save</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5">Esc reset</span>
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4 ui-gap-grid">
+            <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Menu Explorer</div>
+                  <div class="text-xs text-slate-500 mt-1">Klik item untuk select, Enter untuk edit.</div>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                  <button id="btnBulkMode" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">
+                    <i class="fa-solid fa-layer-group mr-1"></i>Bulk Roles
+                  </button>
+                  <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div id="bulkBar" class="hidden mt-4 rounded-2xl border border-sky-200 bg-sky-50 dark:bg-sky-950/20 dark:border-sky-900 p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-sm font-black text-sky-700 dark:text-sky-300">Bulk Role Mapping</div>
+                    <div id="bulkInfo" class="text-xs text-sky-700/80 dark:text-sky-300/80 mt-1">0 menu selected</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnBulkSelectVisible" class="px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black">Select Visible</button>
+                    <button id="btnBulkClear" class="px-3 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-black">Clear Selected</button>
+                  </div>
+                </div>
+                <div id="bulkRoleBox" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2"></div>
+                <div class="mt-4 flex gap-2 flex-wrap">
+                  <button id="btnBulkApplyReplace" class="px-4 py-2.5 rounded-2xl bg-primary text-white text-sm font-black">Replace Roles</button>
+                  <button id="btnBulkApplyAdd" class="px-4 py-2.5 rounded-2xl border border-emerald-200 text-emerald-700 text-sm font-black">Add Roles</button>
+                  <button id="btnBulkApplyRemove" class="px-4 py-2.5 rounded-2xl border border-rose-200 text-rose-700 text-sm font-black">Remove Roles</button>
+                </div>
+              </div>
+
+              <div id="listBox" class="mt-5 space-y-3"></div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Inspector</div>
+                    <div class="text-xs text-slate-500 mt-1">Sticky selection + live diff preview.</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnEditSelected" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Edit Selected</button>
+                    <button id="btnDeleteSelected" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black">Delete Selected</button>
+                  </div>
+                </div>
+
+                <div id="inspectorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Editor</div>
+                    <div class="text-xs text-slate-500 mt-1">Create/update menu tanpa modal.</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnResetEditor" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reset</button>
+                  </div>
+                </div>
+
+                <div id="editorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Diff Preview</div>
+                    <div class="text-xs text-slate-500 mt-1">Preview perubahan sebelum save.</div>
+                  </div>
+                </div>
+
+                <div id="diffBox" class="mt-4"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      let MENUS = [];
+      let ROLES = [];
+      let GROUP_KEYS = GROUP_ORDER.slice();
+      let TREE = [];
+      let FLAT_VISIBLE = [];
+      let confirmAction = null;
+
+      let SELECTED_ID = "";
+      let BULK_MODE = false;
+      let BULK_SELECTED_IDS = new Set();
+
+      let EDIT_MODE = "create";
+      let EDIT_ORIGINAL = null;
+      let EDIT_CURRENT_ID = "";
+
+      let RETURN_ROLE_ID = "";
+      let RETURN_ROLE_NAME = "";
+      let RETURN_MENU_LABEL = "";
+
+      function syncContextBar(){
+        const show = !!String(RETURN_ROLE_ID || "").trim();
+        q("contextBar").classList.toggle("hidden", !show);
+        q("btnBackRoleUsage").classList.toggle("hidden", !show);
+        if(!show) return;
+
+        q("ctxRoleName").textContent = RETURN_ROLE_NAME || RETURN_ROLE_ID || "Role";
+        q("ctxMenuLabel").textContent = RETURN_MENU_LABEL || SELECTED_ID || "Menu";
+      }
+
+      function renderRoleFilter(){
+        q("qRole").innerHTML = `<option value="">All roles</option>` + ROLES.map(r => `
+          <option value="${esc(r.name)}">${esc(r.name)}</option>
+        `).join("");
+      }
+
+      function getMenuById(id){
+        return MENUS.find(x => String(x.id) === String(id)) || null;
+      }
+
+      function getVisibleItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        const role = String(q("qRole").value || "").trim();
+
+        return MENUS.filter(x => {
+          const hay = [
+            x.id, x.code, x.label, x.path, x.parent_label, x.group_key, groupLabel(x.group_key)
+          ].join(" ").toLowerCase();
+          const okKw = !kw || hay.includes(kw);
+          const okRole = !role || (Array.isArray(x.role_names_json) && x.role_names_json.includes(role));
+          return okKw && okRole;
+        });
+      }
+
+      function renderRows(nodes, depth=0, visibleIds = new Set()){
+        const hasVisible = (node)=>{
+          if(visibleIds.has(String(node.id))) return true;
+          return (node.children || []).some(hasVisible);
+        };
+
+        return nodes.filter(hasVisible).map(node => {
+          const roles = Array.isArray(node.role_names_json) ? node.role_names_json : [];
+          const indent = depth * 16;
+          const isSelected = String(node.id) === String(SELECTED_ID);
+          const isBulkChecked = BULK_SELECTED_IDS.has(String(node.id));
+
+          return `
+            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}" data-menu-row="${esc(node.id)}">
+              <div class="px-3 lg:px-4 py-3 bg-white dark:bg-darkLighter ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : ""}" style="padding-left:${12 + indent}px">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1 flex gap-3">
+                    ${BULK_MODE ? `
+                      <div class="pt-1">
+                        <input type="checkbox" class="bulkCheck" data-id="${esc(node.id)}" ${isBulkChecked ? "checked" : ""}>
+                      </div>
+                    ` : ``}
+                    <button class="min-w-0 flex-1 text-left btnSelectRow" data-id="${esc(node.id)}">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <i class="${esc(node.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
+                        <div class="font-black text-sm">${depth > 0 ? "&mdash; " : ""}${esc(node.label || "Menu")}</div>
+                        <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(node.group_key))}</span>
+                        ${isSelected ? `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">selected</span>` : ``}
+                      </div>
+                      <div class="mt-2 text-xs text-slate-500 space-y-1">
+                        ${depth > 0 ? `<div>Parent <span class="font-bold">[${esc(node.parent_label || "-")}]</span></div>` : ``}
+                        ${node.path && node.path !== "/" ? `<div>${esc(node.path)}</div>` : ``}
+                        <div>group: ${esc(node.group_key || "settings")} • sort: ${esc(node.sort_order)} • id: ${esc(node.id)}</div>
+                      </div>
+                      <div class="mt-3 flex gap-2 flex-wrap">
+                        ${roles.length
+                          ? roles.map(r => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(r)}</span>`).join("")
+                          : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">no roles</span>`
+                        }
+                      </div>
+                    </button>
+                  </div>
+
+                  <div class="flex gap-2 shrink-0 flex-wrap justify-end">
+                    <button class="btnMoveUp px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button class="btnMoveDown px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button class="btnQuickEdit px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btnQuickDelete px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-id="${esc(node.id)}"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
+              ${(node.children || []).length ? `<div class="border-t border-slate-200 dark:border-darkBorder">${renderRows(node.children, depth + 1, visibleIds)}</div>` : ``}
+            </div>
+          `;
+        }).join("");
+      }
+
+      function ensureSelectionStillValid(){
+        if(SELECTED_ID && getMenuById(SELECTED_ID)) return;
+        const first = FLAT_VISIBLE[0];
+        SELECTED_ID = first ? String(first.id) : "";
+      }
+
+      function renderList(){
+        TREE = buildTree(MENUS);
+        const visibleItems = getVisibleItems();
+        const visibleIds = new Set(visibleItems.map(x => String(x.id)));
+        q("listBox").innerHTML = renderRows(TREE, 0, visibleIds) || emptyState("No menu data.");
+        FLAT_VISIBLE = flattenTree(buildTree(visibleItems));
+        ensureSelectionStillValid();
+        bindListActions();
+        renderInspector();
+        renderBulkBar();
+        syncContextBar();
+        scrollSelectedIntoView();
+      }
+
+      function scrollSelectedIntoView(){
+        if(!SELECTED_ID) return;
+        const el = q("listBox").querySelector(`[data-menu-row="${CSS.escape(String(SELECTED_ID))}"]`);
+        if(!el) return;
+        try{
+          el.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        }catch{}
+      }
+
+      function renderInspector(){
+        const row = getMenuById(SELECTED_ID);
+        if(!row){
+          q("inspectorBox").innerHTML = `<div class="text-sm text-slate-500">No selected menu.</div>`;
+          return;
+        }
+
+        const roleNames = Array.isArray(row.role_names_json) ? row.role_names_json : [];
+        q("inspectorBox").innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <i class="${esc(row.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
+                <div class="text-lg font-extrabold">${esc(row.label || row.id)}</div>
+                <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(row.group_key))}</span>
+              </div>
+              <div class="mt-3 text-sm text-slate-500 space-y-1">
+                <div><span class="font-bold">ID:</span> ${esc(row.id)}</div>
+                <div><span class="font-bold">CODE:</span> ${esc(row.code || "-")}</div>
+                <div><span class="font-bold">PATH:</span> ${esc(row.path || "-")}</div>
+                <div><span class="font-bold">GROUP:</span> ${esc(row.group_key || "settings")}</div>
+                <div><span class="font-bold">PARENT:</span> ${esc(row.parent_label || row.parent_id || "root")}</div>
+                <div><span class="font-bold">SORT:</span> ${esc(row.sort_order ?? 50)}</div>
+              </div>
+              <div class="mt-4 flex gap-2 flex-wrap">
+                ${roleNames.length
+                  ? roleNames.map(r => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(r)}</span>`).join("")
+                  : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">no roles</span>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function groupOptions(selected){
+        const keys = Array.isArray(GROUP_KEYS) && GROUP_KEYS.length ? GROUP_KEYS : GROUP_ORDER;
+        return keys.map(k => `
+          <option value="${esc(k)}" ${normalizeGroupKey(selected) === k ? "selected" : ""}>${esc(groupLabel(k))} (${esc(k)})</option>
+        `).join("");
+      }
+
+      function editorHtml(row = null){
+        const isUpdate = !!row;
+        const selectedRoleIds = new Set(
+          Array.isArray(row?.role_ids_json) && row.role_ids_json.length
+            ? row.role_ids_json.map(x => String(x))
+            : []
+        );
+
+        const parents = MENUS
+          .filter(x => String(x.id) !== String(row?.id || ""))
+          .map(x => `<option value="${esc(x.id)}" ${String(row?.parent_id || "") === String(x.id) ? "selected" : ""}>${esc(x.label)}</option>`)
+          .join("");
+
+        return `
+          <form id="menuForm" class="grid grid-cols-1 gap-4">
+            <input type="hidden" name="mode" value="${isUpdate ? "update" : "create"}">
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3 text-xs text-slate-500">
+              ${isUpdate ? `Editing menu <span class="font-black">${esc(row.id)}</span>` : `Creating new menu`}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+              <input name="id" value="${esc(row?.id || "")}" ${isUpdate ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="m_core_dashboard">
+              ${validationHint("id", isUpdate ? "Read-only saat edit." : "Minimal 3 karakter. Live check ke backend.")}
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
+                <input name="code" value="${esc(row?.code || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="dashboard">
+                ${validationHint("code", "Code harus unik.")}
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
+                <input name="label" value="${esc(row?.label || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Dashboard">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
+              <input name="path" value="${esc(row?.path || "/")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/dashboard">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">GROUP KEY</label>
+                <select name="group_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  ${groupOptions(row?.group_key || "settings")}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
+                <input name="sort_order" type="number" value="${esc(row?.sort_order ?? 50)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
+                <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  <option value="">root</option>
+                  ${parents}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
+                <input name="icon" value="${esc(row?.icon || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
+              </div>
+            </div>
+
+            <div>
+              <div class="text-sm font-bold text-slate-500 mb-2">ROLE MENUS</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="flex gap-2 flex-wrap mb-3">
+                  <button type="button" id="btnRoleAll" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Check all</button>
+                  <button type="button" id="btnRoleNone" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Uncheck all</button>
+                </div>
+                <div id="roleChecks" class="grid grid-cols-2 gap-2">
+                  ${ROLES.map(r => `
+                    <label class="flex items-center gap-3 text-sm">
+                      <input class="roleCheck" type="checkbox" value="${esc(r.id)}" ${
+                        isUpdate ? (selectedRoleIds.has(String(r.id)) ? "checked" : "") : "checked"
+                      }>
+                      <span class="font-semibold">${esc(r.name)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-2 flex-wrap">
+              <button type="submit" id="btnSubmitMenu" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+              <button type="button" id="btnDeleteFromForm" class="${isUpdate ? "" : "hidden "}px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+            </div>
+          </form>
+        `;
+      }
+
+      function renderEditor(row = null){
+        EDIT_MODE = row ? "update" : "create";
+        EDIT_ORIGINAL = row ? deepClone(row) : null;
+        EDIT_CURRENT_ID = row ? String(row.id) : "";
+        q("editorBox").innerHTML = editorHtml(row);
+        bindEditor(row);
+        renderDiff();
+      }
+
+      function renderDiff(){
+        if(EDIT_MODE === "create"){
+          const form = q("menuForm");
+          if(!form){
+            q("diffBox").innerHTML = `<div class="text-sm text-slate-500">No diff.</div>`;
+            return;
+          }
+
+          const draft = collectFormPayload();
+          const compact = {
+            id: draft.id,
+            code: draft.code,
+            label: draft.label,
+            path: draft.path,
+            group_key: draft.group_key,
+            parent_id: draft.parent_id,
+            sort_order: draft.sort_order,
+            icon: draft.icon,
+            role_ids: draft.role_ids
+          };
+
+          q("diffBox").innerHTML = `
+            <div class="space-y-3">
+              <div class="text-xs text-slate-500">Create payload preview</div>
+              <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(compact))}</pre>
+            </div>
+          `;
+          return;
+        }
+
+        if(!EDIT_ORIGINAL){
+          q("diffBox").innerHTML = `<div class="text-sm text-slate-500">No diff.</div>`;
+          return;
+        }
+
+        const draft = collectFormPayload();
+        const changes = diffRows(EDIT_ORIGINAL, draft);
+
+        if(!changes.length){
+          q("diffBox").innerHTML = `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
+          return;
+        }
+
+        q("diffBox").innerHTML = `
+          <div class="space-y-3">
+            ${changes.map(ch => `
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="text-sm font-black">${esc(ch.field)}</div>
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">FROM</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(
+                      ch.field === "group_key"
+                        ? `${groupLabel(ch.from)} (${ch.from})`
+                        : Array.isArray(ch.from)
+                          ? jsonPretty(mapRoleNamesByIds(ch.from, ROLES))
+                          : String(ch.from)
+                    )}</pre>
+                  </div>
+                  <div>
+                    <div class="text-slate-500 font-bold mb-1">TO</div>
+                    <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(
+                      ch.field === "group_key"
+                        ? `${groupLabel(ch.to)} (${ch.to})`
+                        : Array.isArray(ch.to)
+                          ? jsonPretty(mapRoleNamesByIds(ch.to, ROLES))
+                          : String(ch.to)
+                    )}</pre>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      function collectFormPayload(){
+        const form = q("menuForm");
+        if(!form) return {
+          action:"create",
+          id:"",
+          code:"",
+          label:"",
+          path:"/",
+          group_key:"settings",
+          parent_id:"",
+          sort_order:50,
+          icon:"",
+          role_ids:[]
+        };
+
+        const role_ids = Array.from(form.querySelectorAll(".roleCheck"))
+          .filter(x => x.checked)
+          .map(x => x.value);
+
+        return {
+          action: form.mode.value,
+          id: form.id.value.trim(),
+          code: form.code.value.trim(),
+          label: form.label.value.trim(),
+          path: form.path.value.trim(),
+          group_key: normalizeGroupKey(form.group_key.value),
+          parent_id: form.parent_id.value.trim(),
+          sort_order: Number(form.sort_order.value || 50),
+          icon: form.icon.value.trim(),
+          role_ids
+        };
+      }
+
+      function clearAsyncState(form, name){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+        if(error){
+          error.textContent = "";
+          error.classList.add("hidden");
+        }
+        if(state){
+          state.textContent = "";
+          state.className = "fve-state hidden mt-2";
+        }
+      }
+
+      function setInlineError(form, name, message){
+        const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+        const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+        const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+        input?.classList.remove("is-valid", "is-warning", "is-checking");
+        input?.classList.add("is-invalid");
+        if(error){
+          error.textContent = String(message || "");
+          error.classList.remove("hidden");
+        }
+        if(state){
+          state.textContent = "Invalid";
+          state.className = "fve-state is-invalid mt-2";
+        }
+      }
+
+      function bindEditor(row = null){
+        const form = q("menuForm");
+        if(!form) return;
+
+        const roleChecks = ()=>Array.from(form.querySelectorAll(".roleCheck"));
+
+        q("btnRoleAll").onclick = ()=>{ roleChecks().forEach(x => x.checked = true); renderDiff(); };
+        q("btnRoleNone").onclick = ()=>{ roleChecks().forEach(x => x.checked = false); renderDiff(); };
+
+        form.addEventListener("input", renderDiff);
+        form.addEventListener("change", renderDiff);
+
+        q("btnDeleteFromForm")?.addEventListener("click", ()=>{
+          if(!row) return;
+          openDelete(row);
+        });
+
+        const asyncEngine = afvCreateEngine(form, {
+          id: {
+            debounce_ms: 500,
+            min_length: 3,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              if(row?.id){
+                return { ok:true, message:"ID locked" };
+              }
+              const r = await Orland.api("/api/validate/menu-id", {
+                method:"POST",
+                body: JSON.stringify({
+                  id: value,
+                  exclude_id: ""
+                })
+              });
+              if(r.status !== "ok") return { ok:false, message:"Validation request failed" };
+              return r.data?.available
+                ? { ok:true, message:"ID available" }
+                : { ok:false, used:true, message:"ID already used" };
+            }
+          },
+          code: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/menu-code", {
+                method:"POST",
+                body: JSON.stringify({
+                  code: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+              if(r.status !== "ok") return { ok:false, message:"Validation request failed" };
+              return r.data?.available
+                ? { ok:true, message:"Code available" }
+                : { ok:false, used:true, message:"Code already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+
+          const payload = collectFormPayload();
+
+          clearAsyncState(form, "id");
+          clearAsyncState(form, "code");
+
+          const syncErrors = {};
+          if(!payload.id) syncErrors.id = "ID wajib diisi.";
+          else if(payload.id.length < 3) syncErrors.id = "ID minimal 3 karakter.";
+          else if(!/^[a-zA-Z0-9_\-]+$/.test(payload.id)) syncErrors.id = "ID hanya boleh huruf, angka, underscore, dash.";
+
+          if(!payload.code) syncErrors.code = "CODE wajib diisi.";
+          if(!payload.label) syncErrors.label = "LABEL wajib diisi.";
+          if(!payload.group_key) syncErrors.group_key = "GROUP KEY wajib dipilih.";
+          if(payload.id && payload.code && payload.id === payload.code) syncErrors.code = "CODE harus berbeda dari ID.";
+          if(payload.parent_id && payload.parent_id === payload.id) syncErrors.id = "Parent tidak boleh sama dengan ID.";
+
+          if(syncErrors.id) setInlineError(form, "id", syncErrors.id);
+          if(syncErrors.code) setInlineError(form, "code", syncErrors.code);
+
+          if(Object.keys(syncErrors).length){
+            setMsg(host, "#msg", "error", "Periksa field yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+          if(asyncHasError){
+            setMsg(host, "#msg", "error", "Masih ada unique field yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg(host, "#msg", "warning", "Masih menunggu pengecekan field.");
+            return;
+          }
+
+          setMsg(host, "#msg", "muted", "Saving...");
+          const r = await apiSave(payload);
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          setMsg(host, "#msg", "success", "Menu saved.");
+          SELECTED_ID = payload.id;
+
+          navSetRoleMenuContext({
+            role_id: RETURN_ROLE_ID,
+            role_name: RETURN_ROLE_NAME,
+            menu_id: payload.id,
+            menu_label: payload.label || payload.id,
+            open_usage: !!RETURN_ROLE_ID
+          });
+          RETURN_MENU_LABEL = payload.label || payload.id;
+          syncContextBar();
+
+          await load(false);
+          const latest = getMenuById(payload.id);
+          renderEditor(latest || null);
+        };
+      }
+
+      function openDelete(row){
+        openConfirm(host, {
+          confirmTitle: "Delete Menu",
+          confirmDesc: "Menu akan dihapus jika tidak punya children.",
+          confirmMeta: `<div class="font-black text-red-600">${esc(row.label || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.path || "-")}</div>`
+        });
+
+        confirmAction = async ()=>{
+          setMsg(host, "#msg", "muted", "Deleting...");
+          const r = await apiSave({ action:"delete", id: row.id });
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Delete failed: " + (r.data?.message || r.status));
+            return;
+          }
+          closeConfirm(host);
+          setMsg(host, "#msg", "success", "Menu deleted.");
+          if(String(SELECTED_ID) === String(row.id)) SELECTED_ID = "";
+          renderEditor(null);
+          await load(false);
+        };
+      }
+
+      async function quickSave(row){
+        setMsg(host, "#msg", "muted", "Saving sort...");
+        const role_ids = Array.isArray(row.role_ids_json) ? row.role_ids_json.map(x => String(x)) : [];
+
+        const r = await apiSave({
+          action: "update",
+          id: row.id,
+          code: row.code,
+          label: row.label,
+          path: row.path,
+          group_key: normalizeGroupKey(row.group_key),
+          parent_id: row.parent_id || "",
+          sort_order: row.sort_order,
+          icon: row.icon || "",
+          role_ids
+        });
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Sort save failed: " + (r.data?.message || r.status));
+          return;
+        }
+
+        setMsg(host, "#msg", "success", "Sort updated.");
+        await load(false);
+      }
+
+      function bindListActions(){
+        q("listBox").querySelectorAll(".btnSelectRow").forEach(btn => {
+          btn.onclick = ()=>{
+            const id = String(btn.getAttribute("data-id") || "");
+            SELECTED_ID = id;
+            const row = getMenuById(id);
+            if(row){
+              RETURN_MENU_LABEL = row.label || row.id;
+              navSetRoleMenuContext({
+                role_id: RETURN_ROLE_ID,
+                role_name: RETURN_ROLE_NAME,
+                menu_id: row.id,
+                menu_label: row.label || row.id,
+                open_usage: !!RETURN_ROLE_ID
+              });
+            }
+            renderList();
+          };
+        });
+
+        q("listBox").querySelectorAll(".bulkCheck").forEach(chk => {
+          chk.onchange = ()=>{
+            const id = String(chk.getAttribute("data-id") || "");
+            if(chk.checked) BULK_SELECTED_IDS.add(id);
+            else BULK_SELECTED_IDS.delete(id);
+            renderBulkBar();
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickEdit").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getMenuById(btn.getAttribute("data-id"));
+            if(!row) return;
+            SELECTED_ID = String(row.id);
+            RETURN_MENU_LABEL = row.label || row.id;
+            navSetRoleMenuContext({
+              role_id: RETURN_ROLE_ID,
+              role_name: RETURN_ROLE_NAME,
+              menu_id: row.id,
+              menu_label: row.label || row.id,
+              open_usage: !!RETURN_ROLE_ID
+            });
+            renderList();
+            renderEditor(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnQuickDelete").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = getMenuById(btn.getAttribute("data-id"));
+            if(row) openDelete(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnMoveUp").forEach(btn => {
+          btn.onclick = async ()=>{
+            const row = getMenuById(btn.getAttribute("data-id"));
+            if(!row) return;
+            row.sort_order = Number(row.sort_order || 50) - 1;
+            await quickSave(row);
+          };
+        });
+
+        q("listBox").querySelectorAll(".btnMoveDown").forEach(btn => {
+          btn.onclick = async ()=>{
+            const row = getMenuById(btn.getAttribute("data-id"));
+            if(!row) return;
+            row.sort_order = Number(row.sort_order || 50) + 1;
+            await quickSave(row);
+          };
+        });
+      }
+
+      function renderBulkBar(){
+        q("bulkBar").classList.toggle("hidden", !BULK_MODE);
+        if(!BULK_MODE) return;
+
+        q("bulkInfo").textContent = `${BULK_SELECTED_IDS.size} menu selected`;
+
+        q("bulkRoleBox").innerHTML = ROLES.map(r => `
+          <label class="flex items-center gap-2 text-sm rounded-xl border border-slate-200 dark:border-darkBorder px-3 py-2">
+            <input class="bulkRoleCheck" type="checkbox" value="${esc(r.id)}">
+            <span class="font-semibold">${esc(r.name)}</span>
+          </label>
+        `).join("");
+      }
+
+      function getSelectedBulkRoleIds(){
+        return Array.from(q("bulkRoleBox").querySelectorAll(".bulkRoleCheck"))
+          .filter(x => x.checked)
+          .map(x => String(x.value));
+      }
+
+      async function applyBulkRoles(mode){
+        const ids = Array.from(BULK_SELECTED_IDS);
+        if(!ids.length){
+          setMsg(host, "#msg", "warning", "Pilih menu dulu untuk bulk role mapping.");
+          return;
+        }
+
+        const pickedRoleIds = getSelectedBulkRoleIds();
+        if(!pickedRoleIds.length){
+          setMsg(host, "#msg", "warning", "Pilih role dulu untuk bulk action.");
+          return;
+        }
+
+        const targets = ids.map(id => getMenuById(id)).filter(Boolean);
+        if(!targets.length){
+          setMsg(host, "#msg", "warning", "Selected menus not found.");
+          return;
+        }
+
+        openConfirm(host, {
+          confirmTitle: "Bulk Role Mapping",
+          confirmDesc: `Apply ${mode} ke ${targets.length} menu.`,
+          confirmMeta: `
+            <div class="space-y-2">
+              <div><span class="font-black">Mode:</span> ${esc(mode)}</div>
+              <div><span class="font-black">Menus:</span> ${esc(targets.length)}</div>
+              <div><span class="font-black">Roles:</span> ${esc(mapRoleNamesByIds(pickedRoleIds, ROLES).join(", "))}</div>
+            </div>
+          `
+        });
+
+        confirmAction = async ()=>{
+          closeConfirm(host);
+          setMsg(host, "#msg", "muted", "Applying bulk role mapping...");
+
+          for(const row of targets){
+            const current = uniqStrings(row.role_ids_json || []);
+            let next = current.slice();
+
+            if(mode === "replace"){
+              next = uniqStrings(pickedRoleIds);
+            }else if(mode === "add"){
+              next = uniqStrings(current.concat(pickedRoleIds));
+            }else if(mode === "remove"){
+              next = current.filter(x => !pickedRoleIds.includes(String(x)));
+            }
+
+            const r = await apiSave({
+              action: "update",
+              id: row.id,
+              code: row.code,
+              label: row.label,
+              path: row.path,
+              group_key: normalizeGroupKey(row.group_key),
+              parent_id: row.parent_id || "",
+              sort_order: row.sort_order,
+              icon: row.icon || "",
+              role_ids: next
+            });
+
+            if(r.status !== "ok"){
+              setMsg(host, "#msg", "error", `Bulk failed on ${row.id}: ` + (r.data?.message || r.status));
+              return;
+            }
+          }
+
+          setMsg(host, "#msg", "success", "Bulk role mapping applied.");
+          await load(false);
+        };
+      }
+
+      function moveSelection(step){
+        if(!FLAT_VISIBLE.length) return;
+        let idx = FLAT_VISIBLE.findIndex(x => String(x.id) === String(SELECTED_ID));
+        if(idx < 0) idx = 0;
+        idx += step;
+        if(idx < 0) idx = 0;
+        if(idx >= FLAT_VISIBLE.length) idx = FLAT_VISIBLE.length - 1;
+        SELECTED_ID = String(FLAT_VISIBLE[idx].id);
+        const row = getMenuById(SELECTED_ID);
+        if(row){
+          RETURN_MENU_LABEL = row.label || row.id;
+          navSetRoleMenuContext({
+            role_id: RETURN_ROLE_ID,
+            role_name: RETURN_ROLE_NAME,
+            menu_id: row.id,
+            menu_label: row.label || row.id,
+            open_usage: !!RETURN_ROLE_ID
+          });
+        }
+        renderList();
+      }
+
+      function bindKeyboard(){
+        host.addEventListener("keydown", async (e)=>{
+          const tag = String(document.activeElement?.tagName || "").toLowerCase();
+          const inText = ["input","textarea","select"].includes(tag);
+
+          if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s"){
+            const form = q("menuForm");
+            if(form){
+              e.preventDefault();
+              form.requestSubmit();
+            }
+            return;
+          }
+
+          if(e.key === "Escape"){
+            e.preventDefault();
+            if(BULK_MODE){
+              BULK_MODE = false;
+              BULK_SELECTED_IDS.clear();
+              renderList();
+              return;
+            }
+            const row = getMenuById(SELECTED_ID);
+            renderEditor(row || null);
+            return;
+          }
+
+          if(inText) return;
+
+          if(e.key === "ArrowUp"){
+            e.preventDefault();
+            moveSelection(-1);
+            return;
+          }
+
+          if(e.key === "ArrowDown"){
+            e.preventDefault();
+            moveSelection(1);
+            return;
+          }
+
+          if(e.key === "Enter"){
+            e.preventDefault();
+            const row = getMenuById(SELECTED_ID);
+            if(row) renderEditor(row);
+          }
+        });
+      }
+
+      function processBridgeContext(){
+        const ctx = navGetRoleMenuContext();
+        if(ctx?.role_id){
+          RETURN_ROLE_ID = ctx.role_id;
+          RETURN_ROLE_NAME = ctx.role_name;
+          RETURN_MENU_LABEL = ctx.menu_label;
+        }
+
+        const jump = navConsumeMenuJumpTarget();
+        if(jump?.menuId){
+          RETURN_ROLE_ID = jump.roleId || RETURN_ROLE_ID;
+          RETURN_ROLE_NAME = jump.roleName || RETURN_ROLE_NAME;
+          RETURN_MENU_LABEL = jump.menuLabel || RETURN_MENU_LABEL;
+          SELECTED_ID = String(jump.menuId);
+        }
+
+        syncContextBar();
+      }
+
+      async function load(resetEditor = false){
+        setMsg(host, "#msg", "muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Load failed: " + r.status);
+          return;
+        }
+
+        MENUS = Array.isArray(r.data?.menus) ? r.data.menus.map(x => ({
+          ...x,
+          group_key: normalizeGroupKey(x.group_key)
+        })) : [];
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
+        GROUP_KEYS = Array.isArray(r.data?.group_keys) && r.data.group_keys.length ? r.data.group_keys : GROUP_ORDER;
+
+        renderRoleFilter();
+        processBridgeContext();
+        renderList();
+
+        if(resetEditor){
+          const row = getMenuById(SELECTED_ID);
+          renderEditor(row || null);
+        }else{
+          const row = EDIT_CURRENT_ID ? getMenuById(EDIT_CURRENT_ID) : getMenuById(SELECTED_ID);
+          renderEditor(row || null);
+        }
+
+        if(SELECTED_ID){
+          const row = getMenuById(SELECTED_ID);
+          if(row){
+            RETURN_MENU_LABEL = row.label || row.id;
+            navSetRoleMenuContext({
+              role_id: RETURN_ROLE_ID,
+              role_name: RETURN_ROLE_NAME,
+              menu_id: row.id,
+              menu_label: row.label || row.id,
+              open_usage: !!RETURN_ROLE_ID
+            });
+            syncContextBar();
+          }
+        }
+
+        setMsg(host, "#msg", "success", "Loaded.");
+      }
+
+      q("btnReload").onclick = ()=>load(false);
+
+      q("btnNew").onclick = ()=>{
+        EDIT_CURRENT_ID = "";
+        renderEditor(null);
+      };
+
+      q("btnResetEditor").onclick = ()=>{
+        const row = getMenuById(EDIT_CURRENT_ID || SELECTED_ID);
+        renderEditor(row || null);
+      };
+
+      q("btnClearSelection").onclick = ()=>{
+        SELECTED_ID = "";
+        BULK_SELECTED_IDS.clear();
+        renderList();
+        renderEditor(null);
+      };
+
+      q("btnBulkMode").onclick = ()=>{
+        BULK_MODE = !BULK_MODE;
+        if(!BULK_MODE) BULK_SELECTED_IDS.clear();
+        renderList();
+      };
+
+      q("btnEditSelected").onclick = ()=>{
+        const row = getMenuById(SELECTED_ID);
+        if(row) renderEditor(row);
+      };
+
+      q("btnDeleteSelected").onclick = ()=>{
+        const row = getMenuById(SELECTED_ID);
+        if(row) openDelete(row);
+      };
+
+      q("btnBackRoleUsage").onclick = ()=>{
+        if(!RETURN_ROLE_ID) return;
+        navSetReturnToRoleUsage(RETURN_ROLE_ID, RETURN_ROLE_NAME || RETURN_ROLE_ID);
+        navGoModule(Orland, "role_builder");
+      };
+
+      q("btnCtxOpenRole").onclick = ()=>{
+        if(!RETURN_ROLE_ID) return;
+        navSetReturnToRoleUsage(RETURN_ROLE_ID, RETURN_ROLE_NAME || RETURN_ROLE_ID);
+        navGoModule(Orland, "role_builder");
+      };
+
+      q("qSearch").oninput = ()=>renderList();
+      q("qRole").onchange = ()=>renderList();
+
+      q("btnBulkSelectVisible").onclick = ()=>{
+        FLAT_VISIBLE.forEach(x => BULK_SELECTED_IDS.add(String(x.id)));
+        renderList();
+      };
+
+      q("btnBulkClear").onclick = ()=>{
+        BULK_SELECTED_IDS.clear();
+        renderList();
+      };
+
+      q("btnBulkApplyReplace").onclick = ()=>applyBulkRoles("replace");
+      q("btnBulkApplyAdd").onclick = ()=>applyBulkRoles("add");
+      q("btnBulkApplyRemove").onclick = ()=>applyBulkRoles("remove");
+
+      q("btnConfirmCancel").onclick = ()=>closeConfirm(host);
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
+      };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm(host);
+      });
+
+      bindKeyboard();
+      await load(true);
+    }
+  };
+}
