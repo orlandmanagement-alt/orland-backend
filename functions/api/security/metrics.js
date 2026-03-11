@@ -1,89 +1,152 @@
-import { json, requireAuth, hasRole } from "../../_lib.js";
+import { json, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
-function nowSec(){
-  return Math.floor(Date.now() / 1000);
+function toInt(v, d = 0){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+function dayKeyFromSec(sec){
+  const d = new Date(Number(sec || 0) * 1000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function scalar(env, sql, binds = []){
+  const row = await env.DB.prepare(sql).bind(...binds).first();
+  if(!row) return 0;
+  const k = Object.keys(row)[0];
+  return toInt(row[k], 0);
 }
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
-  if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403,"forbidden",null);
+
+  if(!hasRole(a.roles, ["super_admin", "admin", "staff"])){
+    return json(403, "forbidden", null);
+  }
 
   const url = new URL(request.url);
-  const days = Math.max(1, Math.min(90, Number(url.searchParams.get("days") || "7")));
-  const since = nowSec() - (days * 86400);
+  const days = Math.max(1, Math.min(365, toInt(url.searchParams.get("days"), 7)));
+  const now = nowSec();
+  const since = now - (days * 86400);
+  const sinceDay = dayKeyFromSec(since);
 
-  // audit-based metrics
-  const audit = await env.DB.prepare(`
-    SELECT
-      COALESCE(SUM(CASE WHEN action='rate_limited' THEN 1 ELSE 0 END),0) AS rate_limited,
-      COALESCE(SUM(CASE WHEN action='lockout' THEN 1 ELSE 0 END),0) AS lockouts,
-      COALESCE(SUM(CASE WHEN action='otp_verify_fail' THEN 1 ELSE 0 END),0) AS otp_verify_fail,
-      COALESCE(SUM(CASE WHEN action='password_fail' THEN 1 ELSE 0 END),0) AS password_fail,
-      COALESCE(SUM(CASE WHEN action='session_anomaly' THEN 1 ELSE 0 END),0) AS session_anomaly
-    FROM audit_logs
-    WHERE created_at >= ?
-  `).bind(since).first();
+  const [
+    rate_limited,
+    lockouts,
+    otp_verify_fail,
+    password_fail,
+    session_anomaly,
+    incidents_created,
+    active_sessions,
+    otp_requests_total,
+    otp_consumed,
+    otp_expired,
+    rules_total,
+    rules_enabled,
+    rules_fired
+  ] = await Promise.all([
+    scalar(env, `
+      SELECT COALESCE(SUM(rate_limited), 0) AS v
+      FROM hourly_metrics
+      WHERE hour >= ?
+    `, [sinceDay]),
 
-  // incidents created
-  const inc = await env.DB.prepare(`
-    SELECT COALESCE(COUNT(*),0) AS incidents_created
-    FROM incidents
-    WHERE created_at >= ?
-  `).bind(since).first();
+    scalar(env, `
+      SELECT COALESCE(SUM(lockouts), 0) AS v
+      FROM hourly_metrics
+      WHERE hour >= ?
+    `, [sinceDay]),
 
-  // active sessions
-  const activeSessions = await env.DB.prepare(`
-    SELECT COALESCE(COUNT(*),0) AS active_sessions
-    FROM sessions
-    WHERE revoked_at IS NULL
-      AND expires_at > ?
-  `).bind(nowSec()).first();
+    scalar(env, `
+      SELECT COALESCE(SUM(otp_verify_fail), 0) AS v
+      FROM hourly_metrics
+      WHERE hour >= ?
+    `, [sinceDay]),
 
-  // otp requests in period
-  const otp = await env.DB.prepare(`
-    SELECT
-      COALESCE(COUNT(*),0) AS otp_requests_total,
-      COALESCE(SUM(CASE WHEN consumed_at IS NOT NULL THEN 1 ELSE 0 END),0) AS otp_consumed,
-      COALESCE(SUM(CASE WHEN expires_at < ? AND consumed_at IS NULL THEN 1 ELSE 0 END),0) AS otp_expired
-    FROM otp_requests
-    WHERE created_at >= ?
-  `).bind(nowSec(), since).first();
+    scalar(env, `
+      SELECT COALESCE(SUM(password_fail), 0) AS v
+      FROM hourly_metrics
+      WHERE hour >= ?
+    `, [sinceDay]),
 
-  // alerts state summary
-  const alerts = await env.DB.prepare(`
-    SELECT
-      COALESCE(COUNT(*),0) AS rules_total,
-      COALESCE(SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),0) AS rules_enabled
-    FROM alert_rules
-  `).first();
+    scalar(env, `
+      SELECT COALESCE(SUM(session_anomaly), 0) AS v
+      FROM hourly_metrics
+      WHERE hour >= ?
+    `, [sinceDay]),
 
-  const fired = await env.DB.prepare(`
-    SELECT COALESCE(COUNT(*),0) AS rules_fired
-    FROM alert_state
-    WHERE last_fired_at IS NOT NULL
-      AND updated_at >= ?
-  `).bind(since).first();
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM incidents
+      WHERE created_at >= ?
+    `, [since]),
 
-  return json(200,"ok",{
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM sessions
+      WHERE revoked_at IS NULL
+        AND expires_at > ?
+    `, [now]),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM otp_requests
+      WHERE created_at >= ?
+    `, [since]),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM otp_requests
+      WHERE created_at >= ?
+        AND consumed_at IS NOT NULL
+    `, [since]),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM otp_requests
+      WHERE created_at >= ?
+        AND consumed_at IS NULL
+        AND expires_at < ?
+    `, [since, now]),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM alert_rules
+    `),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM alert_rules
+      WHERE enabled = 1
+    `),
+
+    scalar(env, `
+      SELECT COUNT(*) AS v
+      FROM alert_state
+      WHERE last_fired_at IS NOT NULL
+        AND last_fired_at >= ?
+    `, [since])
+  ]);
+
+  return json(200, "ok", {
+    source: "security_metrics_v1",
     days,
-    source: "audit_logs+incidents+sessions+otp_requests+alert_rules+alert_state",
-
-    rate_limited: Number(audit?.rate_limited || 0),
-    lockouts: Number(audit?.lockouts || 0),
-    otp_verify_fail: Number(audit?.otp_verify_fail || 0),
-    password_fail: Number(audit?.password_fail || 0),
-    session_anomaly: Number(audit?.session_anomaly || 0),
-
-    incidents_created: Number(inc?.incidents_created || 0),
-    active_sessions: Number(activeSessions?.active_sessions || 0),
-
-    otp_requests_total: Number(otp?.otp_requests_total || 0),
-    otp_consumed: Number(otp?.otp_consumed || 0),
-    otp_expired: Number(otp?.otp_expired || 0),
-
-    rules_total: Number(alerts?.rules_total || 0),
-    rules_enabled: Number(alerts?.rules_enabled || 0),
-    rules_fired: Number(fired?.rules_fired || 0)
+    rate_limited,
+    lockouts,
+    otp_verify_fail,
+    password_fail,
+    session_anomaly,
+    incidents_created,
+    active_sessions,
+    otp_requests_total,
+    otp_consumed,
+    otp_expired,
+    rules_total,
+    rules_enabled,
+    rules_fired
   });
 }

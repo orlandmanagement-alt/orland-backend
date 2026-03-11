@@ -1,13 +1,12 @@
-import { json, readJson, nowSec } from "../../_lib.js";
-import { requireBlogspotAccess } from "./_service.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
 async function setConfig(env, k, v){
   await env.DB.prepare(`
     INSERT INTO blogspot_sync_config (k, v, updated_at)
     VALUES (?, ?, ?)
     ON CONFLICT(k) DO UPDATE SET
-      v = excluded.v,
-      updated_at = excluded.updated_at
+      v=excluded.v,
+      updated_at=excluded.updated_at
   `).bind(k, String(v ?? ""), nowSec()).run();
 }
 
@@ -19,8 +18,9 @@ async function getConfig(env, k){
 }
 
 export async function onRequestGet({ request, env }){
-  const a = await requireBlogspotAccess(env, request, true);
+  const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
+  if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403, "forbidden", null);
 
   return json(200, "ok", {
     enabled: (await getConfig(env, "enabled"))?.v || "0",
@@ -28,17 +28,14 @@ export async function onRequestGet({ request, env }){
     sync_interval_min: (await getConfig(env, "sync_interval_min"))?.v || "15",
     sync_posts_enabled: (await getConfig(env, "sync_posts_enabled"))?.v || "1",
     sync_pages_enabled: (await getConfig(env, "sync_pages_enabled"))?.v || "1",
-    sync_widgets_enabled: (await getConfig(env, "sync_widgets_enabled"))?.v || "1",
-    sync_direction: (await getConfig(env, "sync_direction"))?.v || "bidirectional",
-    cron_driver: (await getConfig(env, "cron_driver"))?.v || "cron_trigger",
-    cron_endpoint: (await getConfig(env, "cron_endpoint"))?.v || "",
-    cron_secret: (await getConfig(env, "cron_secret"))?.v || ""
+    sync_direction: (await getConfig(env, "sync_direction"))?.v || "bidirectional"
   });
 }
 
 export async function onRequestPost({ request, env }){
-  const a = await requireBlogspotAccess(env, request, false);
+  const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
+  if(!hasRole(a.roles, ["super_admin","admin"])) return json(403, "forbidden", null);
 
   const body = await readJson(request) || {};
 
@@ -47,7 +44,6 @@ export async function onRequestPost({ request, env }){
   await setConfig(env, "sync_interval_min", Math.max(1, Number(body.sync_interval_min || 15)));
   await setConfig(env, "sync_posts_enabled", body.sync_posts_enabled === false ? "0" : "1");
   await setConfig(env, "sync_pages_enabled", body.sync_pages_enabled === false ? "0" : "1");
-  await setConfig(env, "sync_widgets_enabled", body.sync_widgets_enabled === false ? "0" : "1");
 
   const dir = String(body.sync_direction || "bidirectional");
   await setConfig(
@@ -55,15 +51,6 @@ export async function onRequestPost({ request, env }){
     "sync_direction",
     ["pull", "push", "bidirectional"].includes(dir) ? dir : "bidirectional"
   );
-
-  const cron_driver = String(body.cron_driver || "cron_trigger");
-  await setConfig(
-    env,
-    "cron_driver",
-    ["cron_trigger","worker_http","queue","manual"].includes(cron_driver) ? cron_driver : "cron_trigger"
-  );
-  await setConfig(env, "cron_endpoint", String(body.cron_endpoint || ""));
-  await setConfig(env, "cron_secret", String(body.cron_secret || ""));
 
   return json(200, "ok", { saved: true });
 }

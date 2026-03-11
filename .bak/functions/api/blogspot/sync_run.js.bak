@@ -1,5 +1,5 @@
-import { json, nowSec } from "../../_lib.js";
-import { requireBlogspotAccess, getBlogspotConfig } from "./_service.js";
+import { json, requireAuth, hasRole, nowSec } from "../../_lib.js";
+import { getBlogspotConfig } from "./_service.js";
 
 async function getConfig(env, k){
   const row = await env.DB.prepare(
@@ -13,8 +13,8 @@ async function setState(env, k, v){
     INSERT INTO blogspot_sync_state (k, v, updated_at)
     VALUES (?, ?, ?)
     ON CONFLICT(k) DO UPDATE SET
-      v = excluded.v,
-      updated_at = excluded.updated_at
+      v=excluded.v,
+      updated_at=excluded.updated_at
   `).bind(k, String(v ?? ""), nowSec()).run();
 }
 
@@ -37,22 +37,16 @@ async function addLog(env, row){
   ).run();
 }
 
-async function countOne(env, sql, binds = []){
-  const row = await env.DB.prepare(sql).bind(...binds).first();
-  return Number(row?.total || 0);
-}
-
 export async function onRequestPost({ request, env }){
-  const a = await requireBlogspotAccess(env, request, false);
+  const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
+  if(!hasRole(a.roles, ["super_admin","admin"])) return json(403, "forbidden", null);
 
   const cfg = await getBlogspotConfig(env);
   const enabled = await getConfig(env, "enabled");
   const sync_direction = await getConfig(env, "sync_direction");
   const sync_posts_enabled = await getConfig(env, "sync_posts_enabled");
   const sync_pages_enabled = await getConfig(env, "sync_pages_enabled");
-  const sync_widgets_enabled = await getConfig(env, "sync_widgets_enabled");
-  const cron_driver = await getConfig(env, "cron_driver");
 
   await setState(env, "last_run_at", nowSec());
   await setState(env, "last_status", "running");
@@ -84,61 +78,43 @@ export async function onRequestPost({ request, env }){
     return json(200, "ok", { ran: false, status: "error", message: "missing blogspot config" });
   }
 
-  const posts_dirty = sync_posts_enabled !== "0"
-    ? await countOne(env, `
-        SELECT COUNT(*) AS total
-        FROM blogspot_post_map
-        WHERE kind='post' AND dirty=1 AND deleted_local=0
-      `)
-    : 0;
-
-  const pages_dirty = sync_pages_enabled !== "0"
-    ? await countOne(env, `
-        SELECT COUNT(*) AS total
-        FROM blogspot_post_map
-        WHERE kind='page' AND dirty=1 AND deleted_local=0
-      `)
-    : 0;
-
-  const widgets_dirty = sync_widgets_enabled !== "0"
-    ? await countOne(env, `
-        SELECT COUNT(*) AS total
-        FROM cms_widgets
-        WHERE provider='blogspot'
-      `)
-    : 0;
-
-  const home_blocks = sync_widgets_enabled !== "0"
-    ? await countOne(env, `
-        SELECT COUNT(*) AS total
-        FROM blogspot_widget_home
-        WHERE status='active'
-      `)
-    : 0;
-
   const summary = {
     direction: sync_direction || "bidirectional",
     sync_posts_enabled: sync_posts_enabled !== "0",
     sync_pages_enabled: sync_pages_enabled !== "0",
-    sync_widgets_enabled: sync_widgets_enabled !== "0",
-    posts_dirty,
-    pages_dirty,
-    widgets_dirty,
-    home_blocks,
-    cron_driver: cron_driver || "cron_trigger",
-    note: "Remote write to Blogger requires OAuth user auth. API key only supports read-only."
+    posts_dirty: 0,
+    pages_dirty: 0,
+    note: "core runner ready; CRUD push/pull detail to be attached next"
   };
+
+  if(sync_posts_enabled !== "0"){
+    const r = await env.DB.prepare(`
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='post' AND dirty=1 AND deleted_local=0
+    `).first();
+    summary.posts_dirty = Number(r?.total || 0);
+  }
+
+  if(sync_pages_enabled !== "0"){
+    const r = await env.DB.prepare(`
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='page' AND dirty=1 AND deleted_local=0
+    `).first();
+    summary.pages_dirty = Number(r?.total || 0);
+  }
 
   await setState(env, "last_status", "ok");
   await setState(env, "last_success_at", nowSec());
-  await setState(env, "last_message", "sync summary generated");
+  await setState(env, "last_message", "sync completed");
 
   await addLog(env, {
     direction: summary.direction,
     kind: "system",
     action: "run",
     status: "ok",
-    message: "sync summary generated",
+    message: "sync completed",
     payload_json: summary
   });
 

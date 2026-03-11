@@ -1,5 +1,4 @@
-import { json } from "../../_lib.js";
-import { requireBlogspotAccess } from "./_service.js";
+import { json, requireAuth, hasRole } from "../../_lib.js";
 
 async function getState(env, k){
   const row = await env.DB.prepare(
@@ -16,8 +15,9 @@ async function getConfig(env, k){
 }
 
 export async function onRequestGet({ request, env }){
-  const a = await requireBlogspotAccess(env, request, true);
+  const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
+  if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403, "forbidden", null);
 
   const data = {
     state: {
@@ -32,10 +32,7 @@ export async function onRequestGet({ request, env }){
       sync_interval_min: (await getConfig(env, "sync_interval_min"))?.v || "15",
       sync_posts_enabled: (await getConfig(env, "sync_posts_enabled"))?.v || "1",
       sync_pages_enabled: (await getConfig(env, "sync_pages_enabled"))?.v || "1",
-      sync_widgets_enabled: (await getConfig(env, "sync_widgets_enabled"))?.v || "1",
-      sync_direction: (await getConfig(env, "sync_direction"))?.v || "bidirectional",
-      cron_driver: (await getConfig(env, "cron_driver"))?.v || "cron_trigger",
-      cron_endpoint: (await getConfig(env, "cron_endpoint"))?.v || ""
+      sync_direction: (await getConfig(env, "sync_direction"))?.v || "bidirectional"
     }
   };
 

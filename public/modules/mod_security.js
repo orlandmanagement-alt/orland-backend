@@ -1,14 +1,14 @@
 export default function(Orland){
-  const fmt = (n)=> {
+  const fmt = (n)=>{
     try{ return new Intl.NumberFormat("id-ID").format(Number(n || 0)); }
     catch{ return String(n || 0); }
   };
 
-  async function loadMetrics(days=7){
+  async function loadMetrics(days = 7){
     return await Orland.api("/api/security/metrics?days=" + encodeURIComponent(days));
   }
 
-  function card(title, id, hint=""){
+  function card(title, id, hint = ""){
     return `
       <div class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
         <div class="text-[11px] font-bold text-slate-500">${title}</div>
@@ -22,7 +22,7 @@ export default function(Orland){
     title: "Security",
     async mount(host){
       host.innerHTML = `
-        <div class="space-y-4">
+        <div class="space-y-4 max-w-6xl">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="text-xl font-extrabold text-slate-900 dark:text-white">Security</div>
@@ -100,7 +100,7 @@ export default function(Orland){
         </div>
       `;
 
-      const q = (id)=>host.querySelector("#"+id);
+      const q = (id)=>host.querySelector("#" + id);
 
       async function render(){
         const days = Number(q("daysSel").value || 7);
@@ -130,7 +130,7 @@ export default function(Orland){
         const notes = [];
         notes.push(`<div><b>Window:</b> ${fmt(d.days)} day(s)</div>`);
         notes.push(`<div><b>Source:</b> ${String(d.source || "n/a")}</div>`);
-        notes.push(`<div><b>Interpretation:</b> rate_limited, password_fail, otp_verify_fail, session_anomaly, dan lockouts diambil dari audit trail yang ditulis backend.</div>`);
+        notes.push(`<div><b>Interpretation:</b> rate_limited, password_fail, otp_verify_fail, session_anomaly, dan lockouts diambil dari audit trail backend.</div>`);
 
         if(Number(d.lockouts || 0) > 0){
           notes.push(`<div class="text-amber-600"><b>Warning:</b> lockout terdeteksi dalam window ini.</div>`);
@@ -158,18 +158,21 @@ export default function(Orland){
         const msg = q("actionMsg");
         msg.className = "mt-3 text-xs text-slate-500";
         msg.textContent = "Sending...";
+
         const r = await Orland.api("/api/security/anomaly", {
-          method:"POST",
+          method: "POST",
           body: JSON.stringify({
-            kind:"manual_test",
-            note:"Triggered from security module"
+            kind: "manual_test",
+            note: "Triggered from security module"
           })
         });
+
         if(r.status !== "ok"){
           msg.className = "mt-3 text-xs text-red-500";
           msg.textContent = "Failed: " + r.status;
           return;
         }
+
         msg.className = "mt-3 text-xs text-emerald-600";
         msg.textContent = "Anomaly recorded.";
         await render();
