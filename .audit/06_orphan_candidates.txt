@@ -1,0 +1,3 @@
+=== ORPHAN CANDIDATES ===
+public/modules/mod_config.js
+public/modules/mod_invites_talent.js

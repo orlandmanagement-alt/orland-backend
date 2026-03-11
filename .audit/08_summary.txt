@@ -1,0 +1,18 @@
+PROJECT AUDIT SUMMARY
+
+API files total      : 152
+API shim refs total  : 49
+Module files total   : 48
+Module shim refs     : 12
+Legacy refs found    : 0
+Orphan candidates    : 2
+
+FILES
+- .audit/01_api_routes.txt
+- .audit/02_api_shims.txt
+- .audit/03_module_files.txt
+- .audit/04_module_shims.txt
+- .audit/05_legacy_refs.txt
+- .audit/06_orphan_candidates.txt
+- .audit/07_registry_map_refs.txt
+- .audit/08_summary.txt

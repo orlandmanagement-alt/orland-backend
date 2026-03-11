@@ -1,46 +1,22 @@
 export default function(Orland){
-  async function apiGet(){
-    return await Orland.api("/api/config/blogspot");
-  }
+  async function apiGet(){ return await Orland.api("/api/config/blogspot"); }
   async function apiSave(payload){
-    return await Orland.api("/api/config/blogspot", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
+    return await Orland.api("/api/config/blogspot", { method:"POST", body: JSON.stringify(payload) });
   }
-  async function apiGetSync(){
-    return await Orland.api("/api/blogspot/sync_config");
-  }
+  async function apiGetSync(){ return await Orland.api("/api/blogspot/sync_config"); }
   async function apiSaveSync(payload){
-    return await Orland.api("/api/blogspot/sync_config", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
+    return await Orland.api("/api/blogspot/sync_config", { method:"POST", body: JSON.stringify(payload) });
   }
   async function apiRunSync(){
-    return await Orland.api("/api/blogspot/sync_run", {
-      method:"POST",
-      body: JSON.stringify({})
-    });
+    return await Orland.api("/api/blogspot/sync_run", { method:"POST", body: JSON.stringify({}) });
   }
-  async function apiStatus(){
-    return await Orland.api("/api/blogspot/sync_status");
-  }
-  async function apiTest(){
-    return await Orland.api("/api/blogspot/posts?source=remote&maxResults=5");
-  }
-  async function apiGetOAuth(){
-    return await Orland.api("/api/config/blogspot_oauth");
-  }
+  async function apiStatus(){ return await Orland.api("/api/blogspot/sync_status"); }
+  async function apiTest(){ return await Orland.api("/api/blogspot/posts?source=remote&maxResults=5"); }
+  async function apiGetOAuth(){ return await Orland.api("/api/config/blogspot_oauth"); }
   async function apiSaveOAuth(payload){
-    return await Orland.api("/api/config/blogspot_oauth", {
-      method:"POST",
-      body: JSON.stringify(payload)
-    });
+    return await Orland.api("/api/config/blogspot_oauth", { method:"POST", body: JSON.stringify(payload) });
   }
-  async function apiStartOAuth(){
-    return await Orland.api("/api/blogspot/oauth_start");
-  }
+  async function apiStartOAuth(){ return await Orland.api("/api/blogspot/oauth_start"); }
 
   return {
     title:"Blogspot Settings",
@@ -115,22 +91,10 @@ export default function(Orland){
             </div>
 
             <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <div class="text-xs text-slate-500 font-bold">CLIENT ID</div>
-                <div id="oauth_client_id_state" class="text-sm font-black mt-2">-</div>
-              </div>
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <div class="text-xs text-slate-500 font-bold">CLIENT SECRET</div>
-                <div id="oauth_client_secret_state" class="text-sm font-black mt-2">-</div>
-              </div>
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <div class="text-xs text-slate-500 font-bold">REFRESH TOKEN</div>
-                <div id="oauth_refresh_state" class="text-sm font-black mt-2">-</div>
-              </div>
-              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <div class="text-xs text-slate-500 font-bold">ACCESS TOKEN</div>
-                <div id="oauth_access_state" class="text-sm font-black mt-2">-</div>
-              </div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">CLIENT ID</div><div id="oauth_client_id_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">CLIENT SECRET</div><div id="oauth_client_secret_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">REFRESH TOKEN</div><div id="oauth_refresh_state" class="text-sm font-black mt-2">-</div></div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><div class="text-xs text-slate-500 font-bold">ACCESS TOKEN</div><div id="oauth_access_state" class="text-sm font-black mt-2">-</div></div>
             </div>
 
             <div class="mt-5 flex gap-3 flex-wrap">
@@ -145,18 +109,12 @@ export default function(Orland){
             <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
               <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
                 <input id="sync_enabled" type="checkbox">
-                <div>
-                  <div class="font-black">Enable Sync</div>
-                  <div class="text-xs text-slate-500">Aktifkan sync runner</div>
-                </div>
+                <div><div class="font-black">Enable Sync</div><div class="text-xs text-slate-500">Aktifkan sync runner</div></div>
               </label>
 
               <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
                 <input id="auto_sync_enabled" type="checkbox">
-                <div>
-                  <div class="font-black">Auto Sync</div>
-                  <div class="text-xs text-slate-500">Untuk cron / worker trigger</div>
-                </div>
+                <div><div class="font-black">Auto Sync</div><div class="text-xs text-slate-500">Untuk cron / worker trigger</div></div>
               </label>
 
               <div>
@@ -173,20 +131,9 @@ export default function(Orland){
                 </select>
               </div>
 
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_posts_enabled" type="checkbox">
-                <div><div class="font-black">Sync Posts</div></div>
-              </label>
-
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_pages_enabled" type="checkbox">
-                <div><div class="font-black">Sync Pages</div></div>
-              </label>
-
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-                <input id="sync_widgets_enabled" type="checkbox">
-                <div><div class="font-black">Sync Widgets</div></div>
-              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_posts_enabled" type="checkbox"><div><div class="font-black">Sync Posts</div></div></label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_pages_enabled" type="checkbox"><div><div class="font-black">Sync Pages</div></div></label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-darkBorder p-4"><input id="sync_widgets_enabled" type="checkbox"><div><div class="font-black">Sync Widgets</div></div></label>
 
               <div>
                 <label class="block text-sm font-bold text-slate-500 mb-2">Cron Driver</label>
@@ -225,12 +172,47 @@ export default function(Orland){
             <pre id="testResult" class="mt-4 text-xs whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">{}</pre>
           </div>
         </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       `;
 
       const q = (id)=>host.querySelector("#"+id);
+      let confirmAction = null;
 
-      function yesNo(v){
-        return v ? "configured" : "missing";
+      function yesNo(v){ return v ? "configured" : "missing"; }
+
+      function openConfirm(title, desc, metaHtml, onOk, danger = true){
+        q("confirmTitle").textContent = title || "Confirm";
+        q("confirmDesc").textContent = desc || "";
+        q("confirmMeta").innerHTML = metaHtml || "-";
+        confirmAction = onOk;
+        q("btnConfirmOk").className = danger
+          ? "px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm"
+          : "px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-sm";
+        q("btnConfirmOk").textContent = danger ? "Confirm" : "Continue";
+        q("confirmBackdrop").classList.remove("hidden");
+      }
+
+      function closeConfirm(){
+        q("confirmBackdrop").classList.add("hidden");
+        q("confirmMeta").innerHTML = "";
+        confirmAction = null;
       }
 
       async function loadData(){
@@ -340,21 +322,30 @@ export default function(Orland){
         location.href = url;
       };
 
-      q("btnClearOAuthToken").onclick = async ()=>{
-        q("msg").className = "text-sm text-slate-500 mt-4";
-        q("msg").textContent = "Clearing refresh token...";
-        const r = await apiSaveOAuth({
-          enabled: q("oauth_enabled").checked,
-          clear_refresh_token: true
-        });
-        if(r.status !== "ok"){
-          q("msg").className = "text-sm text-red-500 mt-4";
-          q("msg").textContent = "Clear token failed: " + r.status;
-          return;
-        }
-        q("msg").className = "text-sm text-emerald-600 mt-4";
-        q("msg").textContent = "OAuth token cleared.";
-        await loadData();
+      q("btnClearOAuthToken").onclick = ()=>{
+        openConfirm(
+          "Clear Refresh Token",
+          "This action will remove saved OAuth refresh/access token.",
+          `<div class="font-black text-red-600">Blogspot OAuth token will be cleared</div><div class="text-xs text-slate-500 mt-2">You will need to connect Google again before remote publish/delete.</div>`,
+          async ()=>{
+            q("msg").className = "text-sm text-slate-500 mt-4";
+            q("msg").textContent = "Clearing refresh token...";
+            const r = await apiSaveOAuth({
+              enabled: q("oauth_enabled").checked,
+              clear_refresh_token: true
+            });
+            if(r.status !== "ok"){
+              q("msg").className = "text-sm text-red-500 mt-4";
+              q("msg").textContent = "Clear token failed: " + r.status;
+              return;
+            }
+            closeConfirm();
+            q("msg").className = "text-sm text-emerald-600 mt-4";
+            q("msg").textContent = "OAuth token cleared.";
+            await loadData();
+          },
+          true
+        );
       };
 
       q("btnSaveSync").onclick = async ()=>{
@@ -381,11 +372,20 @@ export default function(Orland){
         await loadData();
       };
 
-      q("btnRunSync").onclick = async ()=>{
-        q("statusBox").textContent = "Running...";
-        const r = await apiRunSync();
-        q("statusBox").textContent = JSON.stringify(r, null, 2);
-        await loadData();
+      q("btnRunSync").onclick = ()=>{
+        openConfirm(
+          "Run Sync Now",
+          "This action will execute manual sync summary/runner.",
+          `<div class="font-black text-emerald-700">Manual sync execution</div><div class="text-xs text-slate-500 mt-2">Direction: ${q("sync_direction").value} • Interval: ${q("sync_interval_min").value || "15"} min</div>`,
+          async ()=>{
+            q("statusBox").textContent = "Running...";
+            const r = await apiRunSync();
+            q("statusBox").textContent = JSON.stringify(r, null, 2);
+            closeConfirm();
+            await loadData();
+          },
+          false
+        );
       };
 
       q("btnTest").onclick = async ()=>{
@@ -393,6 +393,10 @@ export default function(Orland){
         const r = await apiTest();
         q("testResult").textContent = JSON.stringify(r, null, 2);
       };
+
+      q("btnConfirmCancel").onclick = closeConfirm;
+      q("btnConfirmOk").onclick = async ()=>{ if(typeof confirmAction === "function") await confirmAction(); };
+      q("confirmBackdrop").addEventListener("click", (e)=>{ if(e.target === q("confirmBackdrop")) closeConfirm(); });
 
       await loadData();
     }

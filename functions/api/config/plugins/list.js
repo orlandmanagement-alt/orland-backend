@@ -1,15 +1,17 @@
-import { json, requireAuth, hasRole } from "../../../_lib.js";
+import { json } from "../../../_lib.js";
+import { requireConfigAccess } from "../_shared.js";
 
 export async function onRequestGet({ request, env }){
-  const a = await requireAuth(env, request);
+  const a = await requireConfigAccess(env, request, false);
   if(!a.ok) return a.res;
-  if(!hasRole(a.roles, ["super_admin","admin","staff"])) return json(403,"forbidden",null);
 
   const r = await env.DB.prepare(`
     SELECT id, name, version, enabled, installed_at, updated_at
     FROM plugins
-    ORDER BY name ASC, id ASC
+    ORDER BY name ASC, updated_at DESC
   `).all();
 
-  return json(200,"ok",{ items: r.results || [] });
+  return json(200, "ok", {
+    items: r.results || []
+  });
 }

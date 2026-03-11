@@ -1,0 +1,13 @@
+=== MODULE SHIMS ===
+public/modules/mod_blogspot.js:1:export { default } from "./_core/mod_blogspot.js";
+public/modules/mod_blogspot_pages.js:1:export { default } from "./_core/mod_blogspot_pages.js";
+public/modules/mod_blogspot_posts.js:1:export { default } from "./_core/mod_blogspot_posts.js";
+public/modules/mod_blogspot_sync.js:1:export { default } from "./_core/mod_blogspot_sync.js";
+public/modules/mod_blogspot_widgets.js:1:export { default } from "./_core/mod_blogspot_widgets.js";
+public/modules/mod_dashboard.js:1:export { default } from "./_core/mod_dashboard.js";
+public/modules/mod_ipblocks.js:1:export { default } from "./_core/mod_ipblocks.js";
+public/modules/mod_menu_builder.js:1:export { default } from "./_core/mod_menu_builder.js";
+public/modules/mod_ops_incidents.js:1:export { default } from "./_core/mod_ops_incidents.js";
+public/modules/mod_rbac.js:1:export { default } from "./_core/mod_rbac.js";
+public/modules/mod_security.js:1:export { default } from "./_core/mod_security.js";
+public/modules/mod_security_policy.js:1:export { default } from "./_core/mod_security_policy.js";

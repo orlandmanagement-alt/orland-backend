@@ -1,26 +1,33 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../../../_lib.js";
+import { json } from "../../../_lib.js";
+import { requireConfigAccess, readBody } from "../_shared.js";
 
 export async function onRequestPost({ request, env }){
-  const a = await requireAuth(env, request);
+  const a = await requireConfigAccess(env, request, true);
   if(!a.ok) return a.res;
-  if(!hasRole(a.roles, ["super_admin","admin"])) return json(403,"forbidden",null);
 
-  const body = await readJson(request) || {};
+  const body = await readBody(request);
   const id = String(body.id || "").trim();
-  const name = String(body.name || id).trim();
+  const name = String(body.name || "").trim();
+  const version = String(body.version || "").trim();
 
-  if(!id) return json(400,"invalid_input",{ message:"id_required" });
+  if(!id || !name){
+    return json(400, "invalid_input", { message:"id_or_name_required" });
+  }
 
-  const now = nowSec();
+  const now = Math.floor(Date.now() / 1000);
 
   await env.DB.prepare(`
     INSERT INTO plugins (id, name, version, enabled, installed_at, updated_at)
-    VALUES (?,?,?,?,?,?)
+    VALUES (?, ?, ?, 1, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name=excluded.name,
+      version=excluded.version,
       enabled=1,
       updated_at=excluded.updated_at
-  `).bind(id, name || id, "", 1, now, now).run();
+  `).bind(id, name, version, now, now).run();
 
-  return json(200,"ok",{ installed:true, id });
+  return json(200, "ok", {
+    saved: true,
+    id
+  });
 }
