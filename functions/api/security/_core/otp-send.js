@@ -1,5 +1,5 @@
-import { json, readJson, requireAuth, hasRole } from "../../_lib.js";
-import { createOtpRequest } from "./_core/otp_send_helper.js";
+import { json, readJson, requireAuth, hasRole } from "../../../_lib.js";
+import { createOtpRequest } from "./otp_send_helper.js";
 
 /**
  * Generic OTP send endpoint

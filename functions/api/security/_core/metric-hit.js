@@ -1,5 +1,5 @@
-import { json, readJson, requireAuth, hasRole } from "../../_lib.js";
-import { bumpMetric } from "./_core/metrics_writer.js";
+import { json, readJson, requireAuth, hasRole } from "../../../_lib.js";
+import { bumpMetric } from "./metrics_writer.js";
 
 export async function onRequestPost({ request, env }){
   const a = await requireAuth(env, request);

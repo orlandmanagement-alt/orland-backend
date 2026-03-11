@@ -1,4 +1,4 @@
-import { json, parseCookies, revokeSessionBySid, cookie } from "../_lib.js";
+import { json, parseCookies, revokeSessionBySid, cookie } from "../../_lib.js";
 
 export async function onRequestPost({ request, env }) {
   const c = parseCookies(request);

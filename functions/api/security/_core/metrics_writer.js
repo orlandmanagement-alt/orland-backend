@@ -1,4 +1,4 @@
-import { nowSec } from "../../_lib.js";
+import { nowSec } from "../../../_lib.js";
 
 function pad2(n){
   n = Number(n || 0);

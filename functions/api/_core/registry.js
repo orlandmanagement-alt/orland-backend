@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole } from "../_lib.js";
+import { json, requireAuth, hasRole } from "../../_lib.js";
 
 function normPath(p){
   p = String(p || "").trim();

@@ -1,4 +1,4 @@
-import { json, readJson, nowSec } from "../../_lib.js";
+import { json, readJson, nowSec } from "../../../_lib.js";
 import {
   blogspotGet,
   requireBlogspotAccess,
@@ -6,7 +6,7 @@ import {
   makeId,
   safeJsonParse,
   markMapDirty
-} from "./_core/_service.js";
+} from "./_service.js";
 
 function s(v){ return String(v || "").trim(); }
 function n(v, d = 0){ const x = Number(v); return Number.isFinite(x) ? x : d; }

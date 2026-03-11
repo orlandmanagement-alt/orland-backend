@@ -1,5 +1,5 @@
-import { json } from "../../_lib.js";
-import { requireConfigAccess, getSetting, setSetting, readBody, maskSecret } from "./_shared.js";
+import { json } from "../../../_lib.js";
+import { requireConfigAccess, getSetting, setSetting, readBody, maskSecret } from "../_shared.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireConfigAccess(env, request, false);

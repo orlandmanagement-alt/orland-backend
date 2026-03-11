@@ -1,0 +1,2 @@
+-- MENU DB EXACT FIX CANDIDATES
+-- Review before execute.

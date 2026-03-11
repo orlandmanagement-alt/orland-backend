@@ -1,4 +1,4 @@
-import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../../_lib.js";
 
 const POLICY_KEY = "security_policy";
 

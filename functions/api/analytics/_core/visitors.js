@@ -1,4 +1,4 @@
-import { json } from "../../_lib.js";
+import { json } from "../../../_lib.js";
 import {
   requireAnalyticsAccess,
   getAnalyticsConfig,
@@ -6,7 +6,7 @@ import {
   analyticsMissingConfig,
   cfGraphql,
   rangeDates
-} from "./_core/_cf.js";
+} from "./_cf.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireAnalyticsAccess(env, request);

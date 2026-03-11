@@ -1,4 +1,4 @@
-import { json } from "../../_lib.js";
+import { json } from "../../../_lib.js";
 import { requireBlogspotAccess } from "./_service.js";
 
 async function getState(env, k){

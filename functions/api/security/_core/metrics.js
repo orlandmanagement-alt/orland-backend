@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole, nowSec } from "../../_lib.js";
+import { json, requireAuth, hasRole, nowSec } from "../../../_lib.js";
 
 function toInt(v, d = 0){
   const n = Number(v);

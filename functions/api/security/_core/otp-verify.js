@@ -1,5 +1,5 @@
-import { json, readJson, requireAuth, hasRole } from "../../_lib.js";
-import { verifyOtpByIdentifier } from "./_core/otp_verify_helper.js";
+import { json, readJson, requireAuth, hasRole } from "../../../_lib.js";
+import { verifyOtpByIdentifier } from "./otp_verify_helper.js";
 
 /**
  * Generic OTP verify endpoint

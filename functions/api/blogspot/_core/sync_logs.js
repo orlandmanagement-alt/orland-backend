@@ -1,5 +1,5 @@
-import { json } from "../../_lib.js";
-import { requireBlogspotAccess } from "./_core/_service.js";
+import { json } from "../../../_lib.js";
+import { requireBlogspotAccess } from "./_service.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);

@@ -1,5 +1,5 @@
-import { json } from "../../_lib.js";
-import { requireConfigAccess, getJsonSetting, setJsonSetting, readBody } from "./_shared.js";
+import { json } from "../../../_lib.js";
+import { requireConfigAccess, getJsonSetting, setJsonSetting, readBody } from "../_shared.js";
 
 const KEY = "otp_config_v1";
 

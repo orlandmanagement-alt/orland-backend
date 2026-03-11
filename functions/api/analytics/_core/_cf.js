@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole } from "../../_lib.js";
+import { json, requireAuth, hasRole } from "../../../_lib.js";
 
 async function getSetting(env, k){
   const row = await env.DB.prepare(`

@@ -1,5 +1,5 @@
-import { json, readJson, nowSec } from "../../_lib.js";
-import { requireBlogspotAccess } from "./_core/_service.js";
+import { json, readJson, nowSec } from "../../../_lib.js";
+import { requireBlogspotAccess } from "./_service.js";
 
 function s(v){ return String(v || "").trim(); }
 function n(v, d = 0){

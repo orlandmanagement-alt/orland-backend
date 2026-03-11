@@ -1,4 +1,4 @@
-import { json, requireAuth, hasRole, readJson, nowSec } from "../../_lib.js";
+import { json, requireAuth, hasRole, readJson, nowSec } from "../../../_lib.js";
 
 function s(v){
   return String(v || "").trim();

@@ -1,4 +1,4 @@
-import { json, readJson, nowSec } from "../../_lib.js";
+import { json, readJson, nowSec } from "../../../_lib.js";
 import { requireBlogspotAccess } from "./_service.js";
 
 async function setConfig(env, k, v){

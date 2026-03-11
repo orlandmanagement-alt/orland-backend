@@ -1,6 +1,6 @@
-import { json, requireAuth, hasRole, nowSec } from "../../_lib.js";
+import { json, requireAuth, hasRole, nowSec } from "../../../_lib.js";
 
-async function getKV(env, k){
+export async function getKV(env, k){
   const row = await env.DB.prepare(
     "SELECT v FROM system_settings WHERE k=? LIMIT 1"
   ).bind(k).first();

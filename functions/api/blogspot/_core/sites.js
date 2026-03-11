@@ -1,4 +1,4 @@
-import { json } from "../../_lib.js";
+import { json } from "../../../_lib.js";
 import {
   requireBlogspotAccess,
   getBlogspotConfig,
@@ -7,7 +7,7 @@ import {
   missingConfig,
   missingBlogspotFields,
   upstreamError
-} from "./_core/_service.js";
+} from "./_service.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);

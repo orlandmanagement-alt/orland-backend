@@ -1,5 +1,5 @@
-import { json } from "../../_lib.js";
-import { requireBlogspotAccess, getBlogspotConfig } from "./_core/_service.js";
+import { json } from "../../../_lib.js";
+import { requireBlogspotAccess, getBlogspotConfig } from "./_service.js";
 
 async function getState(env, k){
   const row = await env.DB.prepare(

@@ -1,11 +1,11 @@
-import { json } from "../../_lib.js";
+import { json } from "../../../_lib.js";
 import {
   requireAnalyticsAccess,
   getAnalyticsConfig,
   analyticsDisabled,
   analyticsMissingConfig,
   cfGraphql
-} from "./_core/_cf.js";
+} from "./_cf.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireAnalyticsAccess(env, request);

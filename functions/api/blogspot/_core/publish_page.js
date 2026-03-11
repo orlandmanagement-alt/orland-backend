@@ -1,4 +1,4 @@
-import { json, readJson, nowSec } from "../../_lib.js";
+import { json, readJson, nowSec } from "../../../_lib.js";
 import {
   requireBlogspotAccess,
   getBlogspotConfig,
@@ -6,7 +6,7 @@ import {
   refreshBlogspotAccessToken,
   bloggerFetch,
   markMapDirty
-} from "./_core/_service.js";
+} from "./_service.js";
 
 function s(v){ return String(v || "").trim(); }
 

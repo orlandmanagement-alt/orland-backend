@@ -1,6 +1,6 @@
 import {
   json, nowSec, sha256Base64, pbkdf2Hash, timingSafeEqual, auditEvent
-} from "../../_lib.js";
+} from "../../../_lib.js";
 
 function getClientIp(request){
   return (
