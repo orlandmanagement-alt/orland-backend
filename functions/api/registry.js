@@ -25,8 +25,9 @@ function guessModuleByCodeOrPath(code, path){
     users_talent: "/modules/mod_users_talent.js",
     users_tenant: "/modules/mod_users_tenant.js",
 
+    menus: "/modules/mod_menu_builder.js",
+    menus_main: "/modules/mod_menu_builder.js",
     menu_builder: "/modules/mod_menu_builder.js",
-    menus: "/modules/mod_menus.js",
     rbac: "/modules/mod_rbac.js",
 
     audit: "/modules/mod_audit.js",
@@ -76,8 +77,8 @@ function guessModuleByCodeOrPath(code, path){
     "/users/talent": "/modules/mod_users_talent.js",
     "/users/tenant": "/modules/mod_users_tenant.js",
 
+    "/menus": "/modules/mod_menu_builder.js",
     "/menu-builder": "/modules/mod_menu_builder.js",
-    "/menus": "/modules/mod_menus.js",
     "/rbac": "/modules/mod_rbac.js",
 
     "/audit": "/modules/mod_audit.js",

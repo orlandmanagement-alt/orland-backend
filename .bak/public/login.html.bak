@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>ORLAND | Login</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: "#3b82f6",
+            danger: "#ef4444",
+            success: "#10b981",
+            dark: "#0f1115",
+            darkLighter: "#16181d",
+            darkBorder: "#2b2d31"
+          }
+        }
+      }
+    };
+  </script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    html,body{height:100%}
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+
+  <div class="min-h-screen grid lg:grid-cols-2">
+    <div class="hidden lg:flex bg-dark text-white p-10 items-center justify-center">
+      <div class="max-w-md">
+        <div class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+          <i class="fa-solid fa-shield-halved text-xl"></i>
+        </div>
+        <h1 class="mt-6 text-4xl font-black tracking-tight">ORLAND</h1>
+        <p class="mt-3 text-slate-300 leading-relaxed">
+          Enterprise Operations Dashboard untuk security, operations, integrations, analytics, dan administration.
+        </p>
+        <div class="mt-8 grid grid-cols-1 gap-3 text-sm text-slate-300">
+          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <i class="fa-solid fa-user-shield mr-2 text-primary"></i> Session auth + role access
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <i class="fa-solid fa-chart-line mr-2 text-primary"></i> Realtime operational dashboard
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <i class="fa-solid fa-plug mr-2 text-primary"></i> Integrations & plugins ready
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-center p-6 sm:p-8">
+      <div class="w-full max-w-md">
+        <div class="lg:hidden mb-8 text-center">
+          <div class="mx-auto w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg">
+            <i class="fa-solid fa-shield-halved text-xl"></i>
+          </div>
+          <div class="mt-4 text-2xl font-black tracking-tight">ORLAND</div>
+          <div class="text-sm text-slate-500">Enterprise Operations Dashboard</div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8">
+          <div class="mb-6">
+            <h2 class="text-2xl font-black tracking-tight text-slate-900">Masuk</h2>
+            <p class="mt-1 text-sm text-slate-500">Login dengan akun admin/staff yang aktif.</p>
+          </div>
+
+          <form id="loginForm" class="space-y-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Email</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                  <i class="fa-solid fa-envelope"></i>
+                </span>
+                <input
+                  id="email"
+                  type="email"
+                  autocomplete="username"
+                  class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none text-sm"
+                  placeholder="admin@domain.com"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Password</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                  <i class="fa-solid fa-lock"></i>
+                </span>
+                <input
+                  id="password"
+                  type="password"
+                  autocomplete="current-password"
+                  class="w-full pl-11 pr-12 py-3 rounded-2xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none text-sm"
+                  placeholder="Masukkan password"
+                />
+                <button id="togglePass" type="button" class="absolute inset-y-0 right-0 pr-4 text-slate-400 hover:text-slate-600">
+                  <i id="togglePassIcon" class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="msg" class="hidden rounded-2xl px-4 py-3 text-sm"></div>
+
+            <button
+              id="btnLogin"
+              type="submit"
+              class="w-full py-3 rounded-2xl bg-primary text-white font-black text-sm hover:opacity-95 active:scale-[.99] transition"
+            >
+              <span id="btnText">Login</span>
+            </button>
+          </form>
+
+          <div class="mt-6 text-center text-[11px] text-slate-400">
+            Protected by ORLAND session authentication
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function api(path, opt = {}) {
+      const headers = Object.assign({}, opt.headers || {});
+      if (opt.body != null && !headers["content-type"]) headers["content-type"] = "application/json";
+      try{
+        const res = await fetch(path, {
+          method: opt.method || "GET",
+          headers,
+          body: opt.body || undefined,
+          credentials: "include"
+        });
+        const ct = res.headers.get("content-type") || "";
+        if(!ct.includes("application/json")){
+          const t = await res.text().catch(()=> "");
+          return { status:"server_error", data:{ http:res.status, body:t.slice(0,280) } };
+        }
+        return await res.json();
+      }catch(e){
+        return { status:"network_error", data:{ message:String(e?.message || e) } };
+      }
+    }
+
+    (function(){
+      const email = document.getElementById("email");
+      const password = document.getElementById("password");
+      const form = document.getElementById("loginForm");
+      const msg = document.getElementById("msg");
+      const btnLogin = document.getElementById("btnLogin");
+      const btnText = document.getElementById("btnText");
+      const togglePass = document.getElementById("togglePass");
+      const togglePassIcon = document.getElementById("togglePassIcon");
+
+      function setMsg(kind, text){
+        msg.className = "rounded-2xl px-4 py-3 text-sm";
+        if(kind === "error"){
+          msg.classList.add("bg-red-50","text-red-700","border","border-red-200");
+        }else if(kind === "success"){
+          msg.classList.add("bg-emerald-50","text-emerald-700","border","border-emerald-200");
+        }else{
+          msg.classList.add("bg-slate-50","text-slate-700","border","border-slate-200");
+        }
+        msg.textContent = text;
+        msg.classList.remove("hidden");
+      }
+
+      function setLoading(v){
+        btnLogin.disabled = !!v;
+        btnLogin.classList.toggle("opacity-70", !!v);
+        btnLogin.classList.toggle("cursor-not-allowed", !!v);
+        btnText.textContent = v ? "Memproses..." : "Login";
+      }
+
+      togglePass.addEventListener("click", ()=>{
+        const isPwd = password.type === "password";
+        password.type = isPwd ? "text" : "password";
+        togglePassIcon.className = isPwd ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+      });
+
+      form.addEventListener("submit", async (e)=>{
+        e.preventDefault();
+        msg.classList.add("hidden");
+
+        const em = String(email.value || "").trim();
+        const pw = String(password.value || "");
+
+        if(!em || !pw){
+          setMsg("error", "Email dan password wajib diisi.");
+          return;
+        }
+
+        setLoading(true);
+
+        const r = await api("/api/login", {
+          method: "POST",
+          body: JSON.stringify({ email: em, password: pw })
+        });
+
+        setLoading(false);
+
+        if(r.status === "ok"){
+          setMsg("success", "Login berhasil. Mengalihkan ke dashboard...");
+          setTimeout(()=>{ location.href = "/dashboard"; }, 300);
+          return;
+        }
+
+        if(r.status === "user_belum_terdaftar"){
+          setMsg("error", "Akun belum terdaftar.");
+          return;
+        }
+
+        if(r.status === "password_invalid"){
+          setMsg("error", "Password salah.");
+          return;
+        }
+
+        if(r.status === "blocked_ip"){
+          setMsg("error", "Terlalu banyak percobaan gagal. Akses sementara diblokir.");
+          return;
+        }
+
+        if(r.status === "forbidden"){
+          const reason = r.data?.message || "";
+          if(reason === "role_not_allowed_for_dashboard"){
+            setMsg("error", "Role akun ini tidak diizinkan mengakses dashboard.");
+          } else {
+            setMsg("error", "Akses ditolak.");
+          }
+          return;
+        }
+
+        if(r.status === "network_error"){
+          setMsg("error", "Jaringan bermasalah. Coba lagi.");
+          return;
+        }
+
+        setMsg("error", "Login gagal: " + String(r.status || "server_error"));
+      });
+
+      window.addEventListener("DOMContentLoaded", async ()=>{
+        const me = await api("/api/me");
+        if(me.status === "ok"){
+          location.href = "/dashboard";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

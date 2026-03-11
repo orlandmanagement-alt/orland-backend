@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>ORLAND | Enterprise Operations</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -260,18 +257,9 @@
 
       document.addEventListener("DOMContentLoaded", async ()=>{
         await window.Orland.bootDashboard();
-
         const me = window.Orland?.state?.me || {};
         $("pmName") && ($("pmName").textContent = me.display_name || me.email_norm || me.id || "—");
         $("pmEmail") && ($("pmEmail").textContent = me.email_norm || "—");
-
-        if((location.pathname || "/") === "/"){
-          setTimeout(()=>{
-            if((location.pathname || "/") === "/" && window.Orland?.navigate){
-              window.Orland.navigate("/dashboard", false);
-            }
-          }, 0);
-        }
       });
     })();
   </script>
