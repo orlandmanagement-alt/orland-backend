@@ -1,0 +1,29 @@
+Patch minimal untuk functions/api/menus.js:
+
+1) Tambah import:
+import { readProtectedMenuPolicy, evaluateProtectedMenuMutation } from "./_menu_policy_guard.js";
+
+2) Saat action=delete:
+- ambil row original berdasarkan id
+- panggil:
+  const policy = await readProtectedMenuPolicy(env);
+  const check = evaluateProtectedMenuMutation(policy, originalRow, originalRow, "delete");
+  if(!check.ok) return json(400, check.code, { message: check.message });
+
+3) Saat action=update:
+- ambil row original berdasarkan id
+- bentuk draft dari payload update
+- panggil:
+  const policy = await readProtectedMenuPolicy(env);
+  const check = evaluateProtectedMenuMutation(policy, originalRow, draft, "update");
+  if(!check.ok) return json(400, check.code, { message: check.message });
+
+4) Saat action=create:
+- biasanya tidak perlu block, kecuali mau menahan create dengan protected path yang sama.
+- opsional:
+  const policy = await readProtectedMenuPolicy(env);
+  const check = evaluateProtectedMenuMutation(policy, null, draft, "create");
+  if(!check.ok) return json(400, check.code, { message: check.message });
+
+Catatan:
+- enforcement v1 ini paling penting dipasang pada delete + update.

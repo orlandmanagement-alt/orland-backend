@@ -1,0 +1,14 @@
+{
+  "/users/offboarding": {
+    "module": "/modules/mod_user_offboarding.js",
+    "export": "default",
+    "group": "users",
+    "label": "User Offboarding"
+  },
+  "/access/reviews/apply": {
+    "module": "/modules/mod_access_review_apply.js",
+    "export": "default",
+    "group": "access",
+    "label": "Access Review Apply"
+  }
+}

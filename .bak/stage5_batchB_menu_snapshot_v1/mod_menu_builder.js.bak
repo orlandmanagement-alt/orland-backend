@@ -71,14 +71,6 @@ function buildTree(items){
   return roots;
 }
 
-function flattenTree(nodes, out = [], depth = 0){
-  for(const node of nodes || []){
-    out.push({ ...node, __depth: depth });
-    flattenTree(node.children || [], out, depth + 1);
-  }
-  return out;
-}
-
 function deepClone(v){
   try{ return JSON.parse(JSON.stringify(v)); }
   catch{ return v; }
@@ -97,7 +89,7 @@ function arraysEqual(a, b){
   const aa = uniqStrings(a).sort();
   const bb = uniqStrings(b).sort();
   if(aa.length !== bb.length) return false;
-  for(let i=0;i<aa.length;i++) if(aa[i] !== bb[i]) return false;
+  for(let i = 0; i < aa.length; i++) if(aa[i] !== bb[i]) return false;
   return true;
 }
 
@@ -108,31 +100,6 @@ export default function(Orland){
 
   async function apiSave(payload){
     return await Orland.api("/api/menus", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-  }
-
-  async function apiReorder(items){
-    return await Orland.api("/api/menus/reorder", {
-      method: "POST",
-      body: JSON.stringify({ items })
-    });
-  }
-
-  async function apiValidatePath(path, id){
-    const qs = new URLSearchParams();
-    qs.set("path", path || "/");
-    if(id) qs.set("id", id);
-    return await Orland.api("/api/validate/menu-path?" + qs.toString());
-  }
-
-  async function apiSnapshots(){
-    return await Orland.api("/api/config/snapshots");
-  }
-
-  async function apiSnapshotAction(payload){
-    return await Orland.api("/api/config/snapshots", {
       method: "POST",
       body: JSON.stringify(payload)
     });
@@ -205,7 +172,7 @@ export default function(Orland){
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div class="text-2xl font-extrabold ui-title-gradient">Menu Builder</div>
-                <div class="text-slate-500 mt-1">Drag & drop order, modal bertab, validasi path live, dan config snapshot. Dirancang nyaman untuk mobile maupun desktop.</div>
+                <div class="text-slate-500 mt-1">Hybrid builder: audit summary, group badge counts, explorer, inspector. Create/edit sekarang memakai popup modal agar mobile lebih nyaman.</div>
               </div>
               <div class="flex gap-2 flex-wrap">
                 <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
@@ -213,9 +180,6 @@ export default function(Orland){
                 </button>
                 <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
                   <i class="fa-solid fa-plus mr-2"></i>New Menu
-                </button>
-                <button id="btnOpenSnapshots" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
-                  <i class="fa-solid fa-camera-retro mr-2"></i>Snapshots
                 </button>
               </div>
             </div>
@@ -230,7 +194,7 @@ export default function(Orland){
             <div id="msg" class="mt-4 text-sm text-slate-500"></div>
           </div>
 
-          <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
+          <div class="grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-4 ui-gap-grid">
             <div class="space-y-4">
               <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="text-xl font-extrabold">Group Badge Counts</div>
@@ -245,13 +209,10 @@ export default function(Orland){
               <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <div class="text-xl font-extrabold">Explorer + Reorder</div>
-                    <div class="text-xs text-slate-500 mt-1">Pilih menu, drag & drop urutan, atau pakai tombol mobile move.</div>
+                    <div class="text-xl font-extrabold">Menu Explorer</div>
+                    <div class="text-xs text-slate-500 mt-1">Tree explorer with audit badges.</div>
                   </div>
-                  <div class="flex gap-2 flex-wrap">
-                    <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
-                    <button id="btnSaveOrder" class="px-3 py-2 rounded-xl bg-primary text-white text-xs font-black">Save Order</button>
-                  </div>
+                  <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
                 </div>
                 <div id="listBox" class="mt-5 space-y-3"></div>
               </div>
@@ -262,7 +223,7 @@ export default function(Orland){
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <div class="text-xl font-extrabold">Inspector</div>
-                    <div class="text-xs text-slate-500 mt-1">Coverage, audit, dan action cepat.</div>
+                    <div class="text-xs text-slate-500 mt-1">Menu coverage inspector.</div>
                   </div>
                   <div class="flex gap-2 flex-wrap">
                     <button id="btnEditSelected" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Edit Selected</button>
@@ -276,23 +237,11 @@ export default function(Orland){
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <div class="text-xl font-extrabold">Diff Preview</div>
-                    <div class="text-xs text-slate-500 mt-1">Perubahan dari modal editor akan tampil di sini.</div>
+                    <div class="text-xs text-slate-500 mt-1">Preview perubahan menu yang sedang diedit di modal.</div>
                   </div>
                   <button id="btnResetDiff" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
                 </div>
                 <div id="diffBox" class="mt-4"><div class="text-sm text-slate-500">No diff.</div></div>
-              </div>
-
-              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
-                <div class="text-xl font-extrabold">Notice</div>
-                <div class="mt-4 space-y-3 text-sm text-slate-500">
-                  <div class="rounded-2xl border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4">
-                    Drag & drop v1 ini difokuskan untuk pengurutan menu. Parent tetap bisa diubah dari tab Structure di modal editor.
-                  </div>
-                  <div class="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-4">
-                    Di mobile tersedia tombol cepat Move Up / Move Down agar tetap mudah tanpa gesture drag yang sulit.
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -318,7 +267,7 @@ export default function(Orland){
 
         <div id="editorModal" class="hidden fixed inset-0 z-[130] bg-black/60 p-0 lg:p-6 overflow-auto">
           <div class="min-h-full flex items-stretch lg:items-center justify-center">
-            <div class="w-full h-full lg:h-auto lg:max-w-5xl rounded-none lg:rounded-3xl border-0 lg:border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl flex flex-col">
+            <div class="w-full h-full lg:h-auto lg:max-w-4xl rounded-none lg:rounded-3xl border-0 lg:border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl flex flex-col">
               <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
                 <div>
                   <div id="editorModalTitle" class="text-lg font-extrabold">Menu Editor</div>
@@ -326,41 +275,8 @@ export default function(Orland){
                 </div>
                 <button id="btnCloseEditorModal" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black">Close</button>
               </div>
-
-              <div class="px-4 lg:px-5 pt-4 border-b border-slate-200 dark:border-darkBorder">
-                <div class="flex gap-2 flex-wrap">
-                  <button type="button" class="editorTab px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black" data-tab="basic">Basic</button>
-                  <button type="button" class="editorTab px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black" data-tab="roles">Roles</button>
-                  <button type="button" class="editorTab px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black" data-tab="structure">Structure</button>
-                  <button type="button" class="editorTab px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black" data-tab="audit">Audit</button>
-                  <button type="button" class="editorTab px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black" data-tab="diff">Diff</button>
-                </div>
-              </div>
-
               <div class="flex-1 overflow-auto p-4 lg:p-5">
                 <div id="editorBox"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="snapshotModal" class="hidden fixed inset-0 z-[131] bg-black/60 p-0 lg:p-6 overflow-auto">
-          <div class="min-h-full flex items-stretch lg:items-center justify-center">
-            <div class="w-full h-full lg:h-auto lg:max-w-4xl rounded-none lg:rounded-3xl border-0 lg:border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl flex flex-col">
-              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
-                <div>
-                  <div class="text-lg font-extrabold">Config Snapshots</div>
-                  <div class="text-sm text-slate-500 mt-1">Snapshot menu, role, mapping, dan settings untuk rollback administratif.</div>
-                </div>
-                <button id="btnCloseSnapshotModal" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black">Close</button>
-              </div>
-              <div class="flex-1 overflow-auto p-4 lg:p-5">
-                <div class="flex gap-2 flex-wrap mb-4">
-                  <input id="snapshotLabel" class="flex-1 min-w-[220px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Label snapshot, mis. sebelum ubah menu security">
-                  <button id="btnCreateSnapshot" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">Create Snapshot</button>
-                </div>
-                <div id="snapshotMsg" class="text-sm text-slate-500"></div>
-                <div id="snapshotBox" class="mt-4 space-y-3"></div>
               </div>
             </div>
           </div>
@@ -378,9 +294,6 @@ export default function(Orland){
       let EDIT_ORIGINAL = null;
       let EDIT_CURRENT_ID = "";
       let confirmAction = null;
-      let DRAGGING_ID = "";
-      let ACTIVE_TAB = "basic";
-      let SNAPSHOTS = [];
 
       function getMenuById(id){
         return MENUS.find(x => String(x.id) === String(id)) || null;
@@ -452,14 +365,11 @@ export default function(Orland){
           const isSelected = String(node.id) === String(SELECTED_ID);
 
           return `
-            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}"
-                 data-row-id="${esc(node.id)}"
-                 draggable="true">
+            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}">
               <div class="px-3 lg:px-4 py-3 ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : "bg-white dark:bg-darkLighter"}" style="padding-left:${12 + indent}px">
                 <div class="flex items-start justify-between gap-3">
                   <button class="btnSelectRow min-w-0 flex-1 text-left" data-id="${esc(node.id)}">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <span class="cursor-move select-none text-slate-400">⋮⋮</span>
                       <i class="${esc(node.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
                       <div class="font-black text-sm">${depth > 0 ? "&mdash; " : ""}${esc(node.label || "Menu")}</div>
                       <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(node.group_key))}</span>
@@ -477,10 +387,6 @@ export default function(Orland){
                       }
                     </div>
                   </button>
-                  <div class="shrink-0 flex flex-col gap-2">
-                    <button class="btnMoveUp px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}">↑</button>
-                    <button class="btnMoveDown px-2 py-1 rounded-lg border border-slate-200 dark:border-darkBorder text-xs font-black" data-id="${esc(node.id)}">↓</button>
-                  </div>
                 </div>
               </div>
               ${(node.children || []).length ? `<div class="border-t border-slate-200 dark:border-darkBorder">${renderRows(node.children, depth + 1, visibleIds)}</div>` : ``}
@@ -533,12 +439,6 @@ export default function(Orland){
         `).join("");
       }
 
-      function tabBtnClass(key){
-        return ACTIVE_TAB === key
-          ? "px-3 py-2 rounded-xl bg-primary text-white text-sm font-black"
-          : "px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-sm font-black";
-      }
-
       function editorHtml(row = null){
         const isUpdate = !!row;
         const selectedRoleIds = new Set(
@@ -550,9 +450,6 @@ export default function(Orland){
           .map(x => `<option value="${esc(x.id)}" ${String(row?.parent_id || "") === String(x.id) ? "selected" : ""}>${esc(x.label)}</option>`)
           .join("");
 
-        const auditFlags = Array.isArray(row?.audit?.flags) ? row.audit.flags : [];
-        const diffHtml = renderDiffHtml(row);
-
         return `
           <form id="menuForm" class="grid grid-cols-1 gap-4">
             <input type="hidden" name="mode" value="${isUpdate ? "update" : "create"}">
@@ -561,46 +458,61 @@ export default function(Orland){
               ${isUpdate ? `Editing menu <span class="font-black">${esc(row.id)}</span>` : `Creating new menu`}
             </div>
 
-            <div class="flex gap-2 flex-wrap">
-              <button type="button" class="${tabBtnClass("basic")} editorTab" data-tab="basic">Basic</button>
-              <button type="button" class="${tabBtnClass("roles")} editorTab" data-tab="roles">Roles</button>
-              <button type="button" class="${tabBtnClass("structure")} editorTab" data-tab="structure">Structure</button>
-              <button type="button" class="${tabBtnClass("audit")} editorTab" data-tab="audit">Audit</button>
-              <button type="button" class="${tabBtnClass("diff")} editorTab" data-tab="diff">Diff</button>
+            <div class="flex flex-wrap gap-2">
+              ${row ? `<span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(row.group_key))}</span>` : ``}
+              ${row ? auditBadges(row) : ``}
             </div>
 
-            <div class="${ACTIVE_TAB === "basic" ? "" : "hidden"} editorPane" data-pane="basic">
-              <div class="grid grid-cols-1 gap-4">
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
-                  <input name="id" value="${esc(row?.id || "")}" ${isUpdate ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="m_core_dashboard">
-                </div>
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+              <input name="id" value="${esc(row?.id || "")}" ${isUpdate ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="m_core_dashboard">
+            </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
-                    <input name="code" value="${esc(row?.code || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="dashboard">
-                  </div>
-                  <div>
-                    <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
-                    <input name="label" value="${esc(row?.label || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Dashboard">
-                  </div>
-                </div>
-
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
-                  <input name="path" value="${esc(row?.path || "/")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/dashboard">
-                  <div id="pathValidationBox" class="mt-2 text-xs text-slate-500"></div>
-                </div>
-
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
-                  <input name="icon" value="${esc(row?.icon || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
+                <input name="code" value="${esc(row?.code || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="dashboard">
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
+                <input name="label" value="${esc(row?.label || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Dashboard">
               </div>
             </div>
 
-            <div class="${ACTIVE_TAB === "roles" ? "" : "hidden"} editorPane" data-pane="roles">
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
+              <input name="path" value="${esc(row?.path || "/")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/dashboard">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">GROUP KEY</label>
+                <select name="group_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  ${groupOptions(row?.group_key || "settings")}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
+                <input name="sort_order" type="number" value="${esc(row?.sort_order ?? 50)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
+                <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  <option value="">root</option>
+                  ${parents}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
+                <input name="icon" value="${esc(row?.icon || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
+              </div>
+            </div>
+
+            <div>
+              <div class="text-sm font-bold text-slate-500 mb-2">ROLE MENUS</div>
               <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
                 <div class="flex gap-2 flex-wrap mb-3">
                   <button type="button" id="btnRoleAll" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Check all</button>
@@ -617,52 +529,6 @@ export default function(Orland){
               </div>
             </div>
 
-            <div class="${ACTIVE_TAB === "structure" ? "" : "hidden"} editorPane" data-pane="structure">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">GROUP KEY</label>
-                  <select name="group_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
-                    ${groupOptions(row?.group_key || "settings")}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
-                  <input name="sort_order" type="number" value="${esc(row?.sort_order ?? 50)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
-                </div>
-              </div>
-
-              <div class="mt-4">
-                <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
-                <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
-                  <option value="">root</option>
-                  ${parents}
-                </select>
-              </div>
-
-              <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 text-sm text-sky-800 dark:text-sky-200">
-                Gunakan tab ini untuk mengubah group, parent, dan sort default. Untuk pengurutan cepat, pakai drag & drop di explorer.
-              </div>
-            </div>
-
-            <div class="${ACTIVE_TAB === "audit" ? "" : "hidden"} editorPane" data-pane="audit">
-              <div class="space-y-4">
-                <div class="flex gap-2 flex-wrap">
-                  ${row ? `<span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(row.group_key))}</span>` : ``}
-                  ${row ? auditBadges(row) : `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">new menu</span>`}
-                </div>
-
-                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-sm text-slate-500 space-y-2">
-                  <div><span class="font-bold">Role count:</span> ${esc(row?.audit?.role_count ?? 0)}</div>
-                  <div><span class="font-bold">Duplicate path count:</span> ${esc(row?.audit?.duplicate_path_count ?? 0)}</div>
-                  <div><span class="font-bold">Flags:</span> ${auditFlags.length ? auditFlags.map(esc).join(", ") : "none"}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="${ACTIVE_TAB === "diff" ? "" : "hidden"} editorPane" data-pane="diff">
-              <div id="modalDiffBox">${diffHtml}</div>
-            </div>
-
             <div class="sticky bottom-0 bg-white dark:bg-darkLighter py-3 flex gap-2 flex-wrap">
               <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
               <button type="button" id="btnDeleteFromForm" class="${isUpdate ? "" : "hidden "}px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
@@ -670,35 +536,6 @@ export default function(Orland){
             </div>
           </form>
         `;
-      }
-
-      function renderDiffHtml(row = null){
-        if(EDIT_MODE === "create"){
-          const draft = collectFormPayload();
-          return `<pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(draft))}</pre>`;
-        }
-
-        const base = row || EDIT_ORIGINAL;
-        if(!base){
-          return `<div class="text-sm text-slate-500">No diff.</div>`;
-        }
-
-        const draft = collectFormPayload();
-        const changes = diffRows(base, draft);
-
-        if(!changes.length){
-          return `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
-        }
-
-        return changes.map(ch => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 mb-3">
-            <div class="text-sm font-black">${esc(ch.field)}</div>
-            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.from) ? jsonPretty(ch.from) : String(ch.from))}</pre>
-              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.to) ? jsonPretty(ch.to) : String(ch.to))}</pre>
-            </div>
-          </div>
-        `).join("");
       }
 
       function collectFormPayload(){
@@ -736,64 +573,56 @@ export default function(Orland){
         };
       }
 
-      async function renderPathValidation(){
-        const form = q("menuForm");
-        const box = q("pathValidationBox");
-        if(!form || !box) return;
+      function renderDiff(){
+        const diffRoot = q("diffBox");
+        if(!diffRoot) return;
 
-        const path = String(form.path.value || "").trim() || "/";
-        const id = String(form.id.value || "").trim();
-
-        box.innerHTML = `<span class="text-slate-500">Checking path...</span>`;
-        const r = await apiValidatePath(path, id);
-
-        if(r.status !== "ok"){
-          box.innerHTML = `<span class="text-red-500">Validation failed.</span>`;
-          return;
-        }
-
-        const d = r.data || {};
-        if(d.valid){
-          box.innerHTML = `
-            <div class="text-emerald-600 font-semibold">Path available.</div>
-            ${(Array.isArray(d.warnings) ? d.warnings : []).map(w => `<div class="text-amber-600 mt-1">${esc(w)}</div>`).join("")}
+        if(EDIT_MODE === "create"){
+          const draft = collectFormPayload();
+          diffRoot.innerHTML = `
+            <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(draft))}</pre>
           `;
           return;
         }
 
-        box.innerHTML = `
-          <div class="text-red-500 font-semibold">Path duplicate ditemukan.</div>
-          <div class="mt-1 text-xs text-slate-500">
-            ${(Array.isArray(d.duplicates) ? d.duplicates : []).map(x => `${esc(x.label || x.id)} [${esc(x.id)}]`).join(", ")}
+        if(!EDIT_ORIGINAL){
+          diffRoot.innerHTML = `<div class="text-sm text-slate-500">No diff.</div>`;
+          return;
+        }
+
+        const draft = collectFormPayload();
+        const changes = diffRows(EDIT_ORIGINAL, draft);
+
+        if(!changes.length){
+          diffRoot.innerHTML = `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
+          return;
+        }
+
+        diffRoot.innerHTML = changes.map(ch => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 mb-3">
+            <div class="text-sm font-black">${esc(ch.field)}</div>
+            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.from) ? jsonPretty(ch.from) : String(ch.from))}</pre>
+              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.to) ? jsonPretty(ch.to) : String(ch.to))}</pre>
+            </div>
           </div>
-          ${(Array.isArray(d.warnings) ? d.warnings : []).map(w => `<div class="text-amber-600 mt-1">${esc(w)}</div>`).join("")}
-        `;
-      }
-
-      function renderDiff(){
-        const pageDiff = q("diffBox");
-        if(pageDiff) pageDiff.innerHTML = renderDiffHtml();
-
-        const modalDiff = q("modalDiffBox");
-        if(modalDiff) modalDiff.innerHTML = renderDiffHtml();
+        `).join("");
       }
 
       function openEditorModal(row = null){
         EDIT_MODE = row ? "update" : "create";
         EDIT_ORIGINAL = row ? deepClone(row) : null;
         EDIT_CURRENT_ID = row ? String(row.id) : "";
-        ACTIVE_TAB = "basic";
 
         q("editorModalTitle").textContent = row ? "Edit Menu" : "Create Menu";
         q("editorModalDesc").textContent = row
           ? "Update existing menu."
-          : "Create new menu for sidebar and registry.";
+          : "Create new menu for sidebar/registry.";
         q("editorBox").innerHTML = editorHtml(row);
         q("editorModal").classList.remove("hidden");
 
         bindEditor(row);
         renderDiff();
-        renderPathValidation();
       }
 
       function closeEditorModal(){
@@ -804,17 +633,8 @@ export default function(Orland){
         const form = q("menuForm");
         if(!form) return;
 
-        form.addEventListener("input", ()=>{
-          renderDiff();
-        });
-
-        form.addEventListener("change", ()=>{
-          renderDiff();
-        });
-
-        form.path?.addEventListener("input", ()=>{
-          renderPathValidation();
-        });
+        form.addEventListener("input", renderDiff);
+        form.addEventListener("change", renderDiff);
 
         q("btnRoleAll")?.addEventListener("click", ()=>{
           form.querySelectorAll(".roleCheck").forEach(x => x.checked = true);
@@ -835,16 +655,6 @@ export default function(Orland){
 
         q("btnCloseFormModal")?.addEventListener("click", closeEditorModal);
 
-        host.querySelectorAll(".editorTab").forEach(btn => {
-          btn.onclick = ()=>{
-            ACTIVE_TAB = String(btn.getAttribute("data-tab") || "basic");
-            q("editorBox").innerHTML = editorHtml(row);
-            bindEditor(row);
-            renderDiff();
-            renderPathValidation();
-          };
-        });
-
         form.onsubmit = async (ev)=>{
           ev.preventDefault();
           const payload = collectFormPayload();
@@ -861,17 +671,6 @@ export default function(Orland){
 
           if(payload.parent_id && payload.parent_id === payload.id){
             setMsg(host, "#msg", "error", "Parent tidak boleh sama dengan ID.");
-            return;
-          }
-
-          const validPath = await apiValidatePath(payload.path, payload.id);
-          if(validPath.status === "ok" && !validPath.data?.valid){
-            setMsg(host, "#msg", "error", "Path duplicate. Perbaiki sebelum save.");
-            ACTIVE_TAB = "basic";
-            q("editorBox").innerHTML = editorHtml(row);
-            bindEditor(row);
-            renderDiff();
-            renderPathValidation();
             return;
           }
 
@@ -915,127 +714,6 @@ export default function(Orland){
         };
       }
 
-      function reorderArrayMove(flat, id, direction){
-        const idx = flat.findIndex(x => String(x.id) === String(id));
-        if(idx < 0) return flat;
-
-        const parent = String(flat[idx].parent_id || "");
-        let swap = -1;
-
-        if(direction === "up"){
-          for(let i = idx - 1; i >= 0; i--){
-            if(String(flat[i].parent_id || "") === parent){
-              swap = i;
-              break;
-            }
-          }
-        }else{
-          for(let i = idx + 1; i < flat.length; i++){
-            if(String(flat[i].parent_id || "") === parent){
-              swap = i;
-              break;
-            }
-          }
-        }
-
-        if(swap < 0) return flat;
-
-        const next = flat.slice();
-        const tmp = next[idx];
-        next[idx] = next[swap];
-        next[swap] = tmp;
-        return next;
-      }
-
-      function applyFlatOrderToMenus(flat){
-        const next = MENUS.map(x => ({ ...x }));
-        const byId = new Map(next.map(x => [String(x.id), x]));
-
-        let sortSeed = 10;
-        for(const item of flat){
-          const hit = byId.get(String(item.id));
-          if(hit){
-            hit.sort_order = sortSeed;
-            sortSeed += 10;
-          }
-        }
-
-        MENUS = next;
-      }
-
-      function bindDnD(){
-        q("listBox").querySelectorAll("[data-row-id]").forEach(rowEl => {
-          rowEl.addEventListener("dragstart", ()=>{
-            DRAGGING_ID = String(rowEl.getAttribute("data-row-id") || "");
-            rowEl.classList.add("opacity-60");
-          });
-
-          rowEl.addEventListener("dragend", ()=>{
-            DRAGGING_ID = "";
-            rowEl.classList.remove("opacity-60");
-          });
-
-          rowEl.addEventListener("dragover", (e)=>{
-            e.preventDefault();
-            rowEl.classList.add("ring-2", "ring-sky-200");
-          });
-
-          rowEl.addEventListener("dragleave", ()=>{
-            rowEl.classList.remove("ring-2", "ring-sky-200");
-          });
-
-          rowEl.addEventListener("drop", (e)=>{
-            e.preventDefault();
-            rowEl.classList.remove("ring-2", "ring-sky-200");
-
-            const targetId = String(rowEl.getAttribute("data-row-id") || "");
-            if(!DRAGGING_ID || !targetId || DRAGGING_ID === targetId) return;
-
-            const flat = flattenTree(buildTree(filteredItems()));
-            const dragIdx = flat.findIndex(x => String(x.id) === DRAGGING_ID);
-            const targetIdx = flat.findIndex(x => String(x.id) === targetId);
-            if(dragIdx < 0 || targetIdx < 0) return;
-
-            const moving = flat[dragIdx];
-            const target = flat[targetIdx];
-
-            moving.parent_id = target.parent_id || null;
-
-            const next = flat.filter(x => String(x.id) !== DRAGGING_ID);
-            next.splice(targetIdx, 0, moving);
-
-            applyFlatOrderToMenus(next);
-            renderList();
-            renderInspector();
-            setMsg(host, "#msg", "warning", "Order changed locally. Klik Save Order untuk menyimpan.");
-          });
-        });
-
-        q("listBox").querySelectorAll(".btnMoveUp").forEach(btn => {
-          btn.onclick = ()=>{
-            const id = String(btn.getAttribute("data-id") || "");
-            const flat = flattenTree(buildTree(filteredItems()));
-            const next = reorderArrayMove(flat, id, "up");
-            applyFlatOrderToMenus(next);
-            renderList();
-            renderInspector();
-            setMsg(host, "#msg", "warning", "Order changed locally. Klik Save Order untuk menyimpan.");
-          };
-        });
-
-        q("listBox").querySelectorAll(".btnMoveDown").forEach(btn => {
-          btn.onclick = ()=>{
-            const id = String(btn.getAttribute("data-id") || "");
-            const flat = flattenTree(buildTree(filteredItems()));
-            const next = reorderArrayMove(flat, id, "down");
-            applyFlatOrderToMenus(next);
-            renderList();
-            renderInspector();
-            setMsg(host, "#msg", "warning", "Order changed locally. Klik Save Order untuk menyimpan.");
-          };
-        });
-      }
-
       function renderList(){
         ensureSelection();
         const visibleItems = filteredItems();
@@ -1051,100 +729,7 @@ export default function(Orland){
           };
         });
 
-        bindDnD();
         renderInspector();
-      }
-
-      async function saveCurrentOrder(){
-        const flat = flattenTree(buildTree(MENUS));
-        const items = flat.map((x, idx) => ({
-          id: x.id,
-          parent_id: x.parent_id || null,
-          sort_order: (idx + 1) * 10
-        }));
-
-        setMsg(host, "#msg", "muted", "Saving order...");
-        const r = await apiReorder(items);
-        if(r.status !== "ok"){
-          setMsg(host, "#msg", "error", "Save order failed: " + (r.data?.message || r.status));
-          return;
-        }
-
-        setMsg(host, "#msg", "success", "Order saved.");
-        await load(false);
-      }
-
-      async function loadSnapshots(){
-        const r = await apiSnapshots();
-        if(r.status !== "ok"){
-          q("snapshotMsg").className = "text-sm text-red-500";
-          q("snapshotMsg").textContent = "Load snapshots failed.";
-          return;
-        }
-
-        SNAPSHOTS = Array.isArray(r.data?.items) ? r.data.items : [];
-        q("snapshotMsg").className = "text-sm text-slate-500";
-        q("snapshotMsg").textContent = SNAPSHOTS.length ? "Snapshot loaded." : "No snapshots yet.";
-
-        q("snapshotBox").innerHTML = SNAPSHOTS.length ? SNAPSHOTS.map(x => `
-          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <div class="font-black text-sm">${esc(x.label || x.key)}</div>
-                <div class="text-xs text-slate-500 mt-1">${esc(x.key)}</div>
-                <div class="text-[11px] text-slate-400 mt-1">updated_at: ${esc(x.updated_at || 0)}</div>
-              </div>
-              <div class="flex gap-2 flex-wrap">
-                <button class="btnRestoreSnapshot px-3 py-2 rounded-xl border border-amber-200 text-amber-700 text-xs font-black" data-key="${esc(x.key)}">Restore</button>
-                <button class="btnDeleteSnapshot px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black" data-key="${esc(x.key)}">Delete</button>
-              </div>
-            </div>
-          </div>
-        `).join("") : `<div class="text-sm text-slate-500">No snapshots.</div>`;
-
-        q("snapshotBox").querySelectorAll(".btnRestoreSnapshot").forEach(btn => {
-          btn.onclick = async ()=>{
-            const key = String(btn.getAttribute("data-key") || "");
-            q("snapshotMsg").className = "text-sm text-slate-500";
-            q("snapshotMsg").textContent = "Restoring snapshot...";
-            const r = await apiSnapshotAction({ action:"restore", key });
-            if(r.status !== "ok"){
-              q("snapshotMsg").className = "text-sm text-red-500";
-              q("snapshotMsg").textContent = "Restore failed: " + (r.data?.message || r.status);
-              return;
-            }
-            q("snapshotMsg").className = "text-sm text-emerald-600";
-            q("snapshotMsg").textContent = "Snapshot restored.";
-            await load(false);
-            await loadSnapshots();
-          };
-        });
-
-        q("snapshotBox").querySelectorAll(".btnDeleteSnapshot").forEach(btn => {
-          btn.onclick = async ()=>{
-            const key = String(btn.getAttribute("data-key") || "");
-            q("snapshotMsg").className = "text-sm text-slate-500";
-            q("snapshotMsg").textContent = "Deleting snapshot...";
-            const r = await apiSnapshotAction({ action:"delete", key });
-            if(r.status !== "ok"){
-              q("snapshotMsg").className = "text-sm text-red-500";
-              q("snapshotMsg").textContent = "Delete failed: " + (r.data?.message || r.status);
-              return;
-            }
-            q("snapshotMsg").className = "text-sm text-emerald-600";
-            q("snapshotMsg").textContent = "Snapshot deleted.";
-            await loadSnapshots();
-          };
-        });
-      }
-
-      function openSnapshotModal(){
-        q("snapshotModal").classList.remove("hidden");
-        loadSnapshots();
-      }
-
-      function closeSnapshotModal(){
-        q("snapshotModal").classList.add("hidden");
       }
 
       async function load(resetEditorState = false){
@@ -1179,9 +764,10 @@ export default function(Orland){
       }
 
       q("btnReload").onclick = ()=>load(false);
-      q("btnNew").onclick = ()=>openEditorModal(null);
-      q("btnOpenSnapshots").onclick = openSnapshotModal;
-      q("btnSaveOrder").onclick = saveCurrentOrder;
+
+      q("btnNew").onclick = ()=>{
+        openEditorModal(null);
+      };
 
       q("btnClearSelection").onclick = ()=>{
         SELECTED_ID = "";
@@ -1218,27 +804,6 @@ export default function(Orland){
       q("editorModal").addEventListener("click", (e)=>{
         if(e.target === q("editorModal")) closeEditorModal();
       });
-
-      q("btnCloseSnapshotModal").onclick = closeSnapshotModal;
-      q("snapshotModal").addEventListener("click", (e)=>{
-        if(e.target === q("snapshotModal")) closeSnapshotModal();
-      });
-
-      q("btnCreateSnapshot").onclick = async ()=>{
-        q("snapshotMsg").className = "text-sm text-slate-500";
-        q("snapshotMsg").textContent = "Creating snapshot...";
-        const label = String(q("snapshotLabel").value || "").trim();
-        const r = await apiSnapshotAction({ action:"create", label });
-        if(r.status !== "ok"){
-          q("snapshotMsg").className = "text-sm text-red-500";
-          q("snapshotMsg").textContent = "Create snapshot failed: " + (r.data?.message || r.status);
-          return;
-        }
-        q("snapshotLabel").value = "";
-        q("snapshotMsg").className = "text-sm text-emerald-600";
-        q("snapshotMsg").textContent = "Snapshot created.";
-        await loadSnapshots();
-      };
 
       await load(true);
     }

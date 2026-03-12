@@ -1,0 +1,8 @@
+{
+  "/registry-audit": {
+    "module": "/modules/mod_registry_audit.js",
+    "export": "default",
+    "group": "access",
+    "label": "Registry Audit"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "/access/permission-matrix": {
+    "module": "/modules/mod_permission_matrix.js",
+    "export": "default",
+    "group": "access",
+    "label": "Permission Matrix"
+  },
+  "/access/role-templates": {
+    "module": "/modules/mod_role_templates.js",
+    "export": "default",
+    "group": "access",
+    "label": "Role Templates"
+  },
+  "/access/simulation": {
+    "module": "/modules/mod_access_simulation.js",
+    "export": "default",
+    "group": "access",
+    "label": "Access Simulation"
+  }
+}

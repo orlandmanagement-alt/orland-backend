@@ -1,0 +1,768 @@
+import { esc, emptyState, openConfirm, closeConfirm, setMsg } from "../../assets/js/orland_ui.js";
+
+const GROUP_LABELS = {
+  dashboard: "Dashboard",
+  access: "Access Control",
+  users: "Users",
+  security: "Security",
+  content: "Content",
+  ops: "Operations",
+  data: "Data",
+  settings: "Settings",
+  audit: "Audit"
+};
+
+const GROUP_ORDER = [
+  "dashboard",
+  "access",
+  "users",
+  "security",
+  "content",
+  "ops",
+  "data",
+  "settings",
+  "audit"
+];
+
+function groupLabel(v){
+  return GROUP_LABELS[String(v || "").trim()] || "Settings";
+}
+
+function normalizeGroupKey(v){
+  return GROUP_ORDER.includes(String(v || "").trim()) ? String(v || "").trim() : "settings";
+}
+
+function bySort(a, b){
+  const sa = Number(a.sort_order ?? 9999);
+  const sb = Number(b.sort_order ?? 9999);
+  if(sa !== sb) return sa - sb;
+  return Number(a.created_at ?? 0) - Number(b.created_at ?? 0);
+}
+
+function buildTree(items){
+  const byId = new Map();
+  const roots = [];
+
+  for(const row of (items || [])){
+    byId.set(String(row.id), {
+      ...row,
+      id: String(row.id),
+      parent_id: row.parent_id ? String(row.parent_id) : null,
+      sort_order: Number(row.sort_order ?? 9999),
+      created_at: Number(row.created_at ?? 0),
+      children: []
+    });
+  }
+
+  for(const item of byId.values()){
+    if(item.parent_id && byId.has(item.parent_id)){
+      byId.get(item.parent_id).children.push(item);
+    }else{
+      roots.push(item);
+    }
+  }
+
+  const walk = (arr)=>{
+    arr.sort(bySort);
+    for(const x of arr) walk(x.children || []);
+  };
+  walk(roots);
+
+  return roots;
+}
+
+function deepClone(v){
+  try{ return JSON.parse(JSON.stringify(v)); }
+  catch{ return v; }
+}
+
+function jsonPretty(v){
+  try{ return JSON.stringify(v, null, 2); }
+  catch{ return String(v); }
+}
+
+function uniqStrings(arr){
+  return Array.from(new Set((Array.isArray(arr) ? arr : []).map(x => String(x || "").trim()).filter(Boolean)));
+}
+
+function arraysEqual(a, b){
+  const aa = uniqStrings(a).sort();
+  const bb = uniqStrings(b).sort();
+  if(aa.length !== bb.length) return false;
+  for(let i=0;i<aa.length;i++) if(aa[i] !== bb[i]) return false;
+  return true;
+}
+
+export default function(Orland){
+  async function apiLoad(){
+    return await Orland.api("/api/menus");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/menus", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function auditBadges(row){
+    const flags = Array.isArray(row?.audit?.flags) ? row.audit.flags : [];
+    const map = {
+      no_roles: ["amber", "no roles"],
+      orphan_parent: ["rose", "orphan"],
+      duplicate_path: ["violet", "duplicate path"],
+      broad_role_coverage: ["sky", "broad coverage"]
+    };
+    return flags.map(f => {
+      const conf = map[f];
+      if(!conf) return "";
+      const [tone, label] = conf;
+      return `<span class="px-2 py-1 rounded-full bg-${tone}-100 text-${tone}-700 text-[11px] font-black">${esc(label)}</span>`;
+    }).join("");
+  }
+
+  function diffRows(original, draft){
+    const out = [];
+
+    if(String(original.code || "") !== String(draft.code || "")){
+      out.push({ field:"code", from: original.code || "", to: draft.code || "" });
+    }
+    if(String(original.label || "") !== String(draft.label || "")){
+      out.push({ field:"label", from: original.label || "", to: draft.label || "" });
+    }
+    if(String(original.path || "") !== String(draft.path || "")){
+      out.push({ field:"path", from: original.path || "", to: draft.path || "" });
+    }
+    if(String(original.parent_id || "") !== String(draft.parent_id || "")){
+      out.push({ field:"parent_id", from: original.parent_id || "", to: draft.parent_id || "" });
+    }
+    if(String(original.sort_order ?? "") !== String(draft.sort_order ?? "")){
+      out.push({ field:"sort_order", from: original.sort_order ?? "", to: draft.sort_order ?? "" });
+    }
+    if(String(original.icon || "") !== String(draft.icon || "")){
+      out.push({ field:"icon", from: original.icon || "", to: draft.icon || "" });
+    }
+    if(String(normalizeGroupKey(original.group_key)) !== String(normalizeGroupKey(draft.group_key))){
+      out.push({
+        field:"group_key",
+        from: normalizeGroupKey(original.group_key),
+        to: normalizeGroupKey(draft.group_key)
+      });
+    }
+
+    const oldRoleIds = uniqStrings(original.role_ids_json || []);
+    const newRoleIds = uniqStrings(draft.role_ids || []);
+    if(!arraysEqual(oldRoleIds, newRoleIds)){
+      out.push({
+        field:"role_ids",
+        from: oldRoleIds,
+        to: newRoleIds
+      });
+    }
+
+    return out;
+  }
+
+  return {
+    title:"Menu Builder",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">Menu Builder</div>
+                <div class="text-slate-500 mt-1">Hybrid builder: audit summary, group badge counts, explorer, inspector, editor.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">
+                  <i class="fa-solid fa-plus mr-2"></i>New Menu
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-3">
+              <input id="qSearch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Cari label / path / id / code / group / audit flag">
+              <select id="qRole" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                <option value="">All roles</option>
+              </select>
+            </div>
+
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-4 ui-gap-grid">
+            <div class="space-y-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="text-xl font-extrabold">Group Badge Counts</div>
+                <div id="groupCountBox" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="text-xl font-extrabold">Menu Audit Summary</div>
+                <div id="auditSummaryBox" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Menu Explorer</div>
+                    <div class="text-xs text-slate-500 mt-1">Tree explorer with audit badges.</div>
+                  </div>
+                  <button id="btnClearSelection" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Clear</button>
+                </div>
+                <div id="listBox" class="mt-5 space-y-3"></div>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Inspector</div>
+                    <div class="text-xs text-slate-500 mt-1">Menu coverage inspector.</div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button id="btnEditSelected" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Edit Selected</button>
+                    <button id="btnDeleteSelected" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-black">Delete Selected</button>
+                  </div>
+                </div>
+                <div id="inspectorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xl font-extrabold">Editor</div>
+                    <div class="text-xs text-slate-500 mt-1">Create/update menu.</div>
+                  </div>
+                  <button id="btnResetEditor" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Reset</button>
+                </div>
+                <div id="editorBox" class="mt-4"></div>
+              </div>
+
+              <div class="ui-card ui-pad-card rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-4">
+                <div class="text-xl font-extrabold">Diff Preview</div>
+                <div id="diffBox" class="mt-4"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      let MENUS = [];
+      let ROLES = [];
+      let GROUP_COUNTS = [];
+      let AUDIT_SUMMARY = {};
+      let SELECTED_ID = "";
+      let EDIT_MODE = "create";
+      let EDIT_ORIGINAL = null;
+      let EDIT_CURRENT_ID = "";
+      let confirmAction = null;
+
+      function getMenuById(id){
+        return MENUS.find(x => String(x.id) === String(id)) || null;
+      }
+
+      function renderRoleFilter(){
+        q("qRole").innerHTML = `<option value="">All roles</option>` + ROLES.map(r => `
+          <option value="${esc(r.name)}">${esc(r.name)}</option>
+        `).join("");
+      }
+
+      function filteredItems(){
+        const kw = String(q("qSearch").value || "").trim().toLowerCase();
+        const role = String(q("qRole").value || "").trim();
+
+        return MENUS.filter(x => {
+          const hay = [
+            x.id, x.code, x.label, x.path, x.parent_label, x.group_key,
+            groupLabel(x.group_key), (x.audit?.flags || []).join(" ")
+          ].join(" ").toLowerCase();
+
+          const okKw = !kw || hay.includes(kw);
+          const okRole = !role || (Array.isArray(x.role_names_json) && x.role_names_json.includes(role));
+          return okKw && okRole;
+        });
+      }
+
+      function ensureSelection(){
+        if(SELECTED_ID && getMenuById(SELECTED_ID)) return;
+        const first = MENUS[0];
+        SELECTED_ID = first ? String(first.id) : "";
+      }
+
+      function renderGroupCounts(){
+        const map = new Map((Array.isArray(GROUP_COUNTS) ? GROUP_COUNTS : []).map(x => [String(x.group_key || ""), Number(x.count || 0)]));
+        q("groupCountBox").innerHTML = GROUP_ORDER.map(group_key => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+            <div class="text-xs text-slate-500 font-bold">${esc(groupLabel(group_key))}</div>
+            <div class="text-2xl font-extrabold mt-2">${esc(map.get(group_key) || 0)}</div>
+          </div>
+        `).join("");
+      }
+
+      function renderAuditSummary(){
+        const cards = [
+          ["Total", AUDIT_SUMMARY.total_menus || 0],
+          ["No Roles", AUDIT_SUMMARY.no_roles || 0],
+          ["Orphan", AUDIT_SUMMARY.orphan_parent || 0],
+          ["Duplicate Path", AUDIT_SUMMARY.duplicate_path || 0],
+          ["Broad Coverage", AUDIT_SUMMARY.broad_role_coverage || 0]
+        ];
+        q("auditSummaryBox").innerHTML = cards.map(([label, value]) => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+            <div class="text-xs text-slate-500 font-bold">${esc(label)}</div>
+            <div class="text-2xl font-extrabold mt-2">${esc(value)}</div>
+          </div>
+        `).join("");
+      }
+
+      function renderRows(nodes, depth=0, visibleIds = new Set()){
+        const hasVisible = (node)=>{
+          if(visibleIds.has(String(node.id))) return true;
+          return (node.children || []).some(hasVisible);
+        };
+
+        return nodes.filter(hasVisible).map(node => {
+          const roles = Array.isArray(node.role_names_json) ? node.role_names_json : [];
+          const indent = depth * 16;
+          const isSelected = String(node.id) === String(SELECTED_ID);
+
+          return `
+            <div class="rounded-2xl border overflow-hidden ${isSelected ? "border-sky-400 ring-2 ring-sky-200 dark:ring-sky-900" : "border-slate-200 dark:border-darkBorder"}">
+              <div class="px-3 lg:px-4 py-3 ${isSelected ? "bg-sky-50 dark:bg-sky-950/20" : "bg-white dark:bg-darkLighter"}" style="padding-left:${12 + indent}px">
+                <div class="flex items-start justify-between gap-3">
+                  <button class="btnSelectRow min-w-0 flex-1 text-left" data-id="${esc(node.id)}">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <i class="${esc(node.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
+                      <div class="font-black text-sm">${depth > 0 ? "&mdash; " : ""}${esc(node.label || "Menu")}</div>
+                      <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(node.group_key))}</span>
+                      ${auditBadges(node)}
+                    </div>
+                    <div class="mt-2 text-xs text-slate-500 space-y-1">
+                      ${depth > 0 ? `<div>Parent <span class="font-bold">[${esc(node.parent_label || "-")}]</span></div>` : ``}
+                      ${node.path && node.path !== "/" ? `<div>${esc(node.path)}</div>` : ``}
+                      <div>group: ${esc(node.group_key || "settings")} • sort: ${esc(node.sort_order)} • id: ${esc(node.id)}</div>
+                    </div>
+                    <div class="mt-3 flex gap-2 flex-wrap">
+                      ${roles.length
+                        ? roles.map(r => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(r)}</span>`).join("")
+                        : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">no roles</span>`
+                      }
+                    </div>
+                  </button>
+                </div>
+              </div>
+              ${(node.children || []).length ? `<div class="border-t border-slate-200 dark:border-darkBorder">${renderRows(node.children, depth + 1, visibleIds)}</div>` : ``}
+            </div>
+          `;
+        }).join("");
+      }
+
+      function renderInspector(){
+        const row = getMenuById(SELECTED_ID);
+        if(!row){
+          q("inspectorBox").innerHTML = `<div class="text-sm text-slate-500">No selected menu.</div>`;
+          return;
+        }
+
+        const roleNames = Array.isArray(row.role_names_json) ? row.role_names_json : [];
+
+        q("inspectorBox").innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <i class="${esc(row.icon || "fa-solid fa-circle-dot")} text-slate-400"></i>
+                <div class="text-lg font-extrabold">${esc(row.label || row.id)}</div>
+                <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(row.group_key))}</span>
+                ${auditBadges(row)}
+              </div>
+              <div class="mt-3 text-sm text-slate-500 space-y-1">
+                <div><span class="font-bold">ID:</span> ${esc(row.id)}</div>
+                <div><span class="font-bold">CODE:</span> ${esc(row.code || "-")}</div>
+                <div><span class="font-bold">PATH:</span> ${esc(row.path || "-")}</div>
+                <div><span class="font-bold">GROUP:</span> ${esc(row.group_key || "settings")}</div>
+                <div><span class="font-bold">PARENT:</span> ${esc(row.parent_label || row.parent_id || "root")}</div>
+                <div><span class="font-bold">ROLE COUNT:</span> ${esc(row.audit?.role_count ?? 0)}</div>
+                <div><span class="font-bold">DUPLICATE PATH COUNT:</span> ${esc(row.audit?.duplicate_path_count ?? 0)}</div>
+              </div>
+              <div class="mt-4 flex gap-2 flex-wrap">
+                ${roleNames.length
+                  ? roleNames.map(r => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(r)}</span>`).join("")
+                  : `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">no roles</span>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function groupOptions(selected){
+        return GROUP_ORDER.map(k => `
+          <option value="${esc(k)}" ${normalizeGroupKey(selected) === k ? "selected" : ""}>${esc(groupLabel(k))} (${esc(k)})</option>
+        `).join("");
+      }
+
+      function editorHtml(row = null){
+        const isUpdate = !!row;
+        const selectedRoleIds = new Set(
+          Array.isArray(row?.role_ids_json) ? row.role_ids_json.map(x => String(x)) : []
+        );
+
+        const parents = MENUS
+          .filter(x => String(x.id) !== String(row?.id || ""))
+          .map(x => `<option value="${esc(x.id)}" ${String(row?.parent_id || "") === String(x.id) ? "selected" : ""}>${esc(x.label)}</option>`)
+          .join("");
+
+        return `
+          <form id="menuForm" class="grid grid-cols-1 gap-4">
+            <input type="hidden" name="mode" value="${isUpdate ? "update" : "create"}">
+
+            <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3 text-xs text-slate-500">
+              ${isUpdate ? `Editing menu <span class="font-black">${esc(row.id)}</span>` : `Creating new menu`}
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              ${row ? `<span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">${esc(groupLabel(row.group_key))}</span>` : ``}
+              ${row ? auditBadges(row) : ``}
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+              <input name="id" value="${esc(row?.id || "")}" ${isUpdate ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold" placeholder="m_core_dashboard">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">CODE</label>
+                <input name="code" value="${esc(row?.code || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="dashboard">
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">LABEL</label>
+                <input name="label" value="${esc(row?.label || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Dashboard">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-500 mb-2">PATH</label>
+              <input name="path" value="${esc(row?.path || "/")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="/dashboard">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">GROUP KEY</label>
+                <select name="group_key" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  ${groupOptions(row?.group_key || "settings")}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">SORT ORDER</label>
+                <input name="sort_order" type="number" value="${esc(row?.sort_order ?? 50)}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">PARENT</label>
+                <select name="parent_id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  <option value="">root</option>
+                  ${parents}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ICON</label>
+                <input name="icon" value="${esc(row?.icon || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="fa-solid fa-sitemap">
+              </div>
+            </div>
+
+            <div>
+              <div class="text-sm font-bold text-slate-500 mb-2">ROLE MENUS</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                <div class="flex gap-2 flex-wrap mb-3">
+                  <button type="button" id="btnRoleAll" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Check all</button>
+                  <button type="button" id="btnRoleNone" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Uncheck all</button>
+                </div>
+                <div id="roleChecks" class="grid grid-cols-2 gap-2">
+                  ${ROLES.map(r => `
+                    <label class="flex items-center gap-3 text-sm">
+                      <input class="roleCheck" type="checkbox" value="${esc(r.id)}" ${isUpdate ? (selectedRoleIds.has(String(r.id)) ? "checked" : "") : "checked"}>
+                      <span class="font-semibold">${esc(r.name)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-2 flex-wrap">
+              <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+              <button type="button" id="btnDeleteFromForm" class="${isUpdate ? "" : "hidden "}px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete</button>
+            </div>
+          </form>
+        `;
+      }
+
+      function collectFormPayload(){
+        const form = q("menuForm");
+        if(!form){
+          return {
+            action:"create",
+            id:"",
+            code:"",
+            label:"",
+            path:"/",
+            group_key:"settings",
+            parent_id:"",
+            sort_order:50,
+            icon:"",
+            role_ids:[]
+          };
+        }
+
+        const role_ids = Array.from(form.querySelectorAll(".roleCheck"))
+          .filter(x => x.checked)
+          .map(x => x.value);
+
+        return {
+          action: form.mode.value,
+          id: form.id.value.trim(),
+          code: form.code.value.trim(),
+          label: form.label.value.trim(),
+          path: form.path.value.trim(),
+          group_key: normalizeGroupKey(form.group_key.value),
+          parent_id: form.parent_id.value.trim(),
+          sort_order: Number(form.sort_order.value || 50),
+          icon: form.icon.value.trim(),
+          role_ids
+        };
+      }
+
+      function renderDiff(){
+        if(EDIT_MODE === "create"){
+          const draft = collectFormPayload();
+          q("diffBox").innerHTML = `
+            <pre class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-[11px] overflow-auto">${esc(jsonPretty(draft))}</pre>
+          `;
+          return;
+        }
+
+        if(!EDIT_ORIGINAL){
+          q("diffBox").innerHTML = `<div class="text-sm text-slate-500">No diff.</div>`;
+          return;
+        }
+
+        const draft = collectFormPayload();
+        const changes = diffRows(EDIT_ORIGINAL, draft);
+
+        if(!changes.length){
+          q("diffBox").innerHTML = `<div class="text-sm text-emerald-600 font-semibold">No changes.</div>`;
+          return;
+        }
+
+        q("diffBox").innerHTML = changes.map(ch => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 mb-3">
+            <div class="text-sm font-black">${esc(ch.field)}</div>
+            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.from) ? jsonPretty(ch.from) : String(ch.from))}</pre>
+              <pre class="rounded-xl bg-slate-50 dark:bg-black/20 p-3 overflow-auto">${esc(Array.isArray(ch.to) ? jsonPretty(ch.to) : String(ch.to))}</pre>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      function renderEditor(row = null){
+        EDIT_MODE = row ? "update" : "create";
+        EDIT_ORIGINAL = row ? deepClone(row) : null;
+        EDIT_CURRENT_ID = row ? String(row.id) : "";
+        q("editorBox").innerHTML = editorHtml(row);
+        bindEditor(row);
+        renderDiff();
+      }
+
+      function bindEditor(row = null){
+        const form = q("menuForm");
+        if(!form) return;
+
+        form.addEventListener("input", renderDiff);
+        form.addEventListener("change", renderDiff);
+
+        q("btnRoleAll")?.addEventListener("click", ()=>{
+          form.querySelectorAll(".roleCheck").forEach(x => x.checked = true);
+          renderDiff();
+        });
+
+        q("btnRoleNone")?.addEventListener("click", ()=>{
+          form.querySelectorAll(".roleCheck").forEach(x => x.checked = false);
+          renderDiff();
+        });
+
+        q("btnDeleteFromForm")?.addEventListener("click", ()=>{
+          if(row) openDelete(row);
+        });
+
+        form.onsubmit = async (ev)=>{
+          ev.preventDefault();
+          const payload = collectFormPayload();
+
+          if(!payload.id || !payload.code || !payload.label){
+            setMsg(host, "#msg", "error", "ID, CODE, LABEL wajib diisi.");
+            return;
+          }
+
+          if(payload.id === payload.code){
+            setMsg(host, "#msg", "error", "ID harus berbeda dari CODE.");
+            return;
+          }
+
+          if(payload.parent_id && payload.parent_id === payload.id){
+            setMsg(host, "#msg", "error", "Parent tidak boleh sama dengan ID.");
+            return;
+          }
+
+          setMsg(host, "#msg", "muted", "Saving...");
+          const r = await apiSave(payload);
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Save failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          setMsg(host, "#msg", "success", "Menu saved.");
+          SELECTED_ID = payload.id;
+          await load(false);
+          renderEditor(getMenuById(payload.id) || null);
+        };
+      }
+
+      function openDelete(row){
+        openConfirm(host, {
+          confirmTitle: "Delete Menu",
+          confirmDesc: "Menu akan dihapus jika tidak punya children.",
+          confirmMeta: `<div class="font-black text-red-600">${esc(row.label || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.path || "-")}</div>`
+        });
+
+        confirmAction = async ()=>{
+          setMsg(host, "#msg", "muted", "Deleting...");
+          const r = await apiSave({ action:"delete", id: row.id });
+
+          if(r.status !== "ok"){
+            setMsg(host, "#msg", "error", "Delete failed: " + (r.data?.message || r.status));
+            return;
+          }
+
+          closeConfirm(host);
+          setMsg(host, "#msg", "success", "Menu deleted.");
+          if(String(SELECTED_ID) === String(row.id)) SELECTED_ID = "";
+          renderEditor(null);
+          await load(false);
+        };
+      }
+
+      function renderList(){
+        ensureSelection();
+        const visibleItems = filteredItems();
+        const visibleIds = new Set(visibleItems.map(x => String(x.id)));
+        const tree = buildTree(MENUS);
+
+        q("listBox").innerHTML = renderRows(tree, 0, visibleIds) || emptyState("No menu data.");
+        q("listBox").querySelectorAll(".btnSelectRow").forEach(btn => {
+          btn.onclick = ()=>{
+            SELECTED_ID = String(btn.getAttribute("data-id") || "");
+            renderList();
+            renderInspector();
+          };
+        });
+
+        renderInspector();
+      }
+
+      async function load(resetEditor = false){
+        setMsg(host, "#msg", "muted", "Loading...");
+        const r = await apiLoad();
+
+        if(r.status !== "ok"){
+          setMsg(host, "#msg", "error", "Load failed: " + r.status);
+          return;
+        }
+
+        MENUS = Array.isArray(r.data?.menus)
+          ? r.data.menus.map(x => ({ ...x, group_key: normalizeGroupKey(x.group_key) }))
+          : [];
+        ROLES = Array.isArray(r.data?.roles) ? r.data.roles : [];
+        GROUP_COUNTS = Array.isArray(r.data?.group_counts) ? r.data.group_counts : [];
+        AUDIT_SUMMARY = r.data?.audit_summary || {};
+
+        renderRoleFilter();
+        renderGroupCounts();
+        renderAuditSummary();
+        renderList();
+
+        if(resetEditor){
+          renderEditor(getMenuById(SELECTED_ID) || null);
+        }else{
+          renderEditor(getMenuById(EDIT_CURRENT_ID || SELECTED_ID) || null);
+        }
+
+        setMsg(host, "#msg", "success", "Loaded.");
+      }
+
+      q("btnReload").onclick = ()=>load(false);
+      q("btnNew").onclick = ()=>{
+        EDIT_CURRENT_ID = "";
+        renderEditor(null);
+      };
+      q("btnClearSelection").onclick = ()=>{
+        SELECTED_ID = "";
+        renderList();
+        renderEditor(null);
+      };
+      q("btnEditSelected").onclick = ()=>{
+        const row = getMenuById(SELECTED_ID);
+        if(row) renderEditor(row);
+      };
+      q("btnDeleteSelected").onclick = ()=>{
+        const row = getMenuById(SELECTED_ID);
+        if(row) openDelete(row);
+      };
+      q("btnResetEditor").onclick = ()=>{
+        renderEditor(getMenuById(EDIT_CURRENT_ID || SELECTED_ID) || null);
+      };
+
+      q("qSearch").oninput = renderList;
+      q("qRole").onchange = renderList;
+
+      q("btnConfirmCancel").onclick = ()=>closeConfirm(host);
+      q("btnConfirmOk").onclick = async ()=>{
+        if(typeof confirmAction === "function") await confirmAction();
+      };
+      q("confirmBackdrop").addEventListener("click", (e)=>{
+        if(e.target === q("confirmBackdrop")) closeConfirm(host);
+      });
+
+      await load(true);
+    }
+  };
+}
