@@ -296,7 +296,7 @@ export async function requireAuth(env, request){
   }
 
   const user = await env.DB.prepare(`
-    SELECT id, email_norm, display_name, status, is_active, created_at
+    SELECT id, email_norm, display_name, status, created_at
     FROM users
     WHERE id = ?
     LIMIT 1
@@ -307,9 +307,7 @@ export async function requireAuth(env, request){
   }
 
   const statusOk = String(user.status || "").toLowerCase() === "active";
-  const activeOk = user.is_active == null ? true : Number(user.is_active) === 1;
-
-  if(!(statusOk || activeOk)){
+  if(!statusOk){
     return { ok:false, res: json(401, "unauthorized", null) };
   }
 
