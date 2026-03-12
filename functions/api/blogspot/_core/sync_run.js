@@ -1,5 +1,7 @@
-import { json, nowSec } from "../../../_lib.js";
+import { json, nowSec, readJson } from "../../../_lib.js";
 import { requireBlogspotAccess, getBlogspotConfig } from "./_service.js";
+import { appendLedgerEvent } from "./audit_ledger_shared.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 async function getConfig(env, k){
   const row = await env.DB.prepare(
@@ -21,10 +23,11 @@ async function setState(env, k, v){
 async function addLog(env, row){
   await env.DB.prepare(`
     INSERT INTO blogspot_sync_logs (
-      id, direction, kind, local_id, remote_id, action, status, message, payload_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, site_id, direction, kind, local_id, remote_id, action, status, message, payload_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     crypto.randomUUID(),
+    row.site_id || null,
     String(row.direction || "system"),
     String(row.kind || "system"),
     row.local_id || null,
@@ -46,6 +49,9 @@ export async function onRequestPost({ request, env }){
   const a = await requireBlogspotAccess(env, request, false);
   if(!a.ok) return a.res;
 
+  const body = await readJson(request) || {};
+  const activeSite = await resolveActiveSite(env, String(body.site_id || "").trim());
+
   const cfg = await getBlogspotConfig(env);
   const enabled = await getConfig(env, "enabled");
   const sync_direction = await getConfig(env, "sync_direction");
@@ -62,26 +68,52 @@ export async function onRequestPost({ request, env }){
     await setState(env, "last_status", "skipped");
     await setState(env, "last_message", "sync disabled");
     await addLog(env, {
+      site_id: activeSite?.id || null,
       direction: "system",
       kind: "system",
       action: "run",
       status: "skipped",
       message: "sync disabled"
     });
-    return json(200, "ok", { ran: false, status: "skipped", message: "sync disabled" });
+
+    try{
+      await appendLedgerEvent(env, {
+        site_id: activeSite?.id || null,
+        event_type: "sync_run_skipped",
+        item_kind: null,
+        item_id: null,
+        actor_user_id: a.uid || null,
+        payload: { reason: "sync_disabled" }
+      });
+    }catch{}
+
+    return json(200, "ok", { ran: false, status: "skipped", message: "sync disabled", site_id: activeSite?.id || null });
   }
 
   if(!cfg.enabled || !cfg.blog_id || !cfg.api_key){
     await setState(env, "last_status", "error");
     await setState(env, "last_message", "missing blogspot config");
     await addLog(env, {
+      site_id: activeSite?.id || null,
       direction: "system",
       kind: "system",
       action: "run",
       status: "error",
       message: "missing blogspot config"
     });
-    return json(200, "ok", { ran: false, status: "error", message: "missing blogspot config" });
+
+    try{
+      await appendLedgerEvent(env, {
+        site_id: activeSite?.id || null,
+        event_type: "sync_run_error",
+        item_kind: null,
+        item_id: null,
+        actor_user_id: a.uid || null,
+        payload: { reason: "missing_blogspot_config" }
+      });
+    }catch{}
+
+    return json(200, "ok", { ran: false, status: "error", message: "missing blogspot config", site_id: activeSite?.id || null });
   }
 
   const posts_dirty = sync_posts_enabled !== "0"
@@ -89,7 +121,8 @@ export async function onRequestPost({ request, env }){
         SELECT COUNT(*) AS total
         FROM blogspot_post_map
         WHERE kind='post' AND dirty=1 AND deleted_local=0
-      `)
+          AND (? IS NULL OR site_id=? OR site_id IS NULL)
+      `, [activeSite?.id || null, activeSite?.id || null])
     : 0;
 
   const pages_dirty = sync_pages_enabled !== "0"
@@ -97,7 +130,8 @@ export async function onRequestPost({ request, env }){
         SELECT COUNT(*) AS total
         FROM blogspot_post_map
         WHERE kind='page' AND dirty=1 AND deleted_local=0
-      `)
+          AND (? IS NULL OR site_id=? OR site_id IS NULL)
+      `, [activeSite?.id || null, activeSite?.id || null])
     : 0;
 
   const widgets_dirty = sync_widgets_enabled !== "0"
@@ -117,6 +151,7 @@ export async function onRequestPost({ request, env }){
     : 0;
 
   const summary = {
+    site_id: activeSite?.id || null,
     direction: sync_direction || "bidirectional",
     sync_posts_enabled: sync_posts_enabled !== "0",
     sync_pages_enabled: sync_pages_enabled !== "0",
@@ -134,6 +169,7 @@ export async function onRequestPost({ request, env }){
   await setState(env, "last_message", "sync summary generated");
 
   await addLog(env, {
+    site_id: activeSite?.id || null,
     direction: summary.direction,
     kind: "system",
     action: "run",
@@ -142,9 +178,21 @@ export async function onRequestPost({ request, env }){
     payload_json: summary
   });
 
+  try{
+    await appendLedgerEvent(env, {
+      site_id: activeSite?.id || null,
+      event_type: "sync_run_ok",
+      item_kind: null,
+      item_id: null,
+      actor_user_id: a.uid || null,
+      payload: summary
+    });
+  }catch{}
+
   return json(200, "ok", {
     ran: true,
     status: "ok",
+    site_id: activeSite?.id || null,
     summary
   });
 }

@@ -6,6 +6,8 @@ import {
   bloggerFetch,
   markMapDirty
 } from "./_service.js";
+import { appendLedgerEvent } from "./audit_ledger_shared.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 function s(v){ return String(v || "").trim(); }
 
@@ -17,6 +19,7 @@ export async function onRequestPost({ request, env }){
   const id = s(body.id);
   if(!id) return json(400, "invalid_input", { error:"id_required" });
 
+  const activeSite = await resolveActiveSite(env, s(body.site_id || ""));
   const cfg = await getBlogspotConfig(env);
   if(!cfg.enabled || !cfg.blog_id || !cfg.api_key){
     return json(400, "invalid_config", { error:"blogspot_config_missing" });
@@ -53,14 +56,29 @@ export async function onRequestPost({ request, env }){
         action: "remote_refresh_missing",
         direction: "pull",
         message: "remote page missing",
-        payload_json: { remote_id: remoteId }
+        payload_json: {
+          remote_id: remoteId,
+          site_id: activeSite?.id || null
+        }
       });
+
+      try{
+        await appendLedgerEvent(env, {
+          site_id: activeSite?.id || null,
+          event_type: "refresh_remote_page_missing",
+          item_kind: "page",
+          item_id: id,
+          actor_user_id: a.uid || null,
+          payload: { remote_id: remoteId }
+        });
+      }catch{}
 
       return json(200, "ok", {
         found: false,
         remote_deleted: true,
         id,
-        remote_id: remoteId
+        remote_id: remoteId,
+        site_id: activeSite?.id || null
       });
     }
 
@@ -104,14 +122,30 @@ export async function onRequestPost({ request, env }){
     message: "remote page refreshed",
     payload_json: {
       remote_id: remote.id || remoteId,
-      remote_url: remote.url || ""
+      remote_url: remote.url || "",
+      site_id: activeSite?.id || null
     }
   });
+
+  try{
+    await appendLedgerEvent(env, {
+      site_id: activeSite?.id || null,
+      event_type: "refresh_remote_page",
+      item_kind: "page",
+      item_id: id,
+      actor_user_id: a.uid || null,
+      payload: {
+        remote_id: remote.id || remoteId,
+        remote_url: remote.url || ""
+      }
+    });
+  }catch{}
 
   return json(200, "ok", {
     found: true,
     remote_deleted: false,
     id,
+    site_id: activeSite?.id || null,
     remote: {
       id: remote.id || remoteId,
       title: remote.title || "",

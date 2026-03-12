@@ -1,0 +1,582 @@
+import { json, nowSec } from "../../../_lib.js";
+import {
+  requireBlogspotAccess,
+  getBlogspotConfig,
+  getBlogspotOAuthConfig,
+  refreshBlogspotAccessToken,
+  bloggerFetch,
+  bloggerUrl,
+  getSyncConfigValue,
+  setSyncState,
+  addSyncLog,
+  getDirtyLocalItems,
+  getLinkedLocalItems,
+  markMapDirty
+} from "./_service.js";
+
+function s(v){ return String(v || "").trim(); }
+
+async function pushPost(env, cfg, accessToken, row, actor_user_id){
+  const labels = (() => {
+    try{ return JSON.parse(String(row.labels_json || "[]")); }
+    catch{ return []; }
+  })();
+
+  const isDraft = String(row.status || "draft") !== "published" ? "true" : "false";
+  const remoteId = s(row.external_id || row.remote_id);
+  const hasRemote = !!remoteId;
+
+  const endpoint = hasRemote
+    ? `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(cfg.blog_id)}/posts/${encodeURIComponent(remoteId)}?isDraft=${isDraft}`
+    : `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(cfg.blog_id)}/posts?isDraft=${isDraft}`;
+
+  const payload = {
+    kind: "blogger#post",
+    title: row.title || "",
+    content: row.content_html || "",
+    labels: Array.isArray(labels) ? labels : []
+  };
+
+  const res = await bloggerFetch(endpoint, {
+    method: hasRemote ? "PUT" : "POST",
+    headers: {
+      "authorization": "Bearer " + accessToken,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const now = nowSec();
+
+  if(!res.ok){
+    await markMapDirty(env, "post", row.id, {
+      remote_id: remoteId || null,
+      title: row.title || "",
+      slug: row.slug || "",
+      dirty: 1,
+      deleted_local: 0,
+      deleted_remote: 0,
+      sync_state: "error",
+      sync_error: "push_failed",
+      last_synced_at: now,
+      last_actor_user_id: actor_user_id,
+      action: hasRemote ? "remote_update" : "remote_create",
+      direction: "push",
+      status: "error",
+      message: "post push failed",
+      payload_json: { http: res.status, body: res.data || res.text || "" },
+      response_excerpt: res.text || null
+    });
+    return { ok:false, kind:"post", id: row.id, status: res.status };
+  }
+
+  const remote = res.data || {};
+  const finalRemoteId = s(remote.id || remoteId);
+
+  await env.DB.prepare(`
+    UPDATE cms_posts
+    SET external_id=?,
+        blog_id=?,
+        url=?,
+        remote_url=?,
+        remote_status='linked',
+        published_at=?,
+        last_remote_sync_at=?,
+        updated_at=?
+    WHERE id=?
+  `).bind(
+    finalRemoteId || null,
+    cfg.blog_id,
+    remote.url || row.url || null,
+    remote.url || row.url || null,
+    remote.published ? Math.floor(new Date(remote.published).getTime() / 1000) : null,
+    now,
+    now,
+    row.id
+  ).run();
+
+  await markMapDirty(env, "post", row.id, {
+    remote_id: finalRemoteId,
+    title: row.title || "",
+    slug: row.slug || "",
+    remote_url: remote.url || null,
+    remote_status: "linked",
+    remote_updated: s(remote.updated || ""),
+    last_synced_at: now,
+    last_pushed_at: now,
+    dirty: 0,
+    deleted_local: 0,
+    deleted_remote: 0,
+    sync_state: "synced",
+    sync_error: null,
+    last_actor_user_id: actor_user_id,
+    action: hasRemote ? "remote_update" : "remote_create",
+    direction: "push",
+    status: "ok",
+    message: "post pushed to blogger",
+    payload_json: {
+      remote_id: finalRemoteId,
+      remote_url: remote.url || "",
+      local_id: row.id
+    }
+  });
+
+  return { ok:true, kind:"post", id: row.id, remote_id: finalRemoteId };
+}
+
+async function pushPage(env, cfg, accessToken, row, actor_user_id){
+  const isDraft = String(row.status || "draft") !== "published" ? "true" : "false";
+  const remoteId = s(row.external_id || row.remote_id);
+  const hasRemote = !!remoteId;
+
+  const endpoint = hasRemote
+    ? `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(cfg.blog_id)}/pages/${encodeURIComponent(remoteId)}?isDraft=${isDraft}`
+    : `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(cfg.blog_id)}/pages?isDraft=${isDraft}`;
+
+  const payload = {
+    kind: "blogger#page",
+    title: row.title || "",
+    content: row.content_html || ""
+  };
+
+  const res = await bloggerFetch(endpoint, {
+    method: hasRemote ? "PUT" : "POST",
+    headers: {
+      "authorization": "Bearer " + accessToken,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const now = nowSec();
+
+  if(!res.ok){
+    await markMapDirty(env, "page", row.id, {
+      remote_id: remoteId || null,
+      title: row.title || "",
+      slug: row.slug || "",
+      dirty: 1,
+      deleted_local: 0,
+      deleted_remote: 0,
+      sync_state: "error",
+      sync_error: "push_failed",
+      last_synced_at: now,
+      last_actor_user_id: actor_user_id,
+      action: hasRemote ? "remote_update" : "remote_create",
+      direction: "push",
+      status: "error",
+      message: "page push failed",
+      payload_json: { http: res.status, body: res.data || res.text || "" },
+      response_excerpt: res.text || null
+    });
+    return { ok:false, kind:"page", id: row.id, status: res.status };
+  }
+
+  const remote = res.data || {};
+  const finalRemoteId = s(remote.id || remoteId);
+
+  await env.DB.prepare(`
+    UPDATE cms_pages
+    SET external_id=?,
+        blog_id=?,
+        url=?,
+        remote_url=?,
+        remote_status='linked',
+        published_at=?,
+        last_remote_sync_at=?,
+        updated_at=?
+    WHERE id=?
+  `).bind(
+    finalRemoteId || null,
+    cfg.blog_id,
+    remote.url || row.url || null,
+    remote.url || row.url || null,
+    remote.published ? Math.floor(new Date(remote.published).getTime() / 1000) : null,
+    now,
+    now,
+    row.id
+  ).run();
+
+  await markMapDirty(env, "page", row.id, {
+    remote_id: finalRemoteId,
+    title: row.title || "",
+    slug: row.slug || "",
+    remote_url: remote.url || null,
+    remote_status: "linked",
+    remote_updated: s(remote.updated || ""),
+    last_synced_at: now,
+    last_pushed_at: now,
+    dirty: 0,
+    deleted_local: 0,
+    deleted_remote: 0,
+    sync_state: "synced",
+    sync_error: null,
+    last_actor_user_id: actor_user_id,
+    action: hasRemote ? "remote_update" : "remote_create",
+    direction: "push",
+    status: "ok",
+    message: "page pushed to blogger",
+    payload_json: {
+      remote_id: finalRemoteId,
+      remote_url: remote.url || "",
+      local_id: row.id
+    }
+  });
+
+  return { ok:true, kind:"page", id: row.id, remote_id: finalRemoteId };
+}
+
+async function pullPost(env, cfg, row, actor_user_id){
+  const remoteId = s(row.external_id || row.remote_id);
+  if(!remoteId) return { ok:false, skipped:true };
+
+  const now = nowSec();
+  const url = bloggerUrl(cfg.blog_id, "/posts/" + encodeURIComponent(remoteId), {}, cfg.api_key);
+  const res = await bloggerFetch(url, { method:"GET" });
+
+  if(!res.ok){
+    if(Number(res.status) === 404){
+      await markMapDirty(env, "post", row.id, {
+        remote_id: remoteId,
+        title: row.title || "",
+        slug: row.slug || "",
+        last_synced_at: now,
+        dirty: 1,
+        deleted_local: 0,
+        deleted_remote: 1,
+        sync_state: "remote_deleted",
+        sync_error: null,
+        last_actor_user_id: actor_user_id,
+        action: "remote_refresh_missing",
+        direction: "pull",
+        status: "ok",
+        message: "remote post missing",
+        payload_json: { remote_id: remoteId }
+      });
+      await env.DB.prepare(`
+        UPDATE cms_posts
+        SET remote_status='deleted_remote',
+            last_remote_sync_at=?,
+            updated_at=?
+        WHERE id=?
+      `).bind(now, now, row.id).run();
+      return { ok:true, missing:true, kind:"post", id: row.id };
+    }
+
+    await markMapDirty(env, "post", row.id, {
+      remote_id: remoteId,
+      title: row.title || "",
+      slug: row.slug || "",
+      last_synced_at: now,
+      dirty: Number(row.dirty || 0) ? 1 : 0,
+      deleted_local: 0,
+      deleted_remote: 0,
+      sync_state: "error",
+      sync_error: "pull_failed",
+      last_actor_user_id: actor_user_id,
+      action: "remote_refresh",
+      direction: "pull",
+      status: "error",
+      message: "remote post refresh failed",
+      payload_json: { http: res.status, body: res.data || res.text || "" },
+      response_excerpt: res.text || null
+    });
+    return { ok:false, kind:"post", id: row.id };
+  }
+
+  const remote = res.data || {};
+  await env.DB.prepare(`
+    UPDATE cms_posts
+    SET external_id=?,
+        blog_id=?,
+        url=?,
+        remote_url=?,
+        remote_status='linked',
+        published_at=?,
+        last_remote_sync_at=?,
+        updated_at=?
+    WHERE id=?
+  `).bind(
+    s(remote.id || remoteId),
+    cfg.blog_id,
+    remote.url || row.url || null,
+    remote.url || row.url || null,
+    remote.published ? Math.floor(new Date(remote.published).getTime() / 1000) : null,
+    now,
+    now,
+    row.id
+  ).run();
+
+  await markMapDirty(env, "post", row.id, {
+    remote_id: s(remote.id || remoteId),
+    title: row.title || "",
+    slug: row.slug || "",
+    remote_url: remote.url || null,
+    remote_status: "linked",
+    remote_updated: s(remote.updated || ""),
+    last_synced_at: now,
+    dirty: Number(row.dirty || 0) ? 1 : 0,
+    deleted_local: 0,
+    deleted_remote: 0,
+    sync_state: Number(row.dirty || 0) ? "conflict_possible" : "synced",
+    sync_error: null,
+    last_actor_user_id: actor_user_id,
+    action: "remote_refresh",
+    direction: "pull",
+    status: "ok",
+    message: Number(row.dirty || 0) ? "remote post refreshed while local dirty" : "remote post refreshed",
+    payload_json: {
+      remote_id: remote.id || remoteId,
+      remote_url: remote.url || ""
+    }
+  });
+
+  return { ok:true, kind:"post", id: row.id };
+}
+
+async function pullPage(env, cfg, row, actor_user_id){
+  const remoteId = s(row.external_id || row.remote_id);
+  if(!remoteId) return { ok:false, skipped:true };
+
+  const now = nowSec();
+  const url = bloggerUrl(cfg.blog_id, "/pages/" + encodeURIComponent(remoteId), {}, cfg.api_key);
+  const res = await bloggerFetch(url, { method:"GET" });
+
+  if(!res.ok){
+    if(Number(res.status) === 404){
+      await markMapDirty(env, "page", row.id, {
+        remote_id: remoteId,
+        title: row.title || "",
+        slug: row.slug || "",
+        last_synced_at: now,
+        dirty: 1,
+        deleted_local: 0,
+        deleted_remote: 1,
+        sync_state: "remote_deleted",
+        sync_error: null,
+        last_actor_user_id: actor_user_id,
+        action: "remote_refresh_missing",
+        direction: "pull",
+        status: "ok",
+        message: "remote page missing",
+        payload_json: { remote_id: remoteId }
+      });
+      await env.DB.prepare(`
+        UPDATE cms_pages
+        SET remote_status='deleted_remote',
+            last_remote_sync_at=?,
+            updated_at=?
+        WHERE id=?
+      `).bind(now, now, row.id).run();
+      return { ok:true, missing:true, kind:"page", id: row.id };
+    }
+
+    await markMapDirty(env, "page", row.id, {
+      remote_id: remoteId,
+      title: row.title || "",
+      slug: row.slug || "",
+      last_synced_at: now,
+      dirty: Number(row.dirty || 0) ? 1 : 0,
+      deleted_local: 0,
+      deleted_remote: 0,
+      sync_state: "error",
+      sync_error: "pull_failed",
+      last_actor_user_id: actor_user_id,
+      action: "remote_refresh",
+      direction: "pull",
+      status: "error",
+      message: "remote page refresh failed",
+      payload_json: { http: res.status, body: res.data || res.text || "" },
+      response_excerpt: res.text || null
+    });
+    return { ok:false, kind:"page", id: row.id };
+  }
+
+  const remote = res.data || {};
+  await env.DB.prepare(`
+    UPDATE cms_pages
+    SET external_id=?,
+        blog_id=?,
+        url=?,
+        remote_url=?,
+        remote_status='linked',
+        published_at=?,
+        last_remote_sync_at=?,
+        updated_at=?
+    WHERE id=?
+  `).bind(
+    s(remote.id || remoteId),
+    cfg.blog_id,
+    remote.url || row.url || null,
+    remote.url || row.url || null,
+    remote.published ? Math.floor(new Date(remote.published).getTime() / 1000) : null,
+    now,
+    now,
+    row.id
+  ).run();
+
+  await markMapDirty(env, "page", row.id, {
+    remote_id: s(remote.id || remoteId),
+    title: row.title || "",
+    slug: row.slug || "",
+    remote_url: remote.url || null,
+    remote_status: "linked",
+    remote_updated: s(remote.updated || ""),
+    last_synced_at: now,
+    dirty: Number(row.dirty || 0) ? 1 : 0,
+    deleted_local: 0,
+    deleted_remote: 0,
+    sync_state: Number(row.dirty || 0) ? "conflict_possible" : "synced",
+    sync_error: null,
+    last_actor_user_id: actor_user_id,
+    action: "remote_refresh",
+    direction: "pull",
+    status: "ok",
+    message: Number(row.dirty || 0) ? "remote page refreshed while local dirty" : "remote page refreshed",
+    payload_json: {
+      remote_id: remote.id || remoteId,
+      remote_url: remote.url || ""
+    }
+  });
+
+  return { ok:true, kind:"page", id: row.id };
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireBlogspotAccess(env, request, false);
+  if(!a.ok) return a.res;
+
+  const cfg = await getBlogspotConfig(env);
+  const enabled = await getSyncConfigValue(env, "enabled", "0");
+  const sync_direction = await getSyncConfigValue(env, "sync_direction", "bidirectional");
+  const sync_posts_enabled = await getSyncConfigValue(env, "sync_posts_enabled", "1");
+  const sync_pages_enabled = await getSyncConfigValue(env, "sync_pages_enabled", "1");
+  const sync_widgets_enabled = await getSyncConfigValue(env, "sync_widgets_enabled", "1");
+  const write_enabled = await getSyncConfigValue(env, "write_enabled", "0");
+  const cron_driver = await getSyncConfigValue(env, "cron_driver", "cron_trigger");
+
+  const now = nowSec();
+  await setSyncState(env, "last_run_at", now);
+  await setSyncState(env, "last_status", "running");
+  await setSyncState(env, "last_message", "sync executor started");
+
+  if(enabled !== "1"){
+    await setSyncState(env, "last_status", "skipped");
+    await setSyncState(env, "last_message", "sync disabled");
+    await addSyncLog(env, {
+      direction: "system",
+      kind: "system",
+      action: "run",
+      status: "skipped",
+      message: "sync disabled"
+    });
+    return json(200, "ok", { ran:false, status:"skipped", message:"sync disabled" });
+  }
+
+  if(!cfg.enabled || !cfg.blog_id || !cfg.api_key){
+    await setSyncState(env, "last_status", "error");
+    await setSyncState(env, "last_message", "missing blogspot config");
+    await addSyncLog(env, {
+      direction: "system",
+      kind: "system",
+      action: "run",
+      status: "error",
+      message: "missing blogspot config"
+    });
+    return json(200, "ok", { ran:false, status:"error", message:"missing blogspot config" });
+  }
+
+  let accessToken = null;
+  if((sync_direction === "push" || sync_direction === "bidirectional") && write_enabled === "1"){
+    const oauth = await getBlogspotOAuthConfig(env);
+    if(!oauth.enabled){
+      await setSyncState(env, "last_status", "error");
+      await setSyncState(env, "last_message", "oauth disabled for push");
+      return json(200, "ok", { ran:false, status:"error", message:"oauth disabled for push" });
+    }
+
+    const tk = await refreshBlogspotAccessToken(env);
+    if(!tk.ok){
+      await setSyncState(env, "last_status", "error");
+      await setSyncState(env, "last_message", "oauth refresh failed");
+      return json(200, "ok", { ran:false, status:"error", message:"oauth refresh failed", detail: tk.data || null });
+    }
+    accessToken = tk.access_token;
+  }
+
+  const summary = {
+    direction: sync_direction || "bidirectional",
+    sync_posts_enabled: sync_posts_enabled !== "0",
+    sync_pages_enabled: sync_pages_enabled !== "0",
+    sync_widgets_enabled: sync_widgets_enabled !== "0",
+    cron_driver: cron_driver || "cron_trigger",
+    push: { posts:0, pages:0, failed:0 },
+    pull: { posts:0, pages:0, missing:0, failed:0 },
+    widgets: {
+      enabled: sync_widgets_enabled !== "0",
+      note: "widget remote sync not implemented yet"
+    }
+  };
+
+  if((sync_direction === "push" || sync_direction === "bidirectional") && write_enabled === "1"){
+    if(sync_posts_enabled !== "0"){
+      const dirtyPosts = await getDirtyLocalItems(env, "post", 50);
+      for(const row of dirtyPosts){
+        const r = await pushPost(env, cfg, accessToken, row, a.uid || null);
+        if(r.ok) summary.push.posts++;
+        else summary.push.failed++;
+      }
+    }
+
+    if(sync_pages_enabled !== "0"){
+      const dirtyPages = await getDirtyLocalItems(env, "page", 50);
+      for(const row of dirtyPages){
+        const r = await pushPage(env, cfg, accessToken, row, a.uid || null);
+        if(r.ok) summary.push.pages++;
+        else summary.push.failed++;
+      }
+    }
+  }
+
+  if(sync_direction === "pull" || sync_direction === "bidirectional"){
+    if(sync_posts_enabled !== "0"){
+      const linkedPosts = await getLinkedLocalItems(env, "post", 50);
+      for(const row of linkedPosts){
+        const r = await pullPost(env, cfg, row, a.uid || null);
+        if(r.ok && r.missing) summary.pull.missing++;
+        else if(r.ok) summary.pull.posts++;
+        else if(!r.skipped) summary.pull.failed++;
+      }
+    }
+
+    if(sync_pages_enabled !== "0"){
+      const linkedPages = await getLinkedLocalItems(env, "page", 50);
+      for(const row of linkedPages){
+        const r = await pullPage(env, cfg, row, a.uid || null);
+        if(r.ok && r.missing) summary.pull.missing++;
+        else if(r.ok) summary.pull.pages++;
+        else if(!r.skipped) summary.pull.failed++;
+      }
+    }
+  }
+
+  await setSyncState(env, "last_status", "ok");
+  await setSyncState(env, "last_success_at", nowSec());
+  await setSyncState(env, "last_message", "sync executor finished");
+
+  await addSyncLog(env, {
+    direction: summary.direction,
+    kind: "system",
+    actor_user_id: a.uid || null,
+    action: "run",
+    status: "ok",
+    message: "sync executor finished",
+    payload_json: summary
+  });
+
+  return json(200, "ok", {
+    ran: true,
+    status: "ok",
+    summary
+  });
+}

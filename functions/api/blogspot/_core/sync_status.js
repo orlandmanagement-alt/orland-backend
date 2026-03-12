@@ -1,5 +1,6 @@
 import { json } from "../../../_lib.js";
 import { requireBlogspotAccess } from "./_service.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 async function getState(env, k){
   const row = await env.DB.prepare(
@@ -19,7 +20,11 @@ export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);
   if(!a.ok) return a.res;
 
+  const url = new URL(request.url);
+  const activeSite = await resolveActiveSite(env, String(url.searchParams.get("site_id") || "").trim());
+
   const data = {
+    site_id: activeSite?.id || null,
     state: {
       last_run_at: (await getState(env, "last_run_at"))?.v || "0",
       last_success_at: (await getState(env, "last_success_at"))?.v || "0",

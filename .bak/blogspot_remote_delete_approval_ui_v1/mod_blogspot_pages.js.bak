@@ -1,0 +1,731 @@
+import { afvCreateEngine } from "../../assets/js/async_field_validation.js";
+
+export default function(Orland){
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+
+  async function loadLocal(){ return await Orland.api("/api/blogspot/pages"); }
+  async function loadRemote(){ return await Orland.api("/api/blogspot/pages?source=remote&maxResults=10"); }
+  async function loadSafety(){ return await Orland.api("/api/blogspot/safety_config"); }
+  async function save(payload){
+    return await Orland.api("/api/blogspot/pages", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+  async function publishPage(id){
+    return await Orland.api("/api/blogspot/publish_page", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
+  async function deleteRemotePage(id){
+    return await Orland.api("/api/blogspot/delete_remote_page", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
+  async function refreshRemotePage(id){
+    return await Orland.api("/api/blogspot/refresh_remote_page", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+  }
+
+  const TEMPLATES = {
+    simple: `<div class="space-y-4">
+  <h2 class="text-2xl font-bold">Page Title</h2>
+  <p>Isi halaman sederhana di sini.</p>
+</div>`,
+    contact: `<div class="space-y-4">
+  <h2 class="text-2xl font-bold">Contact Us</h2>
+  <p>Email: support@example.com</p>
+  <p>Phone: +62 xxx xxxx</p>
+</div>`,
+    about: `<div class="space-y-4">
+  <h2 class="text-2xl font-bold">About Us</h2>
+  <p>Tulis profil perusahaan atau organisasi di sini.</p>
+</div>`
+  };
+
+  function statusBadge(status){
+    const s = String(status || "draft").toLowerCase();
+    if(s === "published"){
+      return `<span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">published</span>`;
+    }
+    return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">draft</span>`;
+  }
+
+  function syncBadge(row){
+    const hasRemote = !!String(row.map_remote_id || row.external_id || "").trim();
+    if(hasRemote){
+      return `<span class="px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-black">remote linked</span>`;
+    }
+    return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">local only</span>`;
+  }
+
+  function dirtyBadge(row){
+    const dirty = Number(row.map_dirty || 0);
+    const deletedRemote = Number(row.map_deleted_remote || 0);
+
+    if(deletedRemote){
+      return `<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">remote deleted</span>`;
+    }
+    if(dirty){
+      return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">dirty</span>`;
+    }
+    return `<span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">synced</span>`;
+  }
+
+  function fmtDate(v){
+    if(!v) return "-";
+    try{ return new Date(v).toLocaleString("id-ID"); }
+    catch{ return String(v); }
+  }
+
+  function validationHint(name, hintText){
+    return `
+      <div class="text-xs text-slate-500 mt-2" data-fve-hint-for="${esc(name)}">${esc(hintText || "")}</div>
+      <div class="text-xs text-red-500 mt-2 hidden" data-fve-error-for="${esc(name)}"></div>
+      <div class="fve-state hidden mt-2" data-fve-state-for="${esc(name)}"></div>
+    `;
+  }
+
+  function clearAsyncState(form, name){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-invalid", "is-warning", "is-checking");
+    if(error){
+      error.textContent = "";
+      error.classList.add("hidden");
+    }
+    if(state){
+      state.textContent = "";
+      state.className = "fve-state hidden mt-2";
+    }
+  }
+
+  function setInlineError(form, name, message){
+    const input = form.querySelector(`[name="${CSS.escape(String(name))}"]`);
+    const error = form.querySelector(`[data-fve-error-for="${CSS.escape(String(name))}"]`);
+    const state = form.querySelector(`[data-fve-state-for="${CSS.escape(String(name))}"]`);
+    input?.classList.remove("is-valid", "is-warning", "is-checking");
+    input?.classList.add("is-invalid");
+    if(error){
+      error.textContent = String(message || "");
+      error.classList.remove("hidden");
+    }
+    if(state){
+      state.textContent = "Invalid";
+      state.className = "fve-state is-invalid mt-2";
+    }
+  }
+
+  function renderRemoteItems(items){
+    if(!items.length){
+      return `<div class="text-sm text-slate-500">No remote pages.</div>`;
+    }
+
+    return items.map(x => `
+      <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+        <div class="text-sm font-extrabold">${esc(x.title || "Untitled")}</div>
+        <div class="mt-2 space-y-1 text-[11px] text-slate-500">
+          <div><span class="font-bold">ID:</span> ${esc(x.id || "-")}</div>
+          <div><span class="font-bold">Published:</span> ${esc(fmtDate(x.published))}</div>
+          <div><span class="font-bold">Updated:</span> ${esc(fmtDate(x.updated))}</div>
+        </div>
+        ${x.url ? `<div class="mt-3"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-primary break-all">${esc(x.url)}</a></div>` : ``}
+      </div>
+    `).join("");
+  }
+
+  function summaryCards(items){
+    const rows = Array.isArray(items) ? items : [];
+    const total = rows.length;
+    const linked = rows.filter(x => String(x.map_remote_id || x.external_id || "").trim()).length;
+    const dirty = rows.filter(x => Number(x.map_dirty || 0) === 1).length;
+    const remoteDeleted = rows.filter(x => Number(x.map_deleted_remote || 0) === 1).length;
+    return `
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+          <div class="text-xs text-slate-500 font-bold">Local Pages</div>
+          <div class="text-2xl font-extrabold mt-2">${total}</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+          <div class="text-xs text-slate-500 font-bold">Remote Linked</div>
+          <div class="text-2xl font-extrabold mt-2">${linked}</div>
+        </div>
+        <div class="rounded-2xl border border-amber-200 p-4">
+          <div class="text-xs text-slate-500 font-bold">Dirty</div>
+          <div class="text-2xl font-extrabold mt-2">${dirty}</div>
+        </div>
+        <div class="rounded-2xl border border-red-200 p-4">
+          <div class="text-xs text-slate-500 font-bold">Remote Deleted</div>
+          <div class="text-2xl font-extrabold mt-2">${remoteDeleted}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  return {
+    title:"Blogspot Pages",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-4 max-w-7xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold text-slate-900 dark:text-white">Blogspot Pages</div>
+                <div class="text-sm text-slate-500">Local CMS pages + remote Blogger publish/update/delete.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm"><i class="fa-solid fa-rotate mr-2"></i>Reload</button>
+                <button id="btnRemote" class="px-4 py-3 rounded-2xl border border-amber-200 text-amber-700 font-black text-sm"><i class="fa-solid fa-cloud-arrow-down mr-2"></i>Remote Preview</button>
+                <button id="btnOpenSync" class="px-4 py-3 rounded-2xl border border-sky-200 text-sky-700 font-black text-sm"><i class="fa-solid fa-rotate mr-2"></i>Sync</button>
+                <button id="btnOpenSettings" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm"><i class="fa-solid fa-gear mr-2"></i>Settings</button>
+                <button id="btnNew" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm"><i class="fa-solid fa-plus mr-2"></i>New Page</button>
+              </div>
+            </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+            <div class="text-sm font-extrabold text-amber-700">Operator Notice</div>
+            <div class="text-xs text-slate-600 mt-2">
+              Gunakan save untuk draft lokal, publish untuk create/update ke Blogger, refresh remote untuk verifikasi, dan delete remote hanya untuk page yang benar-benar harus dihapus dari Blogger.
+            </div>
+          </div>
+
+          <div id="summaryBox"></div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="xl:col-span-2 rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="text-xl font-extrabold">Local Pages</div>
+                <input id="qSearch" class="w-full xl:w-80 px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold" placeholder="Search title / slug / status / remote">
+              </div>
+              <div id="listBox" class="mt-4 space-y-3"></div>
+              <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                <div id="pageInfo" class="text-xs text-slate-500"></div>
+                <div class="flex gap-2">
+                  <button id="btnPrev" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Prev</button>
+                  <button id="btnNext" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Next</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xl font-extrabold">Remote Preview</div>
+                <span id="remoteCount" class="text-xs text-slate-500">0 items</span>
+              </div>
+              <div id="remoteBox" class="mt-4 space-y-3">
+                <div class="text-sm text-slate-500">Click "Remote Preview" untuk memuat Blogger pages.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="modalBackdrop" class="hidden fixed inset-0 z-[100] bg-black/50 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-6xl rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-4 lg:px-5 py-4 border-b border-slate-200 dark:border-darkBorder flex items-center justify-between gap-3">
+                <div>
+                  <div id="modalTitle" class="text-lg lg:text-xl font-extrabold">Page</div>
+                  <div class="text-xs text-slate-500 mt-1">Create / edit / remote operations</div>
+                </div>
+                <button id="btnModalClose" class="w-10 h-10 rounded-full border border-slate-200 dark:border-darkBorder"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div id="modalBody" class="p-4 lg:p-5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="confirmBackdrop" class="hidden fixed inset-0 z-[120] bg-black/60 p-3 lg:p-6 overflow-auto">
+          <div class="min-h-full flex items-start lg:items-center justify-center">
+            <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter shadow-2xl">
+              <div class="px-5 py-4 border-b border-slate-200 dark:border-darkBorder">
+                <div id="confirmTitle" class="text-lg font-extrabold">Confirm Action</div>
+                <div id="confirmDesc" class="text-sm text-slate-500 mt-1">Are you sure?</div>
+              </div>
+              <div class="p-5">
+                <div id="confirmMeta" class="rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 p-4 text-sm break-words"></div>
+                <div class="mt-5 flex justify-end gap-2">
+                  <button id="btnConfirmCancel" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+                  <button id="btnConfirmOk" class="px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+      let ITEMS = [];
+      let SAFETY = {};
+      let PAGE = 1;
+      let confirmAction = null;
+
+      function setMsg(kind, text){
+        q("msg").className = "text-sm";
+        if(kind === "error") q("msg").classList.add("text-red-500");
+        else if(kind === "success") q("msg").classList.add("text-emerald-600");
+        else q("msg").classList.add("text-slate-500");
+        q("msg").textContent = text;
+      }
+
+      function renderSafetyBanner(){
+        const box = q("safetyBox");
+        if(!box) return;
+        const parts = [];
+
+        if(String(SAFETY.write_lock_enabled || "0") === "1"){
+          parts.push(`<div class="rounded-2xl border border-red-300 bg-red-50 p-4"><div class="text-sm font-extrabold text-red-700">Emergency Write Lock Active</div><div class="text-xs text-slate-600 mt-2">Remote publish/delete should be blocked.</div></div>`);
+        }
+        if(String(SAFETY.maintenance_mode || "0") === "1"){
+          parts.push(`<div class="rounded-2xl border border-amber-300 bg-amber-50 p-4"><div class="text-sm font-extrabold text-amber-700">Maintenance Mode Active</div><div class="text-xs text-slate-600 mt-2">${esc(SAFETY.maintenance_notice || "Production maintenance mode is active.")}</div></div>`);
+        }
+        box.innerHTML = parts.join("");
+      }
+
+      function askPhrase(message, expected){
+        const given = window.prompt(message || "Type confirmation phrase");
+        return String(given || "").trim() === String(expected || "").trim();
+      }
+
+      function setMsg(kind, text){
+        q("msg").className = "mt-4 text-sm";
+        if(kind === "error") q("msg").classList.add("text-red-500");
+        else if(kind === "success") q("msg").classList.add("text-emerald-600");
+        else q("msg").classList.add("text-slate-500");
+        q("msg").textContent = text;
+      }
+
+      function openModal(title, body){
+        q("modalTitle").textContent = title || "Page";
+        q("modalBody").innerHTML = body || "";
+        q("modalBackdrop").classList.remove("hidden");
+      }
+
+      function closeModal(){
+        q("modalBackdrop").classList.add("hidden");
+        q("modalBody").innerHTML = "";
+      }
+
+      function openConfirm(title, desc, metaHtml, onOk, danger = true){
+        q("confirmTitle").textContent = title || "Confirm";
+        q("confirmDesc").textContent = desc || "";
+        q("confirmMeta").innerHTML = metaHtml || "-";
+        confirmAction = onOk;
+        q("btnConfirmOk").className = danger
+          ? "px-4 py-2.5 rounded-2xl bg-red-600 text-white font-black text-sm"
+          : "px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-sm";
+        q("btnConfirmOk").textContent = danger ? "Confirm" : "Continue";
+        q("confirmBackdrop").classList.remove("hidden");
+      }
+
+      function closeConfirm(){
+        q("confirmBackdrop").classList.add("hidden");
+        q("confirmMeta").innerHTML = "";
+        confirmAction = null;
+      }
+
+      function openDeleteLocal(row){
+        if(String(SAFETY.write_lock_enabled || "0") === "1"){
+          setMsg("error", "Write lock active.");
+          return;
+        }
+        if(!askPhrase("Type delete confirm phrase to continue:", SAFETY.delete_confirm_phrase || "DELETE REMOTE BLOGSPOT")){
+          setMsg("error", "Delete confirm phrase mismatch.");
+          return;
+        }
+        if(String(SAFETY.write_lock_enabled || "0") === "1"){
+          setMsg("error", "Write lock active.");
+          return;
+        }
+        if(String(row.status || "draft").toLowerCase() === "published"){
+          if(!askPhrase("Published content detected. Type phrase to continue:", SAFETY.published_change_confirm || "CONFIRM PUBLISHED CHANGE")){
+            setMsg("error", "Published-change confirm phrase mismatch.");
+            return;
+          }
+        }
+        openConfirm(
+          "Delete Local Page",
+          "This action will remove the local page from database.",
+          `<div class="font-black text-red-600">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.slug || "-")}</div>`,
+          async ()=>{
+            setMsg("muted", "Deleting local page...");
+            const r = await save({ action:"delete", id: row.id });
+            if(r.status !== "ok"){
+              setMsg("error", "Delete failed: " + r.status);
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Local page deleted.");
+            await render();
+          },
+          true
+        );
+      }
+
+      function openDeleteRemote(row){
+        openConfirm(
+          "Delete Remote Blogger Page",
+          "This action will remove the page from Blogger remote.",
+          `<div class="font-black text-rose-700">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">Remote ID: ${esc(row.external_id || row.map_remote_id || "-")}</div>${row.url ? `<div class="text-xs text-slate-500 mt-1 break-all">${esc(row.url)}</div>` : ``}`,
+          async ()=>{
+            setMsg("muted", "Deleting remote Blogger page...");
+            const r = await deleteRemotePage(row.id);
+            if(r.status !== "ok"){
+              setMsg("error", "Remote delete failed: " + (r.data?.error || r.status));
+              q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Remote Blogger page deleted.");
+            await render();
+          },
+          true
+        );
+      }
+
+      function openPublishRemote(row){
+        openConfirm(
+          "Publish Page to Blogger",
+          "This action will create or update the remote Blogger page.",
+          `<div class="font-black text-emerald-700">${esc(row.title || row.id)}</div><div class="text-xs text-slate-500 mt-2">${esc(row.slug || "-")}</div><div class="mt-3 flex gap-2 flex-wrap">${statusBadge(row.status)}${syncBadge(row)}${dirtyBadge(row)}</div>`,
+          async ()=>{
+            setMsg("muted", "Publishing to Blogger...");
+            const r = await publishPage(row.id);
+            if(r.status !== "ok"){
+              setMsg("error", "Publish failed: " + (r.data?.error || r.status));
+              q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+              return;
+            }
+            closeConfirm();
+            closeModal();
+            setMsg("success", "Page published to Blogger.");
+            await render();
+          },
+          false
+        );
+      }
+
+      function formHtml(row = {}){
+        const hasRemote = !!String(row.external_id || row.map_remote_id || "").trim();
+
+        return `
+          <form id="pageForm" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="space-y-4">
+              <input type="hidden" name="mode" value="${row.id ? "update" : "create"}">
+
+              <div class="flex flex-wrap gap-2">
+                ${statusBadge(row.status)}
+                ${syncBadge(row)}
+                ${dirtyBadge(row)}
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">ID</label>
+                <input name="id" value="${esc(row.id || "")}" ${row.id ? "readonly" : ""} class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-slate-50 dark:bg-black/20 text-sm font-semibold">
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">TITLE</label>
+                <input name="title" value="${esc(row.title || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">SLUG</label>
+                  <input name="slug" value="${esc(row.slug || "")}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                  ${validationHint("slug", "Slug page harus unik. Live check ke backend.")}
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-slate-500 mb-2">STATUS</label>
+                  <select name="status" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-semibold">
+                    <option value="draft" ${row.status === "draft" || !row.status ? "selected" : ""}>draft</option>
+                    <option value="published" ${row.status === "published" ? "selected" : ""}>published</option>
+                  </select>
+                </div>
+              </div>
+
+              ${row.url ? `<div class="rounded-2xl border border-sky-200 bg-sky-50 p-4"><div class="text-xs font-black text-sky-700">REMOTE URL</div><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" class="mt-2 block text-sm font-bold text-primary break-all">${esc(row.url)}</a></div>` : ``}
+
+              <div>
+                <div class="text-sm font-bold text-slate-500 mb-2">STARTER TEMPLATES</div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-template="simple">Simple</button>
+                  <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-template="contact">Contact</button>
+                  <button type="button" class="tplBtn px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-bold" data-template="about">About</button>
+                </div>
+              </div>
+
+              <div class="flex gap-2 flex-wrap">
+                <button type="submit" class="px-4 py-2.5 rounded-2xl bg-primary text-white font-black text-sm">Save</button>
+                ${row.id ? `<button type="button" id="btnPublishPage" class="px-4 py-2.5 rounded-2xl border border-emerald-200 text-emerald-700 font-black text-sm">Publish to Blogger</button>` : ``}
+                ${hasRemote ? `<button type="button" id="btnRefreshRemotePage" class="px-4 py-2.5 rounded-2xl border border-sky-200 text-sky-700 font-black text-sm">Refresh Remote</button>` : ``}
+                ${hasRemote ? `<button type="button" id="btnDeleteRemotePage" class="px-4 py-2.5 rounded-2xl border border-rose-200 text-rose-700 font-black text-sm">Delete Remote</button>` : ``}
+                ${row.id ? `<button type="button" id="btnDeletePage" class="px-4 py-2.5 rounded-2xl border border-red-200 text-red-600 font-black text-sm">Delete Local</button>` : ``}
+                <button type="button" id="btnCancelPage" class="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Cancel</button>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-500 mb-2">CONTENT HTML</label>
+                <textarea name="content_html" id="content_html" rows="16" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark text-sm font-mono">${esc(row.content_html || "")}</textarea>
+              </div>
+
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-3">
+                <div class="text-xs font-black text-slate-500 mb-2">LIVE PREVIEW</div>
+                <div id="htmlPreview" class="rounded-2xl bg-slate-50 dark:bg-black/20 p-4 overflow-auto min-h-[220px]"></div>
+              </div>
+            </div>
+          </form>
+        `;
+      }
+
+      function bindModal(row = {}){
+        const form = q("pageForm");
+        const htmlEl = q("content_html");
+        const preview = q("htmlPreview");
+
+        const asyncEngine = afvCreateEngine(form, {
+          slug: {
+            debounce_ms: 500,
+            min_length: 2,
+            skip_if_empty: true,
+            validate: async (value)=>{
+              const r = await Orland.api("/api/validate/page-slug", {
+                method: "POST",
+                body: JSON.stringify({
+                  slug: value,
+                  exclude_id: row?.id || ""
+                })
+              });
+
+              if(r.status !== "ok"){
+                return { ok:false, message:"Validation request failed" };
+              }
+
+              return r.data?.available
+                ? { ok:true, message:"Slug available" }
+                : { ok:false, used:true, message:"Slug already used" };
+            }
+          }
+        });
+
+        asyncEngine.bind();
+
+        function renderPreview(){
+          preview.innerHTML = htmlEl.value || `<div class="text-xs text-slate-500">Empty preview.</div>`;
+        }
+
+        renderPreview();
+        htmlEl.addEventListener("input", renderPreview);
+
+        q("btnCancelPage")?.addEventListener("click", closeModal);
+        q("btnDeletePage")?.addEventListener("click", ()=> openDeleteLocal(row));
+        q("btnDeleteRemotePage")?.addEventListener("click", ()=> openDeleteRemote(row));
+        q("btnPublishPage")?.addEventListener("click", ()=> openPublishRemote(row));
+
+        q("btnRefreshRemotePage")?.addEventListener("click", async ()=>{
+          if(!row.id){
+            setMsg("error", "Invalid page id.");
+            return;
+          }
+          setMsg("muted", "Refreshing remote Blogger page...");
+          const r = await refreshRemotePage(row.id);
+          if(r.status !== "ok"){
+            setMsg("error", "Remote refresh failed: " + (r.data?.error || r.status));
+            q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+            return;
+          }
+          closeModal();
+          if(r.data?.remote_deleted){
+            setMsg("success", "Remote page not found. Local map updated.");
+          }else{
+            setMsg("success", "Remote page refreshed.");
+          }
+          await render();
+        });
+
+        q("modalBody").querySelectorAll(".tplBtn").forEach(btn => {
+          btn.addEventListener("click", ()=>{
+            const key = btn.getAttribute("data-template");
+            htmlEl.value = TEMPLATES[key] || "";
+            renderPreview();
+          });
+        });
+
+        form.addEventListener("submit", async (ev)=>{
+          ev.preventDefault();
+
+          const payload = {
+            action: form.mode.value,
+            id: form.id.value.trim(),
+            title: form.title.value.trim(),
+            slug: form.slug.value.trim(),
+            status: form.status.value,
+            content_html: htmlEl.value
+          };
+
+          clearAsyncState(form, "slug");
+
+          if(!payload.title){
+            setMsg("error", "Title required.");
+            return;
+          }
+
+          if(!payload.slug){
+            setInlineError(form, "slug", "Slug wajib diisi.");
+            setMsg("error", "Periksa field page yang belum valid.");
+            return;
+          }
+
+          const asyncResult = await asyncEngine.validateAll();
+          const asyncHasError = Object.values(asyncResult).some(x => x && x.ok === false);
+
+          if(asyncHasError){
+            setMsg("error", "Masih ada unique field page yang bentrok.");
+            return;
+          }
+
+          if(asyncEngine.isBusy()){
+            setMsg("error", "Masih menunggu pengecekan field page.");
+            return;
+          }
+
+          setMsg("muted", "Saving...");
+          const r = await save(payload);
+          if(r.status !== "ok"){
+            setMsg("error", "Save failed: " + r.status);
+            return;
+          }
+
+          closeModal();
+          setMsg("success", "Page saved.");
+          await render();
+        });
+      }
+
+      function filteredItems(){
+        const qv = String(q("qSearch").value || "").trim().toLowerCase();
+        return !qv ? ITEMS : ITEMS.filter(x => {
+          const hay = [
+            x.title,
+            x.slug,
+            x.status,
+            x.external_id ? "remote linked" : "local only",
+            Number(x.map_dirty || 0) ? "dirty" : "synced",
+            Number(x.map_deleted_remote || 0) ? "remote deleted" : ""
+          ].join(" ").toLowerCase();
+          return hay.includes(qv);
+        });
+      }
+
+      function pagedItems(rows){
+        const totalPages = Math.max(1, Math.ceil(rows.length / 8));
+        if(PAGE > totalPages) PAGE = totalPages;
+        if(PAGE < 1) PAGE = 1;
+        const start = (PAGE - 1) * 8;
+        return { totalPages, items: rows.slice(start, start + 8) };
+      }
+
+      function renderList(){
+        const rows = filteredItems();
+        const pager = pagedItems(rows);
+
+        if(!rows.length){
+          q("listBox").innerHTML = `<div class="text-sm text-slate-500">No local pages.</div>`;
+          q("pageInfo").textContent = "0 items";
+          return;
+        }
+
+        q("listBox").innerHTML = pager.items.map(x => `
+          <button class="w-full text-left rounded-2xl border border-slate-200 dark:border-darkBorder p-4 hover:bg-slate-50 dark:hover:bg-white/5 itemRow" data-id="${esc(x.id)}">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="text-base font-extrabold">${esc(x.title || "Untitled")}</div>
+                <div class="text-xs text-slate-500 mt-1">${esc(x.slug || "")}</div>
+                <div class="flex gap-2 flex-wrap mt-3">
+                  ${statusBadge(x.status)}
+                  ${syncBadge(x)}
+                  ${dirtyBadge(x)}
+                </div>
+              </div>
+              <div class="text-[11px] text-slate-400">${esc(fmtDate(x.updated_at || x.created_at))}</div>
+            </div>
+          </button>
+        `).join("");
+
+        q("pageInfo").textContent = `Page ${PAGE} / ${pager.totalPages} • ${rows.length} items`;
+        q("btnPrev").disabled = PAGE <= 1;
+        q("btnNext").disabled = PAGE >= pager.totalPages;
+
+        q("listBox").querySelectorAll(".itemRow").forEach(btn => {
+          btn.onclick = ()=>{
+            const row = ITEMS.find(x => String(x.id) === String(btn.getAttribute("data-id")));
+            if(!row) return;
+            openModal("Edit Page", formHtml(row));
+            bindModal(row);
+          };
+        });
+      }
+
+      async function render(){
+        setMsg("muted", "Loading...");
+        const [r, safetyRes] = await Promise.all([loadLocal(), loadSafety()]);
+        SAFETY = safetyRes.status === "ok" ? (safetyRes.data || {}) : {};
+        renderSafetyBanner();
+        if(r.status !== "ok"){
+          q("listBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+          setMsg("error", "Load failed: " + r.status);
+          return;
+        }
+        ITEMS = Array.isArray(r.data?.items) ? r.data.items : [];
+        PAGE = 1;
+        q("summaryBox").innerHTML = summaryCards(ITEMS);
+        renderList();
+        setMsg("success", "Loaded.");
+      }
+
+      q("btnReload").onclick = render;
+      q("qSearch").oninput = ()=>{ PAGE = 1; renderList(); };
+      q("btnPrev").onclick = ()=>{ PAGE--; renderList(); };
+      q("btnNext").onclick = ()=>{ PAGE++; renderList(); };
+      q("btnNew").onclick = ()=>{ openModal("Create Page", formHtml({})); bindModal({}); };
+      q("btnOpenSync").onclick = ()=>Orland.navigate("/integrations/blogspot/sync");
+      q("btnOpenSettings").onclick = ()=>Orland.navigate("/integrations/blogspot/settings");
+
+      q("btnRemote").onclick = async ()=>{
+        q("remoteBox").innerHTML = `<div class="text-sm text-slate-500">Loading remote pages...</div>`;
+        q("remoteCount").textContent = "loading...";
+        const r = await loadRemote();
+
+        if(r.status !== "ok"){
+          q("remoteBox").innerHTML = `<pre class="text-[11px] whitespace-pre-wrap text-red-500">${esc(JSON.stringify(r, null, 2))}</pre>`;
+          q("remoteCount").textContent = "error";
+          return;
+        }
+
+        const items = Array.isArray(r.data?.items) ? r.data.items : [];
+        q("remoteBox").innerHTML = renderRemoteItems(items);
+        q("remoteCount").textContent = `${items.length} items`;
+      };
+
+      q("btnModalClose").onclick = closeModal;
+      q("modalBackdrop").addEventListener("click", (e)=>{ if(e.target === q("modalBackdrop")) closeModal(); });
+      q("btnConfirmCancel").onclick = closeConfirm;
+      q("btnConfirmOk").onclick = async ()=>{ if(typeof confirmAction === "function") await confirmAction(); };
+      q("confirmBackdrop").addEventListener("click", (e)=>{ if(e.target === q("confirmBackdrop")) closeConfirm(); });
+
+      await render();
+    }
+  };
+}

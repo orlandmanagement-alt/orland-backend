@@ -7,6 +7,8 @@ import {
   bloggerFetch,
   markMapDirty
 } from "./_service.js";
+import { appendLedgerEvent } from "./audit_ledger_shared.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 function s(v){ return String(v || "").trim(); }
 
@@ -18,6 +20,7 @@ export async function onRequestPost({ request, env }){
   const id = s(body.id);
   if(!id) return json(400, "invalid_input", { error:"id_required" });
 
+  const activeSite = await resolveActiveSite(env, s(body.site_id || ""));
   const cfg = await getBlogspotConfig(env);
   if(!cfg.enabled || !cfg.blog_id){
     return json(400, "invalid_config", { error:"blogspot_config_missing" });
@@ -30,7 +33,10 @@ export async function onRequestPost({ request, env }){
 
   const tk = await refreshBlogspotAccessToken(env);
   if(!tk.ok){
-    return json(400, "invalid_config", { error: tk.error || "oauth_refresh_failed", detail: tk.data || null });
+    return json(400, "invalid_config", {
+      error: tk.error || "oauth_refresh_failed",
+      detail: tk.data || null
+    });
   }
 
   const row = await env.DB.prepare(`
@@ -103,14 +109,30 @@ export async function onRequestPost({ request, env }){
     payload_json: {
       remote_id: remote.id || "",
       remote_url: remote.url || "",
-      status: row.status || "draft"
+      status: row.status || "draft",
+      site_id: activeSite?.id || null
     }
   });
+
+  try{
+    await appendLedgerEvent(env, {
+      site_id: activeSite?.id || null,
+      event_type: hasRemote ? "publish_page_update_remote" : "publish_page_create_remote",
+      item_kind: "page",
+      item_id: id,
+      actor_user_id: a.uid || null,
+      payload: {
+        remote_id: String(remote.id || ""),
+        remote_url: String(remote.url || "")
+      }
+    });
+  }catch{}
 
   return json(200, "ok", {
     published: true,
     id,
     remote_id: remote.id || "",
-    remote_url: remote.url || ""
+    remote_url: remote.url || "",
+    site_id: activeSite?.id || null
   });
 }

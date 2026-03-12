@@ -1,0 +1,489 @@
+export default function(Orland){
+  const esc = (s)=>String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+
+  async function loadSummary(){
+    return await Orland.api("/api/blogspot/summary");
+  }
+
+  async function loadPosts(){
+    return await Orland.api("/api/blogspot/posts");
+  }
+
+  async function loadPages(){
+    return await Orland.api("/api/blogspot/pages");
+  }
+
+  async function loadSyncLogs(limit = 8){
+    return await Orland.api("/api/blogspot/sync_logs?limit=" + encodeURIComponent(String(limit)));
+  }
+
+  async function loadSyncStatus(){
+    return await Orland.api("/api/blogspot/sync_status");
+  }
+
+  async function runSync(){
+    return await Orland.api("/api/blogspot/sync_run", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+  }
+
+  function fmtTs(v){
+    const n = Number(v || 0);
+    if(!n) return "-";
+    try{ return new Date(n * 1000).toLocaleString("id-ID"); }
+    catch{ return String(v); }
+  }
+
+  function badgeStatus(v){
+    const s = String(v || "").toLowerCase();
+    if(s === "ok") return `<span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">ok</span>`;
+    if(s === "error") return `<span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">error</span>`;
+    if(s === "running") return `<span class="px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-black">running</span>`;
+    if(s === "skipped") return `<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black">skipped</span>`;
+    if(s === "idle") return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">idle</span>`;
+    return `<span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-black">${esc(s || "unknown")}</span>`;
+  }
+
+  function badgeDirection(v){
+    const s = String(v || "").toLowerCase();
+    if(s === "push") return `<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black">push</span>`;
+    if(s === "pull") return `<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-black">pull</span>`;
+    if(s === "system") return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">system</span>`;
+    return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(s || "-")}</span>`;
+  }
+
+  function syncStateBadge(v){
+    const s = String(v || "").toLowerCase();
+    if(s === "synced") return `<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black">synced</span>`;
+    if(s === "pending_push") return `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-black">pending push</span>`;
+    if(s === "remote_deleted") return `<span class="px-2 py-1 rounded-full bg-red-100 text-red-700 text-[11px] font-black">remote deleted</span>`;
+    if(s === "error") return `<span class="px-2 py-1 rounded-full bg-red-100 text-red-700 text-[11px] font-black">error</span>`;
+    if(s === "conflict_possible") return `<span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-black">conflict</span>`;
+    if(s === "local_only") return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">local only</span>`;
+    return `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(s || "-")}</span>`;
+  }
+
+  function card(title, id, hint = "", tone = "default"){
+    const toneCls = tone === "danger"
+      ? "border-red-200"
+      : tone === "warn"
+      ? "border-amber-200"
+      : tone === "ok"
+      ? "border-emerald-200"
+      : "border-slate-200 dark:border-darkBorder";
+
+    return `
+      <div class="rounded-3xl border ${toneCls} bg-white dark:bg-darkLighter p-5">
+        <div class="text-xs text-slate-500 font-bold">${title}</div>
+        <div id="${id}" class="text-2xl font-extrabold mt-2">—</div>
+        ${hint ? `<div class="text-[11px] text-slate-500 mt-2">${hint}</div>` : ``}
+      </div>
+    `;
+  }
+
+  function buildDirtyItems(posts, pages){
+    const p = Array.isArray(posts) ? posts : [];
+    const g = Array.isArray(pages) ? pages : [];
+
+    const dirtyPosts = p
+      .filter(x => Number(x.map_dirty || 0) === 1 || Number(x.map_deleted_remote || 0) === 1 || String(x.sync_state || x.map_sync_state || "").trim())
+      .map(x => ({
+        kind: "post",
+        id: x.id,
+        title: x.title || x.id,
+        slug: x.slug || "",
+        updated_at: Number(x.updated_at || x.created_at || 0),
+        sync_state: x.sync_state || x.map_sync_state || (
+          Number(x.map_deleted_remote || 0) === 1 ? "remote_deleted" :
+          Number(x.map_dirty || 0) === 1 ? "pending_push" :
+          "local_only"
+        ),
+        path: "/integrations/blogspot/posts"
+      }));
+
+    const dirtyPages = g
+      .filter(x => Number(x.map_dirty || 0) === 1 || Number(x.map_deleted_remote || 0) === 1 || String(x.sync_state || x.map_sync_state || "").trim())
+      .map(x => ({
+        kind: "page",
+        id: x.id,
+        title: x.title || x.id,
+        slug: x.slug || "",
+        updated_at: Number(x.updated_at || x.created_at || 0),
+        sync_state: x.sync_state || x.map_sync_state || (
+          Number(x.map_deleted_remote || 0) === 1 ? "remote_deleted" :
+          Number(x.map_dirty || 0) === 1 ? "pending_push" :
+          "local_only"
+        ),
+        path: "/integrations/blogspot/pages"
+      }));
+
+    return dirtyPosts.concat(dirtyPages)
+      .sort((a, b) => Number(b.updated_at || 0) - Number(a.updated_at || 0))
+      .slice(0, 10);
+  }
+
+  function buildRecentLocal(posts, pages){
+    const p = Array.isArray(posts) ? posts : [];
+    const g = Array.isArray(pages) ? pages : [];
+
+    return p.map(x => ({
+      kind: "post",
+      id: x.id,
+      title: x.title || x.id,
+      slug: x.slug || "",
+      status: x.status || "draft",
+      updated_at: Number(x.updated_at || x.created_at || 0),
+      path: "/integrations/blogspot/posts"
+    })).concat(
+      g.map(x => ({
+        kind: "page",
+        id: x.id,
+        title: x.title || x.id,
+        slug: x.slug || "",
+        status: x.status || "draft",
+        updated_at: Number(x.updated_at || x.created_at || 0),
+        path: "/integrations/blogspot/pages"
+      }))
+    ).sort((a, b) => Number(b.updated_at || 0) - Number(a.updated_at || 0)).slice(0, 10);
+  }
+
+  return {
+    title:"Blogspot Integrated Console",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-7xl">
+          <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold text-slate-900 dark:text-white">Blogspot Integrated Console</div>
+                <div class="text-sm text-slate-500 mt-1">Pusat operasi Blogger: overview, content, widget, sync, dan health monitor.</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">
+                  <i class="fa-solid fa-rotate mr-2"></i>Reload
+                </button>
+                <button id="btnRunSync" class="px-4 py-3 rounded-2xl border border-emerald-200 text-emerald-700 font-black text-sm">
+                  <i class="fa-solid fa-play mr-2"></i>Run Sync
+                </button>
+              </div>
+            </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+            <div class="text-sm font-extrabold text-amber-700">Operator Notice</div>
+            <div class="text-xs text-slate-600 mt-2">
+              Publish, delete remote, dan bulk sync sebaiknya hanya dilakukan setelah cek konfigurasi OAuth, Blog ID, dan approval internal.
+              Untuk production, aktifkan protect mode dan audit perubahan secara rutin.
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 xl:grid-cols-6 gap-4">
+            ${card("Local Posts", "kPosts", "Jumlah post local")}
+            ${card("Local Pages", "kPages", "Jumlah page local")}
+            ${card("Active Widgets", "kWidgets", "Widget aktif")}
+            ${card("Dirty Items", "kDirty", "Butuh push / review", "warn")}
+            ${card("Remote Deleted", "kDeleted", "Perlu tindakan operator", "danger")}
+            ${card("Last Status", "kStatus", "Status runner terakhir")}
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Connection Health</div>
+              <div class="mt-4 space-y-3 text-sm">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-slate-500">Bundle Enabled</span>
+                  <span id="vEnabled" class="font-black">—</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-slate-500">Configured</span>
+                  <span id="vConfigured" class="font-black">—</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-slate-500">Blog ID</span>
+                  <span id="vBlogId" class="font-black text-right break-all">—</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-slate-500">Last Run</span>
+                  <span id="vLastRun" class="font-black text-right">—</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-slate-500">Last Success</span>
+                  <span id="vLastSuccess" class="font-black text-right">—</span>
+                </div>
+                <div class="pt-2">
+                  <div class="text-xs text-slate-500 font-bold">Last Message</div>
+                  <div id="vLastMsg" class="text-sm mt-2 break-words">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Quick Actions</div>
+              <div class="mt-4 grid grid-cols-1 gap-3">
+                <button id="goSettings" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+                  <div class="text-sm font-extrabold">API Settings</div>
+                  <div class="text-[11px] text-slate-500 mt-1">OAuth, API key, blog ID, sync policy</div>
+                </button>
+                <button id="goPosts" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+                  <div class="text-sm font-extrabold">Manage Posts</div>
+                  <div class="text-[11px] text-slate-500 mt-1">Local post + publish remote</div>
+                </button>
+                <button id="goPages" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+                  <div class="text-sm font-extrabold">Manage Pages</div>
+                  <div class="text-[11px] text-slate-500 mt-1">Local page + publish remote</div>
+                </button>
+                <button id="goWidgets" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+                  <div class="text-sm font-extrabold">Widgets / Home</div>
+                  <div class="text-[11px] text-slate-500 mt-1">Widget local-managed</div>
+                </button>
+                <button id="goSync" class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4 text-left hover:bg-slate-50 dark:hover:bg-white/5">
+                  <div class="text-sm font-extrabold">Sync Monitor</div>
+                  <div class="text-[11px] text-slate-500 mt-1">Logs, executor, runner state</div>
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Operational Advice</div>
+              <div class="mt-4 space-y-3 text-sm text-slate-600">
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                  <div class="font-extrabold">Sebelum Push</div>
+                  <div class="text-xs text-slate-500 mt-2">Pastikan dirty items sudah direview, slug valid, dan konten final.</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                  <div class="font-extrabold">Sebelum Delete Remote</div>
+                  <div class="text-xs text-slate-500 mt-2">Aktifkan delete_remote_enabled hanya saat diperlukan. Hindari enable permanen di production.</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+                  <div class="font-extrabold">Untuk Government-grade</div>
+                  <div class="text-xs text-slate-500 mt-2">Tambahkan approval, protected production, drift detection, dan evidence log.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Dirty Content Queue</div>
+                  <div class="text-sm text-slate-500 mt-1">Post/page yang perlu didorong atau diperiksa.</div>
+                </div>
+                <button id="btnGoDirtySync" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Open Sync</button>
+              </div>
+              <div id="dirtyBox" class="mt-4 space-y-3"></div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Recent Sync Logs</div>
+                  <div class="text-sm text-slate-500 mt-1">Ringkasan aktivitas sinkronisasi terakhir.</div>
+                </div>
+                <button id="btnOpenLogs" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Open Monitor</button>
+              </div>
+              <div id="logsBox" class="mt-4 space-y-3"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xl font-extrabold">Recent Local Content</div>
+                  <div class="text-sm text-slate-500 mt-1">Konten terbaru dari local CMS Blogspot.</div>
+                </div>
+                <div class="flex gap-2">
+                  <button id="btnGoPosts2" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Posts</button>
+                  <button id="btnGoPages2" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-black">Pages</button>
+                </div>
+              </div>
+              <div id="recentBox" class="mt-4 space-y-3"></div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-xl font-extrabold">Raw Status Snapshot</div>
+              <pre id="rawBox" class="mt-4 text-xs whitespace-pre-wrap break-words bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-darkBorder rounded-2xl p-4">{}</pre>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + id);
+
+      function setMsg(kind, text){
+        q("msg").className = "mt-4 text-sm";
+        if(kind === "error") q("msg").classList.add("text-red-500");
+        else if(kind === "success") q("msg").classList.add("text-emerald-600");
+        else q("msg").classList.add("text-slate-500");
+        q("msg").textContent = text;
+      }
+
+      function renderDirty(items){
+        const rows = Array.isArray(items) ? items : [];
+        if(!rows.length){
+          q("dirtyBox").innerHTML = `<div class="text-sm text-slate-500">No dirty content.</div>`;
+          return;
+        }
+
+        q("dirtyBox").innerHTML = rows.map(x => `
+          <button class="w-full text-left rounded-2xl border border-slate-200 dark:border-darkBorder p-4 hover:bg-slate-50 dark:hover:bg-white/5 dirtyItem" data-path="${esc(x.path)}">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="flex gap-2 flex-wrap">
+                  <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(x.kind)}</span>
+                  ${syncStateBadge(x.sync_state)}
+                </div>
+                <div class="text-sm font-extrabold mt-3">${esc(x.title || x.id)}</div>
+                <div class="text-xs text-slate-500 mt-1">${esc(x.slug || "-")}</div>
+                <div class="text-[11px] text-slate-400 mt-2">${esc(fmtTs(x.updated_at))}</div>
+              </div>
+            </div>
+          </button>
+        `).join("");
+
+        q("dirtyBox").querySelectorAll(".dirtyItem").forEach(el => {
+          el.onclick = ()=>Orland.navigate(el.getAttribute("data-path") || "/integrations/blogspot/sync");
+        });
+      }
+
+      function renderLogs(items){
+        const rows = Array.isArray(items) ? items : [];
+        if(!rows.length){
+          q("logsBox").innerHTML = `<div class="text-sm text-slate-500">No sync logs.</div>`;
+          return;
+        }
+
+        q("logsBox").innerHTML = rows.map(x => `
+          <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="flex gap-2 flex-wrap">
+                  ${badgeStatus(x.status)}
+                  ${badgeDirection(x.direction)}
+                  <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(x.kind || "-")}</span>
+                  <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(x.action || "-")}</span>
+                </div>
+                <div class="text-sm font-extrabold mt-3">${esc(x.message || "-")}</div>
+                <div class="text-[11px] text-slate-500 mt-2">${esc(fmtTs(x.created_at))}</div>
+              </div>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      function renderRecent(items){
+        const rows = Array.isArray(items) ? items : [];
+        if(!rows.length){
+          q("recentBox").innerHTML = `<div class="text-sm text-slate-500">No local content.</div>`;
+          return;
+        }
+
+        q("recentBox").innerHTML = rows.map(x => `
+          <button class="w-full text-left rounded-2xl border border-slate-200 dark:border-darkBorder p-4 hover:bg-slate-50 dark:hover:bg-white/5 recentItem" data-path="${esc(x.path)}">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="flex gap-2 flex-wrap">
+                  <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-black">${esc(x.kind)}</span>
+                  <span class="px-2 py-1 rounded-full ${String(x.status) === "published" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"} text-[11px] font-black">${esc(x.status || "draft")}</span>
+                </div>
+                <div class="text-sm font-extrabold mt-3">${esc(x.title || x.id)}</div>
+                <div class="text-xs text-slate-500 mt-1">${esc(x.slug || "-")}</div>
+                <div class="text-[11px] text-slate-400 mt-2">${esc(fmtTs(x.updated_at))}</div>
+              </div>
+            </div>
+          </button>
+        `).join("");
+
+        q("recentBox").querySelectorAll(".recentItem").forEach(el => {
+          el.onclick = ()=>Orland.navigate(el.getAttribute("data-path") || "/integrations/blogspot");
+        });
+      }
+
+      async function render(){
+        setMsg("muted", "Loading integrated console...");
+
+        const [summaryRes, postsRes, pagesRes, logsRes, syncStatusRes] = await Promise.all([
+          loadSummary(),
+          loadPosts(),
+          loadPages(),
+          loadSyncLogs(8),
+          loadSyncStatus()
+        ]);
+
+        const rawSnapshot = {
+          summary: summaryRes,
+          posts: postsRes?.status === "ok" ? { count: Array.isArray(postsRes.data?.items) ? postsRes.data.items.length : 0 } : postsRes,
+          pages: pagesRes?.status === "ok" ? { count: Array.isArray(pagesRes.data?.items) ? pagesRes.data.items.length : 0 } : pagesRes,
+          logs: logsRes?.status === "ok" ? { count: Array.isArray(logsRes.data?.items) ? logsRes.data.items.length : 0 } : logsRes,
+          sync_status: syncStatusRes
+        };
+        q("rawBox").textContent = JSON.stringify(rawSnapshot, null, 2);
+
+        if(summaryRes.status !== "ok"){
+          setMsg("error", "Load summary failed: " + summaryRes.status);
+          return;
+        }
+
+        const d = summaryRes.data || {};
+        const s = d.sync || {};
+
+        q("kPosts").textContent = String(d.local_posts ?? 0);
+        q("kPages").textContent = String(d.local_pages ?? 0);
+        q("kWidgets").textContent = String(d.active_widgets ?? 0);
+        q("kDirty").textContent = String(d.dirty_total ?? 0);
+        q("kDeleted").textContent = String(d.remote_deleted_total ?? 0);
+        q("kStatus").innerHTML = badgeStatus(s.last_status || "idle");
+
+        q("vEnabled").textContent = d.enabled ? "yes" : "no";
+        q("vConfigured").textContent = d.configured ? "yes" : "no";
+        q("vBlogId").textContent = d.blog_id || "-";
+        q("vLastRun").textContent = fmtTs(s.last_run_at);
+        q("vLastSuccess").textContent = fmtTs(s.last_success_at);
+        q("vLastMsg").textContent = s.last_message || "-";
+
+        const posts = postsRes.status === "ok" ? (Array.isArray(postsRes.data?.items) ? postsRes.data.items : []) : [];
+        const pages = pagesRes.status === "ok" ? (Array.isArray(pagesRes.data?.items) ? pagesRes.data.items : []) : [];
+        const dirtyItems = buildDirtyItems(posts, pages);
+        const recentItems = buildRecentLocal(posts, pages);
+        const logs = logsRes.status === "ok" ? (Array.isArray(logsRes.data?.items) ? logsRes.data.items : []) : [];
+
+        renderDirty(dirtyItems);
+        renderLogs(logs);
+        renderRecent(recentItems);
+
+        setMsg("success", "Integrated console loaded.");
+      }
+
+      q("btnReload").onclick = render;
+      q("btnRunSync").onclick = async ()=>{
+        setMsg("muted", "Running sync executor...");
+        const r = await runSync();
+        q("rawBox").textContent = JSON.stringify(r, null, 2);
+        if(r.status !== "ok"){
+          setMsg("error", "Run sync failed: " + r.status);
+          return;
+        }
+        setMsg("success", "Sync executor finished.");
+        await render();
+      };
+
+      q("goSettings").onclick = ()=>Orland.navigate("/integrations/blogspot/settings");
+      q("goPosts").onclick = ()=>Orland.navigate("/integrations/blogspot/posts");
+      q("goPages").onclick = ()=>Orland.navigate("/integrations/blogspot/pages");
+      q("goWidgets").onclick = ()=>Orland.navigate("/integrations/blogspot/widgets");
+      q("goSync").onclick = ()=>Orland.navigate("/integrations/blogspot/sync");
+
+      q("btnGoDirtySync").onclick = ()=>Orland.navigate("/integrations/blogspot/sync");
+      q("btnOpenLogs").onclick = ()=>Orland.navigate("/integrations/blogspot/sync");
+      q("btnGoPosts2").onclick = ()=>Orland.navigate("/integrations/blogspot/posts");
+      q("btnGoPages2").onclick = ()=>Orland.navigate("/integrations/blogspot/pages");
+
+      await render();
+    }
+  };
+}

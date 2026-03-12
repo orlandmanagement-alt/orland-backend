@@ -136,7 +136,7 @@ export async function bloggerFetch(url, opt = {}){
       ok: res.ok,
       status: res.status,
       data: null,
-      text: text.slice(0, 2000)
+      text: text.slice(0, 4000)
     };
   }catch(e){
     return {
@@ -182,8 +182,47 @@ export function safeJsonParse(v, fallback){
   }
 }
 
+export async function getSyncConfigValue(env, k, fallback = ""){
+  const row = await env.DB.prepare(
+    "SELECT v FROM blogspot_sync_config WHERE k=? LIMIT 1"
+  ).bind(k).first();
+  return row ? String(row.v || "") : String(fallback || "");
+}
+
+export async function setSyncState(env, k, v){
+  await env.DB.prepare(`
+    INSERT INTO blogspot_sync_state (k, v, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(k) DO UPDATE SET
+      v = excluded.v,
+      updated_at = excluded.updated_at
+  `).bind(k, String(v ?? ""), nowSec()).run();
+}
+
+export async function addSyncLog(env, row){
+  await env.DB.prepare(`
+    INSERT INTO blogspot_sync_logs (
+      id, direction, kind, local_id, remote_id, actor_user_id, action, status, message, payload_json, response_excerpt, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    makeId("bslog"),
+    String(row.direction || "system"),
+    String(row.kind || "system"),
+    row.local_id || null,
+    row.remote_id || null,
+    row.actor_user_id || null,
+    String(row.action || "run"),
+    String(row.status || "ok"),
+    row.message || "",
+    JSON.stringify(row.payload_json || {}),
+    row.response_excerpt || null,
+    nowSec()
+  ).run();
+}
+
 export async function markMapDirty(env, kind, localId, patch = {}){
   const now = nowSec();
+
   await env.DB.prepare(`
     INSERT INTO blogspot_post_map (
       local_id,
@@ -191,13 +230,24 @@ export async function markMapDirty(env, kind, localId, patch = {}){
       kind,
       title,
       slug,
+      remote_url,
+      remote_status,
       remote_updated,
       last_synced_at,
       last_pushed_at,
       dirty,
       deleted_local,
-      deleted_remote
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      deleted_remote,
+      sync_state,
+      sync_error,
+      sync_version,
+      last_local_hash,
+      last_remote_hash,
+      last_actor_user_id,
+      approval_status,
+      approved_by,
+      approved_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(local_id) DO UPDATE SET
       remote_id = CASE
         WHEN excluded.remote_id IS NOT NULL AND excluded.remote_id <> '' THEN excluded.remote_id
@@ -206,68 +256,104 @@ export async function markMapDirty(env, kind, localId, patch = {}){
       kind = excluded.kind,
       title = COALESCE(excluded.title, blogspot_post_map.title),
       slug = COALESCE(excluded.slug, blogspot_post_map.slug),
+      remote_url = COALESCE(excluded.remote_url, blogspot_post_map.remote_url),
+      remote_status = COALESCE(excluded.remote_status, blogspot_post_map.remote_status),
       remote_updated = COALESCE(excluded.remote_updated, blogspot_post_map.remote_updated),
       last_synced_at = COALESCE(excluded.last_synced_at, blogspot_post_map.last_synced_at),
       last_pushed_at = COALESCE(excluded.last_pushed_at, blogspot_post_map.last_pushed_at),
       dirty = excluded.dirty,
       deleted_local = excluded.deleted_local,
-      deleted_remote = excluded.deleted_remote
+      deleted_remote = excluded.deleted_remote,
+      sync_state = COALESCE(excluded.sync_state, blogspot_post_map.sync_state),
+      sync_error = COALESCE(excluded.sync_error, blogspot_post_map.sync_error),
+      sync_version = COALESCE(excluded.sync_version, blogspot_post_map.sync_version),
+      last_local_hash = COALESCE(excluded.last_local_hash, blogspot_post_map.last_local_hash),
+      last_remote_hash = COALESCE(excluded.last_remote_hash, blogspot_post_map.last_remote_hash),
+      last_actor_user_id = COALESCE(excluded.last_actor_user_id, blogspot_post_map.last_actor_user_id),
+      approval_status = COALESCE(excluded.approval_status, blogspot_post_map.approval_status),
+      approved_by = COALESCE(excluded.approved_by, blogspot_post_map.approved_by),
+      approved_at = COALESCE(excluded.approved_at, blogspot_post_map.approved_at)
   `).bind(
     String(localId),
-    String(patch.remote_id || ""),
+    patch.remote_id ? String(patch.remote_id) : null,
     String(kind),
     patch.title || null,
     patch.slug || null,
+    patch.remote_url || null,
+    patch.remote_status || null,
     patch.remote_updated || null,
     patch.last_synced_at || null,
     patch.last_pushed_at || null,
     patch.dirty ? 1 : 0,
     patch.deleted_local ? 1 : 0,
-    patch.deleted_remote ? 1 : 0
+    patch.deleted_remote ? 1 : 0,
+    patch.sync_state || null,
+    patch.sync_error || null,
+    Number(patch.sync_version || 1),
+    patch.last_local_hash || null,
+    patch.last_remote_hash || null,
+    patch.last_actor_user_id || null,
+    patch.approval_status || "not_required",
+    patch.approved_by || null,
+    patch.approved_at || null
   ).run();
 
-  await env.DB.prepare(`
-    INSERT INTO blogspot_sync_logs (
-      id, direction, kind, local_id, remote_id, action, status, message, payload_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    makeId("bslog"),
-    String(patch.direction || "local"),
-    String(kind),
-    String(localId),
-    patch.remote_id || null,
-    String(patch.action || "update"),
-    String(patch.status || "ok"),
-    String(patch.message || "map updated"),
-    JSON.stringify(patch.payload_json || {}),
-    now
-  ).run();
-}
-
-export function getOAuthRedirectUri(request){
-  const u = new URL(request.url);
-  return u.origin + "/api/blogspot/oauth_callback";
-}
-
-export async function exchangeAuthCodeForToken(request, env, code){
-  const oauth = await getBlogspotOAuthConfig(env);
-  const redirect_uri = getOAuthRedirectUri(request);
-
-  const form = new URLSearchParams();
-  form.set("grant_type", "authorization_code");
-  form.set("code", String(code || ""));
-  form.set("client_id", oauth.client_id || "");
-  form.set("client_secret", oauth.client_secret || "");
-  form.set("redirect_uri", redirect_uri);
-
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString()
+  await addSyncLog(env, {
+    direction: String(patch.direction || "local"),
+    kind: String(kind),
+    local_id: String(localId),
+    remote_id: patch.remote_id || null,
+    actor_user_id: patch.last_actor_user_id || null,
+    action: String(patch.action || "update"),
+    status: String(patch.status || "ok"),
+    message: String(patch.message || "map updated"),
+    payload_json: patch.payload_json || {},
+    response_excerpt: patch.response_excerpt || null
   });
+}
 
-  const data = await res.json().catch(() => null);
-  return { ok: res.ok, status: res.status, data };
+
+export async function getSafetyConfig(env){
+  return {
+    write_lock_enabled: (await getSyncConfigValue(env, "write_lock_enabled", "0")) === "1",
+    maintenance_mode: (await getSyncConfigValue(env, "maintenance_mode", "0")) === "1",
+    maintenance_notice: await getSyncConfigValue(env, "maintenance_notice", "Production maintenance mode is active. Review changes carefully."),
+    delete_confirm_phrase: await getSyncConfigValue(env, "delete_confirm_phrase", "DELETE REMOTE BLOGSPOT"),
+    published_change_confirm: await getSyncConfigValue(env, "published_change_confirm", "CONFIRM PUBLISHED CHANGE"),
+    remote_delete_requires_approval: (await getSyncConfigValue(env, "remote_delete_requires_approval", "1")) === "1"
+  };
+}
+
+export async function assertWriteAllowed(env, {
+  action = "write",
+  requiresApproval = false,
+  approved = false
+} = {}){
+  const safety = await getSafetyConfig(env);
+
+  if(safety.write_lock_enabled){
+    return {
+      ok:false,
+      res: json(423, "locked", {
+        error: "write_lock_enabled",
+        action,
+        message: "blogspot_write_lock_enabled"
+      })
+    };
+  }
+
+  if(action === "delete_remote" && safety.remote_delete_requires_approval && requiresApproval && !approved){
+    return {
+      ok:false,
+      res: json(403, "forbidden", {
+        error: "remote_delete_requires_approval",
+        action,
+        message: "remote_delete_requires_approval"
+      })
+    };
+  }
+
+  return { ok:true, safety };
 }
 
 export async function refreshBlogspotAccessToken(env){
@@ -296,21 +382,113 @@ export async function refreshBlogspotAccessToken(env){
 
   const data = await res.json().catch(() => null);
   if(!res.ok || !data?.access_token){
-    return {
-      ok: false,
-      status: res.status,
-      error: "token_refresh_failed",
-      data
-    };
+    return { ok:false, status:res.status, error:"token_refresh_failed", data };
   }
 
   const exp = now + Number(data.expires_in || 3600);
   await setKV(env, "blogspot_access_token", data.access_token, 1);
   await setKV(env, "blogspot_token_exp_at", String(exp), 1);
 
-  return {
-    ok: true,
-    access_token: data.access_token,
-    token_exp_at: exp
-  };
+  return { ok:true, access_token:data.access_token, token_exp_at:exp };
+}
+
+export async function getDirtyLocalItems(env, kind, limit = 20){
+  const table = kind === "page" ? "cms_pages" : "cms_posts";
+  const rows = await env.DB.prepare(`
+    SELECT
+      p.id, p.external_id, p.blog_id, p.title, p.slug, p.status, p.url,
+      p.content_html, p.content_text, p.labels_json, p.meta_json,
+      m.remote_id, m.remote_url, m.remote_status, m.remote_updated,
+      m.dirty, m.deleted_local, m.deleted_remote, m.sync_state,
+      m.approval_status, m.approved_by, m.approved_at
+    FROM ${table} p
+    LEFT JOIN blogspot_post_map m
+      ON m.local_id = p.id
+     AND m.kind = ?
+    WHERE p.provider = 'blogspot'
+      AND COALESCE(m.dirty, 0) = 1
+      AND COALESCE(m.deleted_local, 0) = 0
+    ORDER BY p.updated_at DESC, p.created_at DESC
+    LIMIT ?
+  `).bind(kind, Math.max(1, Number(limit || 20))).all();
+
+  return rows.results || [];
+}
+
+export async function getLinkedLocalItems(env, kind, limit = 20){
+  const table = kind === "page" ? "cms_pages" : "cms_posts";
+  const rows = await env.DB.prepare(`
+    SELECT
+      p.id, p.external_id, p.blog_id, p.title, p.slug, p.status, p.url,
+      p.content_html, p.content_text, p.labels_json, p.meta_json,
+      m.remote_id, m.remote_url, m.remote_status, m.remote_updated,
+      m.dirty, m.deleted_local, m.deleted_remote, m.sync_state,
+      m.approval_status, m.approved_by, m.approved_at
+    FROM ${table} p
+    LEFT JOIN blogspot_post_map m
+      ON m.local_id = p.id
+     AND m.kind = ?
+    WHERE p.provider = 'blogspot'
+      AND COALESCE(p.external_id, '') <> ''
+      AND COALESCE(m.deleted_local, 0) = 0
+    ORDER BY p.updated_at DESC, p.created_at DESC
+    LIMIT ?
+  `).bind(kind, Math.max(1, Number(limit || 20))).all();
+
+  return rows.results || [];
+}
+
+export function simpleHash(input){
+  let h = 2166136261;
+  const s = String(input || "");
+  for(let i = 0; i < s.length; i++){
+    h ^= s.charCodeAt(i);
+    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+  }
+  return (h >>> 0).toString(16);
+}
+
+export function buildLocalContentHash(row){
+  return simpleHash(JSON.stringify({
+    title: row?.title || "",
+    slug: row?.slug || "",
+    status: row?.status || "",
+    content_html: row?.content_html || "",
+    labels_json: row?.labels_json || "[]"
+  }));
+}
+
+export function buildRemoteContentHash(remote){
+  return simpleHash(JSON.stringify({
+    id: remote?.id || "",
+    title: remote?.title || "",
+    url: remote?.url || "",
+    published: remote?.published || "",
+    updated: remote?.updated || "",
+    content: remote?.content || "",
+    labels: remote?.labels || []
+  }));
+}
+
+export async function requiresApprovalForAction(env, action, row){
+  const productionProtect = await getSyncConfigValue(env, "production_protect", "1");
+  if(productionProtect !== "1") return false;
+
+  if(action === "publish"){
+    const cfg = await getSyncConfigValue(env, "approval_required_publish", "1");
+    if(cfg !== "1") return false;
+    const protectPublished = await getSyncConfigValue(env, "protect_published_content", "1");
+    return protectPublished === "1" && String(row?.status || "").toLowerCase() === "published";
+  }
+
+  if(action === "delete"){
+    const cfg = await getSyncConfigValue(env, "approval_required_delete", "1");
+    return cfg === "1";
+  }
+
+  return false;
+}
+
+export function isApprovalSatisfied(row){
+  return String(row?.approval_status || "not_required") === "approved";
 }

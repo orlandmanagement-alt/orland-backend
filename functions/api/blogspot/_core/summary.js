@@ -1,5 +1,6 @@
 import { json } from "../../../_lib.js";
 import { requireBlogspotAccess, getBlogspotConfig } from "./_service.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 async function getState(env, k){
   const row = await env.DB.prepare(
@@ -17,6 +18,10 @@ export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);
   if(!a.ok) return a.res;
 
+  const url = new URL(request.url);
+  const activeSite = await resolveActiveSite(env, String(url.searchParams.get("site_id") || "").trim());
+  const siteId = activeSite?.id || null;
+
   const cfg = await getBlogspotConfig(env);
 
   const [
@@ -31,10 +36,30 @@ export async function onRequestGet({ request, env }){
     countOne(env, `SELECT COUNT(*) AS total FROM cms_posts WHERE provider='blogspot'`),
     countOne(env, `SELECT COUNT(*) AS total FROM cms_pages WHERE provider='blogspot'`),
     countOne(env, `SELECT COUNT(*) AS total FROM blogspot_widget_home WHERE status='active'`),
-    countOne(env, `SELECT COUNT(*) AS total FROM blogspot_post_map WHERE kind='post' AND dirty=1`),
-    countOne(env, `SELECT COUNT(*) AS total FROM blogspot_post_map WHERE kind='page' AND dirty=1`),
-    countOne(env, `SELECT COUNT(*) AS total FROM blogspot_post_map WHERE kind='post' AND deleted_remote=1`),
-    countOne(env, `SELECT COUNT(*) AS total FROM blogspot_post_map WHERE kind='page' AND deleted_remote=1`)
+    countOne(env, `
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='post' AND dirty=1
+        AND (? IS NULL OR site_id=? OR site_id IS NULL)
+    `, siteId, siteId),
+    countOne(env, `
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='page' AND dirty=1
+        AND (? IS NULL OR site_id=? OR site_id IS NULL)
+    `, siteId, siteId),
+    countOne(env, `
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='post' AND deleted_remote=1
+        AND (? IS NULL OR site_id=? OR site_id IS NULL)
+    `, siteId, siteId),
+    countOne(env, `
+      SELECT COUNT(*) AS total
+      FROM blogspot_post_map
+      WHERE kind='page' AND deleted_remote=1
+        AND (? IS NULL OR site_id=? OR site_id IS NULL)
+    `, siteId, siteId)
   ]);
 
   const last_run_at = await getState(env, "last_run_at");
@@ -46,6 +71,7 @@ export async function onRequestGet({ request, env }){
     enabled: !!cfg.enabled,
     configured: !!(cfg.blog_id && cfg.api_key),
     blog_id: cfg.blog_id || "",
+    site_id: siteId,
     local_posts,
     local_pages,
     active_widgets,

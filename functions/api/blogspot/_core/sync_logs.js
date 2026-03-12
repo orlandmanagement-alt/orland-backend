@@ -1,5 +1,6 @@
 import { json } from "../../../_lib.js";
 import { requireBlogspotAccess } from "./_service.js";
+import { resolveActiveSite } from "./site_shared.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireBlogspotAccess(env, request, true);
@@ -10,10 +11,12 @@ export async function onRequestGet({ request, env }){
   const status = String(url.searchParams.get("status") || "").trim();
   const kind = String(url.searchParams.get("kind") || "").trim();
   const direction = String(url.searchParams.get("direction") || "").trim();
+  const activeSite = await resolveActiveSite(env, String(url.searchParams.get("site_id") || "").trim());
 
   let sql = `
     SELECT
       id,
+      site_id,
       direction,
       kind,
       local_id,
@@ -28,6 +31,10 @@ export async function onRequestGet({ request, env }){
   `;
   const binds = [];
 
+  if(activeSite?.id){
+    sql += ` AND (site_id=? OR site_id IS NULL)`;
+    binds.push(activeSite.id);
+  }
   if(status){
     sql += ` AND status=?`;
     binds.push(status);
@@ -47,6 +54,7 @@ export async function onRequestGet({ request, env }){
   const r = await env.DB.prepare(sql).bind(...binds).all();
 
   return json(200, "ok", {
+    site_id: activeSite?.id || null,
     items: (r.results || []).map(x => ({
       ...x,
       payload_json: (() => {
