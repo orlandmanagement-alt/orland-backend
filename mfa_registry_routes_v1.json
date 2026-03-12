@@ -1,0 +1,26 @@
+{
+  "/security/mfa-enrollment": {
+    "module": "/modules/mod_mfa_enrollment.js",
+    "export": "default",
+    "group": "security",
+    "label": "MFA Enrollment"
+  },
+  "/security/mfa-challenge": {
+    "module": "/modules/mod_mfa_challenge.js",
+    "export": "default",
+    "group": "security",
+    "label": "MFA Challenge"
+  },
+  "/security/mfa-recovery-codes": {
+    "module": "/modules/mod_mfa_recovery_codes.js",
+    "export": "default",
+    "group": "security",
+    "label": "Recovery Codes"
+  },
+  "/security/mfa-recovery-audit": {
+    "module": "/modules/mod_mfa_recovery_audit.js",
+    "export": "default",
+    "group": "security",
+    "label": "Recovery Audit"
+  }
+}

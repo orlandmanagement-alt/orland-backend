@@ -11,30 +11,6 @@ function safeJsonArray(v){
   }
 }
 
-const PROTECTED_ROLE_IDS = new Set([
-  "role_super_admin",
-  "role_admin",
-  "role_staff",
-  "role_client",
-  "role_talent",
-  "role_security_admin"
-]);
-
-const PROTECTED_ROLE_NAMES = new Set([
-  "super_admin",
-  "admin",
-  "staff",
-  "client",
-  "talent",
-  "security_admin"
-]);
-
-function isProtectedRole(id, name = ""){
-  const rid = String(id || "").trim();
-  const rname = String(name || "").trim().toLowerCase();
-  return PROTECTED_ROLE_IDS.has(rid) || PROTECTED_ROLE_NAMES.has(rname);
-}
-
 async function hasDescriptionColumn(env){
   try{
     const r = await env.DB.prepare(`PRAGMA table_info(roles)`).all();
@@ -120,7 +96,6 @@ async function listRoles(env){
     description: String(x.description || ""),
     created_at: Number(x.created_at ?? 0),
     menu_usage_count: Number(x.menu_usage_count ?? 0),
-    protected_role: isProtectedRole(x.id, x.name),
     menu_usage_items: safeJsonArray(x.menu_usage_items_json).map(m => ({
       id: String(m?.id || ""),
       code: String(m?.code || ""),
@@ -144,54 +119,27 @@ async function getRoleUsageCount(env, id){
   }
 }
 
-async function getUserRoleUsageCount(env, id){
-  try{
-    const r = await env.DB.prepare(`
-      SELECT COUNT(*) AS total
-      FROM user_roles
-      WHERE role_id=?
-    `).bind(id).first();
-
-    return Number(r?.total ?? 0);
-  }catch{
-    return 0;
-  }
-}
-
-async function getRoleRow(env, id){
-  try{
-    return await env.DB.prepare(`
-      SELECT id, name, created_at
-      FROM roles
-      WHERE id=?
-      LIMIT 1
-    `).bind(id).first();
-  }catch{
-    return null;
-  }
+function isProtectedRole(id){
+  return ["super_admin", "admin", "staff", "client", "talent"].includes(String(id || ""));
 }
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
 
-  if(!hasRole(a.roles, ["super_admin", "admin", "access_admin"])){
+  if(!hasRole(a.roles, ["super_admin", "admin"])){
     return json(403, "forbidden", null);
   }
 
   const items = await listRoles(env);
-  return json(200, "ok", {
-    items,
-    protected_role_ids: Array.from(PROTECTED_ROLE_IDS),
-    protected_role_names: Array.from(PROTECTED_ROLE_NAMES)
-  });
+  return json(200, "ok", { items });
 }
 
 export async function onRequestPost({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
 
-  if(!hasRole(a.roles, ["super_admin", "admin", "access_admin"])){
+  if(!hasRole(a.roles, ["super_admin", "admin"])){
     return json(403, "forbidden", null);
   }
 
@@ -211,13 +159,8 @@ export async function onRequestPost({ request, env }){
       return json(400, "invalid_input", { message: "id_required" });
     }
 
-    const row = await getRoleRow(env, id);
-    if(!row){
-      return json(404, "not_found", { message: "role_not_found" });
-    }
-
-    if(isProtectedRole(row.id, row.name)){
-      return json(400, "protected_role", { message: "protected_role_delete_denied" });
+    if(isProtectedRole(id)){
+      return json(400, "invalid_input", { message: "protected_role" });
     }
 
     const usageCount = await getRoleUsageCount(env, id);
@@ -225,14 +168,6 @@ export async function onRequestPost({ request, env }){
       return json(400, "invalid_input", {
         message: "role_in_use_by_menus",
         menu_usage_count: usageCount
-      });
-    }
-
-    const userUsageCount = await getUserRoleUsageCount(env, id);
-    if(userUsageCount > 0){
-      return json(400, "invalid_input", {
-        message: "role_in_use_by_users",
-        user_usage_count: userUsageCount
       });
     }
 
@@ -255,10 +190,6 @@ export async function onRequestPost({ request, env }){
   const withDesc = await hasDescriptionColumn(env);
 
   if(action === "create"){
-    if(isProtectedRole(id, name)){
-      return json(400, "protected_role", { message: "protected_role_reserved" });
-    }
-
     const exists = await env.DB.prepare(`
       SELECT id
       FROM roles
@@ -286,7 +217,7 @@ export async function onRequestPost({ request, env }){
   }
 
   const exists = await env.DB.prepare(`
-    SELECT id, name
+    SELECT id
     FROM roles
     WHERE id=?
     LIMIT 1
@@ -294,23 +225,6 @@ export async function onRequestPost({ request, env }){
 
   if(!exists){
     return json(404, "not_found", { message: "role_not_found" });
-  }
-
-  if(isProtectedRole(exists.id, exists.name)){
-    if(String(exists.name || "").toLowerCase() !== String(name || "").toLowerCase()){
-      return json(400, "protected_role", { message: "protected_role_rename_denied" });
-    }
-
-    return json(200, "ok", {
-      updated: true,
-      id,
-      protected_role: true,
-      message: "protected_role_no_mutation_required"
-    });
-  }
-
-  if(PROTECTED_ROLE_NAMES.has(String(name || "").toLowerCase())){
-    return json(400, "protected_role", { message: "protected_role_name_reserved" });
   }
 
   const nameConflict = await env.DB.prepare(`

@@ -1,0 +1,95 @@
+import { json, readJson, requireAuth, sha256Base64 } from "../../_lib.js";
+
+function acceptedCode(env){
+  return String(env.MFA_ENROLL_TEST_CODE || "123456").trim();
+}
+
+function safeJson(v){
+  if(v == null || v === "") return [];
+  try{
+    const x = JSON.parse(String(v));
+    return Array.isArray(x) ? x : [];
+  }catch{
+    return [];
+  }
+}
+
+function generateRecoveryCodes(){
+  const codes = [];
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for(let i = 0; i < 8; i++){
+    let s = "";
+    for(let j = 0; j < 10; j++){
+      s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    codes.push(s);
+  }
+  return codes;
+}
+
+async function hashCodes(codes){
+  const out = [];
+  for(const c of codes){
+    out.push(await sha256Base64(String(c)));
+  }
+  return out;
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const body = await readJson(request) || {};
+  const code = String(body.code || "").trim();
+  const challenge_id = String(body.challenge_id || "").trim();
+
+  if(!challenge_id || !code){
+    return json(400, "invalid_input", { message:"challenge_id_and_code_required" });
+  }
+
+  const user = await env.DB.prepare(`
+    SELECT id, mfa_enabled, recovery_codes_json
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).bind(a.uid).first();
+
+  if(!user){
+    return json(404, "not_found", { message:"user_not_found" });
+  }
+
+  if(Number(user.mfa_enabled || 0) !== 1){
+    return json(400, "invalid_input", { message:"mfa_not_enabled" });
+  }
+
+  let verified = false;
+  let used_recovery_code = false;
+  const accepted = acceptedCode(env);
+
+  if(code === accepted){
+    verified = true;
+  }else{
+    const raw = safeJson(user.recovery_codes_json);
+    const codeHash = await sha256Base64(code);
+    if(raw.includes(codeHash)){
+      verified = true;
+      used_recovery_code = true;
+      const next = raw.filter(x => String(x) !== String(codeHash));
+      await env.DB.prepare(`
+        UPDATE users
+        SET recovery_codes_json = ?, updated_at = strftime('%s','now')
+        WHERE id = ?
+      `).bind(JSON.stringify(next), a.uid).run();
+    }
+  }
+
+  if(!verified){
+    return json(400, "invalid_input", { message:"invalid_mfa_code" });
+  }
+
+  return json(200, "ok", {
+    verified: true,
+    used_recovery_code,
+    challenge_id
+  });
+}

@@ -1,0 +1,38 @@
+{
+  "/security/center": {
+    "module": "/modules/mod_security_center.js",
+    "export": "default",
+    "group": "security",
+    "label": "Security Center"
+  },
+  "/security/sessions": {
+    "module": "/modules/mod_sessions_admin.js",
+    "export": "default",
+    "group": "security",
+    "label": "Session Control"
+  },
+  "/security/login-timeline": {
+    "module": "/modules/mod_login_audit_timeline.js",
+    "export": "default",
+    "group": "security",
+    "label": "Login Timeline"
+  },
+  "/security/force-password-reset": {
+    "module": "/modules/mod_force_password_reset_admin.js",
+    "export": "default",
+    "group": "security",
+    "label": "Forced Password Reset"
+  },
+  "/security/bootstrap-admin": {
+    "module": "/modules/mod_bootstrap_admin.js",
+    "export": "default",
+    "group": "security",
+    "label": "Bootstrap Admin"
+  },
+  "/security/mfa-policy": {
+    "module": "/modules/mod_mfa_policy_console.js",
+    "export": "default",
+    "group": "security",
+    "label": "MFA Policy"
+  }
+}

@@ -5,7 +5,6 @@ import {
   createSession, requireEnv,
   nowSec, sha256Base64, auditEvent
 } from "../_lib.js";
-import { readMfaPolicy, mfaRequiredByRoles, signPendingLoginToken } from "./mfa/_common.js";
 
 function getClientIp(request){
   return (
@@ -53,7 +52,8 @@ async function delCounter(env, key){
   await env.DB.prepare(`DELETE FROM request_counters WHERE k=?`).bind(key).run();
 }
 
-async function bumpFailCounter(env, key, windowSec, maxFail){
+async function bumpFailCounter(env, ipHash, windowSec, maxFail){
+  const key = "login_fail:" + ipHash;
   const now = nowSec();
   const row = await getCounter(env, key);
 
@@ -73,8 +73,8 @@ async function bumpFailCounter(env, key, windowSec, maxFail){
   return { count, window_start, blocked: count >= maxFail };
 }
 
-async function resetFailCounter(env, key){
-  await delCounter(env, key);
+async function resetFailCounter(env, ipHash){
+  await delCounter(env, "login_fail:" + ipHash);
 }
 
 async function autoBlockIp(env, actor_user_id, ipHash, ttlSec, reason){
@@ -111,7 +111,7 @@ export async function onRequestPost({ request, env }) {
   const BLOCK_TTL_SEC = Number(env.LOGIN_FAIL_BLOCK_TTL_SEC || 3600);
 
   if (!email.includes("@") || password.length < 6) {
-    const res = await bumpFailCounter(env, "login_fail:" + ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
+    const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
     await auditEvent(env, request, {
       actor_identifier_hash: actorIdentifierHash,
       action: "password_fail",
@@ -123,6 +123,15 @@ export async function onRequestPost({ request, env }) {
     });
     if(res.blocked){
       await autoBlockIp(env, null, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        action: "lockout",
+        actor_identifier_hash: actorIdentifierHash,
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
     return json(400, "invalid_input", null);
@@ -135,14 +144,14 @@ export async function onRequestPost({ request, env }) {
       phone_verified,phone_verified_at,
       profile_completed,last_ip_hash,last_ua_hash,last_login_at,
       session_version,pw_fail_count,pw_fail_last_at,locked_until,lock_reason,
-      must_change_password,mfa_enabled,mfa_type,mfa_secret,disabled_at,disabled_reason
+      must_change_password,mfa_enabled,mfa_type,disabled_at,disabled_reason
     FROM users
     WHERE email_norm=?
     LIMIT 1
   `).bind(email).first();
 
   if (!u){
-    const res = await bumpFailCounter(env, "login_fail:" + ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
+    const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
     await auditEvent(env, request, {
       actor_identifier_hash: actorIdentifierHash,
       action: "password_fail",
@@ -154,17 +163,46 @@ export async function onRequestPost({ request, env }) {
     });
     if(res.blocked){
       await autoBlockIp(env, null, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        action: "lockout",
+        actor_identifier_hash: actorIdentifierHash,
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
     return json(403, "user_belum_terdaftar", null);
   }
 
   if (String(u.status || "").toLowerCase() !== "active" || u.disabled_at != null) {
+    await auditEvent(env, request, {
+      actor_user_id: u.id,
+      actor_identifier_hash: actorIdentifierHash,
+      action: "lockout",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 403,
+      duration_ms: Date.now() - started,
+      meta: { reason: "user_inactive_or_disabled" }
+    });
     return json(403, "forbidden", null);
   }
 
   const now = nowSec();
   if (u.locked_until != null && Number(u.locked_until || 0) > now) {
+    await auditEvent(env, request, {
+      actor_user_id: u.id,
+      actor_identifier_hash: actorIdentifierHash,
+      action: "lockout",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 423,
+      duration_ms: Date.now() - started,
+      meta: { reason: "locked_until", locked_until: Number(u.locked_until || 0) }
+    });
     return json(423, "locked", {
       message: "account_locked",
       locked_until: Number(u.locked_until || 0),
@@ -180,7 +218,7 @@ export async function onRequestPost({ request, env }) {
   const calc = await pbkdf2Hash(password, u.password_salt, iter);
 
   if (!timingSafeEqual(calc, u.password_hash)) {
-    const res = await bumpFailCounter(env, "login_fail:" + ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
+    const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
 
     let lockedUntil = null;
     if(res.blocked){
@@ -195,7 +233,18 @@ export async function onRequestPost({ request, env }) {
           WHERE id = ?
         `).bind(now, lockedUntil, "too_many_failed_attempts", u.id).run();
       }catch{}
+
       await autoBlockIp(env, u.id, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        actor_user_id: u.id,
+        actor_identifier_hash: actorIdentifierHash,
+        action: "lockout",
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts", locked_until: lockedUntil }
+      });
       return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
     }
 
@@ -226,10 +275,20 @@ export async function onRequestPost({ request, env }) {
   const roles = await getRolesForUser(env, u.id);
   const allowed = roles.includes("super_admin") || roles.includes("admin") || roles.includes("staff");
   if (!allowed) {
+    await auditEvent(env, request, {
+      actor_user_id: u.id,
+      actor_identifier_hash: actorIdentifierHash,
+      action: "lockout",
+      ip_hash: ipHash,
+      ua_hash: uaHash,
+      http_status: 403,
+      duration_ms: Date.now() - started,
+      meta: { reason: "role_not_allowed_for_dashboard" }
+    });
     return json(403, "forbidden", { message: "role_not_allowed_for_dashboard" });
   }
 
-  await resetFailCounter(env, "login_fail:" + ipHash);
+  await resetFailCounter(env, ipHash);
 
   try{
     await env.DB.prepare(`
@@ -247,49 +306,6 @@ export async function onRequestPost({ request, env }) {
     `).bind(ipHash, uaHash, now, now, now, u.id).run();
   }catch{}
 
-  const mfaPolicy = await readMfaPolicy(env);
-  const mfaPolicyEnabled = Number(mfaPolicy.enabled || 0) === 1;
-  const userMfaEnabled = Number(u.mfa_enabled || 0) === 1;
-  const mfaRequiredByRole = mfaRequiredByRoles(roles, mfaPolicy);
-
-  if((mfaPolicyEnabled && mfaRequiredByRole) || userMfaEnabled){
-    if(!u.mfa_secret || Number(u.mfa_enabled || 0) !== 1){
-      return json(403, "mfa_required", {
-        message: "mfa_required_but_not_enrolled",
-        require_enrollment: true
-      });
-    }
-
-    const pending_token = await signPendingLoginToken(env, {
-      uid: u.id,
-      roles,
-      ip_hash: ipHash,
-      ua_hash: uaHash,
-      exp: now + 300
-    });
-
-    await auditEvent(env, request, {
-      actor_user_id: u.id,
-      actor_identifier_hash: actorIdentifierHash,
-      action: "login_mfa_required",
-      ip_hash: ipHash,
-      ua_hash: uaHash,
-      http_status: 200,
-      duration_ms: Date.now() - started,
-      meta: { roles, mfa_required_by_role: mfaRequiredByRole }
-    });
-
-    return json(200, "ok", {
-      mfa_required: true,
-      pending_token,
-      user: {
-        id: u.id,
-        email_norm: u.email_norm,
-        display_name: u.display_name
-      }
-    });
-  }
-
   const sessionVersion = Number(u.session_version || 1);
   const sess = await createSession(env, u.id, roles, {
     ip_hash: ipHash,
@@ -305,7 +321,7 @@ export async function onRequestPost({ request, env }) {
     ua_hash: uaHash,
     http_status: 200,
     duration_ms: Date.now() - started,
-    meta: { roles, session_version: sessionVersion, mfa_used: false }
+    meta: { roles, session_version: sessionVersion }
   });
 
   const res = json(200, "ok", {

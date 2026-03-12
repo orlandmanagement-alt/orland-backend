@@ -1,0 +1,22 @@
+export async function submitLoginWithMfa(fetchJson, payload, onMfaRequired){
+  const r = await fetchJson("/api/login", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  if(r.status === "ok" && r.data?.mfa_required){
+    if(typeof onMfaRequired === "function"){
+      await onMfaRequired(r.data);
+    }
+    return r;
+  }
+
+  return r;
+}
+
+export async function submitMfaLoginVerify(fetchJson, payload){
+  return await fetchJson("/api/mfa/login-verify", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}

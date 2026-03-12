@@ -1,0 +1,8 @@
+{
+  "/security/final-health": {
+    "module": "/modules/mod_security_final_health.js",
+    "export": "default",
+    "group": "security",
+    "label": "Security Final Health"
+  }
+}

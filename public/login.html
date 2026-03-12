@@ -1,217 +1,86 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>Login | ORLAND Enterprise Operations</title>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ORLAND Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: "#3b82f6",
-            danger: "#ef4444"
-          }
-        }
-      }
-    };
-  </script>
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
   <style>
-    html,body{height:100%}
-    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    :root{ color-scheme: light dark; }
+    body{
+      background:
+        radial-gradient(circle at top left, rgba(59,130,246,.16), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(168,85,247,.14), transparent 28%),
+        #0f172a;
+    }
+    .glass{
+      backdrop-filter: blur(12px);
+      background: rgba(255,255,255,.9);
+    }
+    @media (prefers-color-scheme: dark){
+      .glass{ background: rgba(15,23,42,.84); }
+    }
   </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-800">
-  <div class="min-h-screen grid lg:grid-cols-2">
-    <div class="hidden lg:flex items-center justify-center bg-slate-900 text-white p-10">
-      <div class="max-w-md">
-        <div class="flex items-center gap-3 mb-6">
-          <div class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <i class="fa-solid fa-shield-halved text-white"></i>
-          </div>
+<body class="min-h-screen text-slate-900 dark:text-slate-100">
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-3xl border border-slate-200/70 dark:border-slate-700/70 glass shadow-2xl overflow-hidden">
+      <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center text-xl font-black">O</div>
           <div>
-            <div class="text-2xl font-black tracking-tight">ORLAND</div>
-            <div class="text-sm text-slate-300">Enterprise Operations Dashboard</div>
+            <h1 class="text-2xl font-extrabold">ORLAND Login</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Dashboard login dengan MFA support.</p>
           </div>
-        </div>
-        <div class="text-3xl font-black leading-tight">Secure enterprise access for admin operations.</div>
-        <div class="mt-4 text-slate-300 leading-relaxed">
-          Login untuk mengakses dashboard internal, analytics, RBAC, security, ops, dan konfigurasi sistem.
         </div>
       </div>
-    </div>
 
-    <div class="flex items-center justify-center p-6 sm:p-10">
-      <div class="w-full max-w-md">
-        <div class="lg:hidden flex items-center gap-3 mb-8">
-          <div class="w-11 h-11 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <i class="fa-solid fa-shield-halved text-white"></i>
-          </div>
+      <div class="p-6 space-y-5">
+        <form id="loginForm" class="space-y-4">
           <div>
-            <div class="text-xl font-black tracking-tight">ORLAND</div>
-            <div class="text-xs text-slate-500">Enterprise Operations</div>
-          </div>
-        </div>
-
-        <div class="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 sm:p-8">
-          <div class="text-2xl font-black">Login</div>
-          <div class="text-slate-500 mt-1">Masuk ke dashboard admin enterprise.</div>
-
-          <div id="msg" class="mt-4 text-sm text-slate-500"></div>
-
-          <form id="loginForm" class="mt-6 space-y-4">
-            <div>
-              <label class="block text-sm font-bold text-slate-500 mb-2">EMAIL</label>
-              <div class="relative">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                  <i class="fa-solid fa-envelope"></i>
-                </span>
-                <input
-                  id="email"
-                  type="email"
-                  autocomplete="username"
-                  placeholder="you@example.com"
-                  class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-semibold outline-none focus:border-primary"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold text-slate-500 mb-2">PASSWORD</label>
-              <div class="relative">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                  <i class="fa-solid fa-lock"></i>
-                </span>
-                <input
-                  id="password"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="••••••••"
-                  class="w-full pl-11 pr-12 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-semibold outline-none focus:border-primary"
-                  required
-                />
-                <button id="btnTogglePw" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full text-slate-400 hover:text-slate-600">
-                  <i id="icoPw" class="fa-solid fa-eye"></i>
-                </button>
-              </div>
-            </div>
-
-            <button
-              id="btnSubmit"
-              type="submit"
-              class="w-full py-3 rounded-2xl bg-primary text-white font-black shadow-sm hover:opacity-95 transition"
+            <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="you@example.com"
+              required
             >
-              <i class="fa-solid fa-right-to-bracket mr-2"></i>Login
-            </button>
-          </form>
-        </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="••••••••"
+              required
+            >
+          </div>
+
+          <button
+            id="btnLogin"
+            type="submit"
+            class="w-full px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div id="loginMsg" class="text-sm text-slate-500 dark:text-slate-400"></div>
+        <div id="loginMfaBox" class="space-y-4"></div>
       </div>
     </div>
   </div>
 
-  <script>
-    (function(){
-      const msg = document.getElementById("msg");
-      const form = document.getElementById("loginForm");
-      const email = document.getElementById("email");
-      const password = document.getElementById("password");
-      const btnSubmit = document.getElementById("btnSubmit");
-      const btnTogglePw = document.getElementById("btnTogglePw");
-      const icoPw = document.getElementById("icoPw");
-
-      function setMsg(kind, text){
-        msg.className = "mt-4 text-sm";
-        if(kind === "error") msg.classList.add("text-red-500");
-        else if(kind === "success") msg.classList.add("text-emerald-600");
-        else msg.classList.add("text-slate-500");
-        msg.textContent = text;
-      }
-
-      async function safeJson(res){
-        try{
-          return await res.json();
-        }catch{
-          return { status:"network_error", data:null };
-        }
-      }
-
-      btnTogglePw.addEventListener("click", ()=>{
-        const isPw = password.type === "password";
-        password.type = isPw ? "text" : "password";
-        icoPw.className = isPw ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
-      });
-
-      async function checkSession(){
-        try{
-          const res = await fetch("/api/me", {
-            method: "GET",
-            credentials: "include",
-            headers: { "accept":"application/json" }
-          });
-          const j = await safeJson(res);
-          if(j && j.status === "ok"){
-            location.href = "/";
-            return;
-          }
-        }catch{}
-      }
-
-      form.addEventListener("submit", async (ev)=>{
-        ev.preventDefault();
-
-        const payload = {
-          email: String(email.value || "").trim(),
-          password: String(password.value || "")
-        };
-
-        if(!payload.email || !payload.password){
-          setMsg("error", "Email dan password wajib diisi.");
-          return;
-        }
-
-        btnSubmit.disabled = true;
-        setMsg("muted", "Signing in...");
-
-        try{
-          const res = await fetch("/api/login", {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "content-type":"application/json",
-              "accept":"application/json"
-            },
-            body: JSON.stringify(payload)
-          });
-
-          const j = await safeJson(res);
-
-          if(!j || j.status !== "ok"){
-            const err = j?.data?.error || j?.status || "login_failed";
-            setMsg("error", "Login failed: " + err);
-            btnSubmit.disabled = false;
-            return;
-          }
-
-          setMsg("success", "Login success. Redirecting...");
-          location.href = "/";
-        }catch{
-          setMsg("error", "Network error.");
-          btnSubmit.disabled = false;
-        }
-      });
-
-      checkSession();
-    })();
+  <script type="module">
+    import { mountLoginMfaIntegration } from "/assets/js/login_page_mfa_integration.js";
+    mountLoginMfaIntegration();
   </script>
 </body>
 </html>

@@ -1,38 +1,35 @@
 import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
 
-const POLICY_KEY = "global_verification_policy_v1";
+const POLICY_KEY = "mfa_policy_v1";
 
 function defaultPolicy(){
   return {
     enabled: 0,
-    enforce_admin_routes: 0,
-    require_email_verified: 0,
-    require_phone_verified: 0,
-    require_profile_completed: 0,
-    require_mfa_for_admin: 0,
-    skip_roles: ["super_admin"]
+    allow_user_opt_in: 0,
+    require_for_super_admin: 0,
+    require_for_security_admin: 0,
+    require_for_admin: 0,
+    allowed_types: ["app"],
+    recovery_codes_enabled: 0
   };
-}
-
-function toInt(v, d){
-  const n = Number(v);
-  return Number.isFinite(n) ? n : d;
 }
 
 function normalizePolicy(v){
   const src = v && typeof v === "object" ? v : {};
   const d = defaultPolicy();
 
+  const allowed = Array.isArray(src.allowed_types)
+    ? src.allowed_types.map(x => String(x || "").trim()).filter(Boolean)
+    : d.allowed_types;
+
   return {
     enabled: src.enabled ? 1 : 0,
-    enforce_admin_routes: src.enforce_admin_routes ? 1 : 0,
-    require_email_verified: src.require_email_verified ? 1 : 0,
-    require_phone_verified: src.require_phone_verified ? 1 : 0,
-    require_profile_completed: src.require_profile_completed ? 1 : 0,
-    require_mfa_for_admin: src.require_mfa_for_admin ? 1 : 0,
-    skip_roles: Array.isArray(src.skip_roles)
-      ? src.skip_roles.map(x => String(x || "").trim()).filter(Boolean)
-      : d.skip_roles
+    allow_user_opt_in: src.allow_user_opt_in ? 1 : 0,
+    require_for_super_admin: src.require_for_super_admin ? 1 : 0,
+    require_for_security_admin: src.require_for_security_admin ? 1 : 0,
+    require_for_admin: src.require_for_admin ? 1 : 0,
+    allowed_types: allowed.length ? allowed : d.allowed_types,
+    recovery_codes_enabled: src.recovery_codes_enabled ? 1 : 0
   };
 }
 
@@ -45,10 +42,7 @@ async function readPolicy(env){
       LIMIT 1
     `).bind(POLICY_KEY).first();
 
-    if(!row?.v){
-      return defaultPolicy();
-    }
-
+    if(!row?.v) return defaultPolicy();
     return normalizePolicy(JSON.parse(row.v));
   }catch{
     return defaultPolicy();
@@ -79,11 +73,9 @@ export async function onRequestGet({ request, env }){
     return json(403, "forbidden", null);
   }
 
-  const value = await readPolicy(env);
-
   return json(200, "ok", {
     key: POLICY_KEY,
-    value
+    value: await readPolicy(env)
   });
 }
 

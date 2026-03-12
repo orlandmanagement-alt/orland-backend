@@ -1,0 +1,40 @@
+import { json, readJson, requireAuth, sha256Base64 } from "../../_lib.js";
+
+function acceptedCode(env){
+  return String(env.MFA_ENROLL_TEST_CODE || "123456").trim();
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const body = await readJson(request) || {};
+  const code = String(body.code || "").trim();
+  const secret = String(body.secret || "").trim();
+
+  if(!secret || !code){
+    return json(400, "invalid_input", { message:"secret_and_code_required" });
+  }
+
+  if(code !== acceptedCode(env)){
+    return json(400, "invalid_input", { message:"invalid_verification_code" });
+  }
+
+  const secretHash = await sha256Base64(secret);
+
+  await env.DB.prepare(`
+    UPDATE users
+    SET
+      mfa_enabled = 1,
+      mfa_type = 'app',
+      mfa_secret = ?,
+      updated_at = strftime('%s','now')
+    WHERE id = ?
+  `).bind(secretHash, a.uid).run();
+
+  return json(200, "ok", {
+    enrolled: true,
+    mfa_enabled: true,
+    mfa_type: "app"
+  });
+}

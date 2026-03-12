@@ -1,0 +1,121 @@
+import { json, requireAuth, randomB64, sha256Base64 } from "../../_lib.js";
+
+const POLICY_KEY = "mfa_policy_v1";
+
+function defaultPolicy(){
+  return {
+    enabled: 0,
+    allow_user_opt_in: 0,
+    require_for_super_admin: 0,
+    require_for_security_admin: 0,
+    require_for_admin: 0,
+    allowed_types: ["app"],
+    recovery_codes_enabled: 0
+  };
+}
+
+async function readPolicy(env){
+  try{
+    const row = await env.DB.prepare(`
+      SELECT v
+      FROM system_settings
+      WHERE k = ?
+      LIMIT 1
+    `).bind(POLICY_KEY).first();
+
+    if(!row?.v) return defaultPolicy();
+    return JSON.parse(row.v);
+  }catch{
+    return defaultPolicy();
+  }
+}
+
+function toBase32FromB64(b64){
+  try{
+    const bytes = Uint8Array.from(atob(String(b64 || "")), c => c.charCodeAt(0));
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = 0;
+    let value = 0;
+    let output = "";
+
+    for(const byte of bytes){
+      value = (value << 8) | byte;
+      bits += 8;
+      while(bits >= 5){
+        output += alphabet[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+
+    if(bits > 0){
+      output += alphabet[(value << (5 - bits)) & 31];
+    }
+
+    return output;
+  }catch{
+    return "JBSWY3DPEHPK3PXP";
+  }
+}
+
+function otpauthUrl({ issuer, account, secret }){
+  const label = encodeURIComponent(`${issuer}:${account}`);
+  const iss = encodeURIComponent(issuer);
+  const sec = encodeURIComponent(secret);
+  return `otpauth://totp/${label}?secret=${sec}&issuer=${iss}&algorithm=SHA1&digits=6&period=30`;
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const policy = await readPolicy(env);
+  if(Number(policy.enabled || 0) !== 1){
+    return json(400, "invalid_input", { message:"mfa_policy_disabled" });
+  }
+
+  if(Number(policy.allow_user_opt_in || 0) !== 1){
+    return json(403, "forbidden", { message:"user_mfa_opt_in_disabled" });
+  }
+
+  const user = await env.DB.prepare(`
+    SELECT id, email_norm, display_name, mfa_enabled, mfa_type
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).bind(a.uid).first();
+
+  if(!user){
+    return json(404, "not_found", { message:"user_not_found" });
+  }
+
+  const rawSecretB64 = randomB64(20);
+  const secret = toBase32FromB64(rawSecretB64);
+  const pendingHash = await sha256Base64(secret);
+  const issuer = String(env.MFA_ISSUER || "ORLAND");
+  const account = String(user.email_norm || user.id || "user");
+  const provision_url = otpauthUrl({ issuer, account, secret });
+
+  await env.DB.prepare(`
+    UPDATE users
+    SET
+      mfa_secret = ?,
+      mfa_enabled = 0,
+      mfa_type = 'app',
+      updated_at = strftime('%s','now')
+    WHERE id = ?
+  `).bind(pendingHash, a.uid).run();
+
+  return json(200, "ok", {
+    enrollment_ready: true,
+    user: {
+      id: String(user.id || ""),
+      email_norm: user.email_norm || null,
+      display_name: user.display_name || null,
+      mfa_enabled: Number(user.mfa_enabled || 0) === 1,
+      mfa_type: user.mfa_type || null
+    },
+    secret,
+    provision_url,
+    issuer
+  });
+}

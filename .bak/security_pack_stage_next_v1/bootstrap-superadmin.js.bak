@@ -7,51 +7,18 @@ import {
   pbkdf2Hash
 } from "../../_lib.js";
 
-const BOOTSTRAP_LOCK_KEY = "bootstrap_superadmin_lock_v1";
-
 function randomB64(bytes=16){
   const u8 = crypto.getRandomValues(new Uint8Array(bytes));
-  let s = "";
-  for(const c of u8) s += String.fromCharCode(c);
+  let s="";
+  for(const c of u8) s+=String.fromCharCode(c);
   return btoa(s);
 }
 
-async function isBootstrapLocked(env){
-  try{
-    const row = await env.DB.prepare(`
-      SELECT v
-      FROM system_settings
-      WHERE k = ?
-      LIMIT 1
-    `).bind(BOOTSTRAP_LOCK_KEY).first();
-
-    return String(row?.v || "") === "1";
-  }catch{
-    return false;
-  }
-}
-
-async function lockBootstrap(env){
-  try{
-    await env.DB.prepare(`
-      INSERT INTO system_settings (k, v, is_secret, updated_at)
-      VALUES (?, ?, 0, ?)
-      ON CONFLICT(k) DO UPDATE SET
-        v = excluded.v,
-        is_secret = excluded.is_secret,
-        updated_at = excluded.updated_at
-    `).bind(BOOTSTRAP_LOCK_KEY, "1", nowSec()).run();
-  }catch{}
-}
-
 export async function onRequestPost({request,env}){
+
   const BOOT_SECRET = String(env.BOOTSTRAP_SECRET || "");
   if(!BOOT_SECRET){
     return json(500,"server_error",{message:"BOOTSTRAP_SECRET_not_configured"});
-  }
-
-  if(await isBootstrapLocked(env)){
-    return json(403,"setup_locked",{message:"bootstrap_already_disabled"});
   }
 
   const body = await readJson(request) || {};
@@ -64,26 +31,24 @@ export async function onRequestPost({request,env}){
     return json(403,"forbidden",{message:"invalid_bootstrap_secret"});
   }
 
-  if(!display_name || !email.includes("@") || password.length < 10){
-    return json(400,"invalid_input",{message:"display_name_email_password_invalid"});
+  if(!display_name || !email.includes("@") || password.length < 8){
+    return json(400,"invalid_input",null);
   }
 
   const exists = await env.DB.prepare(`
-    SELECT id
-    FROM users
-    LIMIT 1
+    SELECT id FROM users LIMIT 1
   `).first();
 
   if(exists){
-    await lockBootstrap(env);
     return json(400,"setup_locked",{message:"super_admin_already_exists"});
   }
 
   const now = nowSec();
   const id = crypto.randomUUID();
+
   const salt = randomB64(16);
   const iter = 100000;
-  const hash = await pbkdf2Hash(password, salt, iter);
+  const hash = await pbkdf2Hash(password,salt,iter);
   const email_hash = await sha256Base64(email);
 
   await env.DB.prepare(`
@@ -93,43 +58,34 @@ export async function onRequestPost({request,env}){
       password_hash,password_salt,password_iter,password_algo,
       email_verified,email_verified_at,
       profile_completed,
-      session_version,
-      must_change_password,
-      mfa_enabled
+      session_version
     )
     VALUES(?,?,?,?,?,
            ?,?,
            ?,?,?,?,
            ?,?,
-           ?,?,
            ?,?)
   `).bind(
-    id, email, email_hash, display_name, "active",
-    now, now,
-    hash, salt, iter, "pbkdf2_sha256",
-    1, now,
+    id,email,email_hash,display_name,"active",
+    now,now,
+    hash,salt,iter,"pbkdf2_sha256",
+    1,now,
     1,
-    1,
-    0,
-    0
+    1
   ).run();
 
   await env.DB.prepare(`
-    INSERT INTO user_roles(user_id, role_id, created_at)
+    INSERT INTO user_roles(user_id,role_id,created_at)
     VALUES(?,?,?)
-  `).bind(id, "role_super_admin", now).run();
-
-  await lockBootstrap(env);
+  `).bind(id,"super_admin",now).run();
 
   return json(200,"ok",{
     created:true,
-    bootstrap_locked:true,
     user:{
       id,
       email,
       display_name,
-      role_id:"role_super_admin",
-      role_name:"super_admin"
+      role:"super_admin"
     }
   });
 }

@@ -1,0 +1,97 @@
+import { json, readJson, requireAuth, sha256Base64 } from "../../_lib.js";
+
+function safeJson(v){
+  if(v == null || v === "") return [];
+  try{
+    const x = JSON.parse(String(v));
+    return Array.isArray(x) ? x : [];
+  }catch{
+    return [];
+  }
+}
+
+function generateRecoveryCodes(){
+  const codes = [];
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for(let i = 0; i < 8; i++){
+    let s = "";
+    for(let j = 0; j < 10; j++){
+      s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    codes.push(s);
+  }
+  return codes;
+}
+
+async function hashCodes(codes){
+  const out = [];
+  for(const c of codes){
+    out.push(await sha256Base64(String(c)));
+  }
+  return out;
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const user = await env.DB.prepare(`
+    SELECT id, mfa_enabled, recovery_codes_json
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).bind(a.uid).first();
+
+  if(!user){
+    return json(404, "not_found", { message:"user_not_found" });
+  }
+
+  const current = safeJson(user.recovery_codes_json);
+
+  return json(200, "ok", {
+    mfa_enabled: Number(user.mfa_enabled || 0) === 1,
+    recovery_codes_count: current.length
+  });
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  const body = await readJson(request) || {};
+  const action = String(body.action || "generate").trim().toLowerCase();
+
+  const user = await env.DB.prepare(`
+    SELECT id, mfa_enabled
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).bind(a.uid).first();
+
+  if(!user){
+    return json(404, "not_found", { message:"user_not_found" });
+  }
+
+  if(Number(user.mfa_enabled || 0) !== 1){
+    return json(400, "invalid_input", { message:"mfa_not_enabled" });
+  }
+
+  if(action !== "generate"){
+    return json(400, "invalid_input", { message:"invalid_action" });
+  }
+
+  const plainCodes = generateRecoveryCodes();
+  const hashedCodes = await hashCodes(plainCodes);
+
+  await env.DB.prepare(`
+    UPDATE users
+    SET recovery_codes_json = ?, updated_at = strftime('%s','now')
+    WHERE id = ?
+  `).bind(JSON.stringify(hashedCodes), a.uid).run();
+
+  return json(200, "ok", {
+    generated: true,
+    codes: plainCodes,
+    count: plainCodes.length
+  });
+}
