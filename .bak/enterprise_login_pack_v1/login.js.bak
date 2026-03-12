@@ -137,18 +137,9 @@ export async function onRequestPost({ request, env }) {
     return json(400, "invalid_input", null);
   }
 
-  const u = await env.DB.prepare(`
-    SELECT
-      id,email_norm,display_name,status,password_hash,password_salt,password_iter,
-      email_verified,email_verified_at,
-      phone_verified,phone_verified_at,
-      profile_completed,last_ip_hash,last_ua_hash,last_login_at,
-      session_version,pw_fail_count,pw_fail_last_at,locked_until,lock_reason,
-      must_change_password,mfa_enabled,mfa_type,disabled_at,disabled_reason
-    FROM users
-    WHERE email_norm=?
-    LIMIT 1
-  `).bind(email).first();
+  const u = await env.DB.prepare(
+    "SELECT id,email_norm,display_name,status,password_hash,password_salt,password_iter FROM users WHERE email_norm=? LIMIT 1"
+  ).bind(email).first();
 
   if (!u){
     const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
@@ -177,7 +168,7 @@ export async function onRequestPost({ request, env }) {
     return json(403, "user_belum_terdaftar", null);
   }
 
-  if (String(u.status || "").toLowerCase() !== "active" || u.disabled_at != null) {
+  if (String(u.status) !== "active") {
     await auditEvent(env, request, {
       actor_user_id: u.id,
       actor_identifier_hash: actorIdentifierHash,
@@ -186,78 +177,20 @@ export async function onRequestPost({ request, env }) {
       ua_hash: uaHash,
       http_status: 403,
       duration_ms: Date.now() - started,
-      meta: { reason: "user_inactive_or_disabled" }
+      meta: { reason: "user_inactive" }
     });
     return json(403, "forbidden", null);
-  }
-
-  const now = nowSec();
-  if (u.locked_until != null && Number(u.locked_until || 0) > now) {
-    await auditEvent(env, request, {
-      actor_user_id: u.id,
-      actor_identifier_hash: actorIdentifierHash,
-      action: "lockout",
-      ip_hash: ipHash,
-      ua_hash: uaHash,
-      http_status: 423,
-      duration_ms: Date.now() - started,
-      meta: { reason: "locked_until", locked_until: Number(u.locked_until || 0) }
-    });
-    return json(423, "locked", {
-      message: "account_locked",
-      locked_until: Number(u.locked_until || 0),
-      lock_reason: u.lock_reason || null
-    });
   }
 
   if (!u.password_hash || !u.password_salt) {
     return json(403, "password_invalid", { message: "password_not_set" });
   }
 
-  const iter = Math.min(200000, Number(u.password_iter || env.PBKDF2_ITER || 100000));
+  const iter = Math.min(100000, Number(u.password_iter || env.PBKDF2_ITER || 100000));
   const calc = await pbkdf2Hash(password, u.password_salt, iter);
 
   if (!timingSafeEqual(calc, u.password_hash)) {
     const res = await bumpFailCounter(env, ipHash, FAIL_WINDOW_SEC, FAIL_MAX);
-
-    let lockedUntil = null;
-    if(res.blocked){
-      lockedUntil = now + BLOCK_TTL_SEC;
-      try{
-        await env.DB.prepare(`
-          UPDATE users
-          SET pw_fail_count = COALESCE(pw_fail_count, 0) + 1,
-              pw_fail_last_at = ?,
-              locked_until = ?,
-              lock_reason = ?
-          WHERE id = ?
-        `).bind(now, lockedUntil, "too_many_failed_attempts", u.id).run();
-      }catch{}
-
-      await autoBlockIp(env, u.id, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
-      await auditEvent(env, request, {
-        actor_user_id: u.id,
-        actor_identifier_hash: actorIdentifierHash,
-        action: "lockout",
-        ip_hash: ipHash,
-        ua_hash: uaHash,
-        http_status: 403,
-        duration_ms: Date.now() - started,
-        meta: { reason: "too_many_failed_attempts", locked_until: lockedUntil }
-      });
-      return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
-    }
-
-    try{
-      await env.DB.prepare(`
-        UPDATE users
-        SET pw_fail_count = COALESCE(pw_fail_count, 0) + 1,
-            pw_fail_last_at = ?,
-            last_login_fail_at = ?
-        WHERE id = ?
-      `).bind(now, now, u.id).run();
-    }catch{}
-
     await auditEvent(env, request, {
       actor_user_id: u.id,
       actor_identifier_hash: actorIdentifierHash,
@@ -268,7 +201,20 @@ export async function onRequestPost({ request, env }) {
       duration_ms: Date.now() - started,
       meta: { reason: "wrong_password", count: res.count, blocked: res.blocked }
     });
-
+    if(res.blocked){
+      await autoBlockIp(env, u.id, ipHash, BLOCK_TTL_SEC, "auto_login_fail");
+      await auditEvent(env, request, {
+        actor_user_id: u.id,
+        actor_identifier_hash: actorIdentifierHash,
+        action: "lockout",
+        ip_hash: ipHash,
+        ua_hash: uaHash,
+        http_status: 403,
+        duration_ms: Date.now() - started,
+        meta: { reason: "too_many_failed_attempts" }
+      });
+      return json(403, "blocked_ip", { message: "too_many_failed_attempts" });
+    }
     return json(403, "password_invalid", null);
   }
 
@@ -290,50 +236,14 @@ export async function onRequestPost({ request, env }) {
 
   await resetFailCounter(env, ipHash);
 
-  try{
-    await env.DB.prepare(`
-      UPDATE users
-      SET pw_fail_count = 0,
-          pw_fail_last_at = NULL,
-          locked_until = NULL,
-          lock_reason = NULL,
-          last_ip_hash = ?,
-          last_ua_hash = ?,
-          last_login_at = ?,
-          last_login_success_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `).bind(ipHash, uaHash, now, now, now, u.id).run();
-  }catch{}
-
-  const sessionVersion = Number(u.session_version || 1);
-  const sess = await createSession(env, u.id, roles, {
-    ip_hash: ipHash,
-    ua_hash: uaHash,
-    session_version: sessionVersion
-  });
-
-  await auditEvent(env, request, {
-    actor_user_id: u.id,
-    actor_identifier_hash: actorIdentifierHash,
-    action: "login_success",
-    ip_hash: ipHash,
-    ua_hash: uaHash,
-    http_status: 200,
-    duration_ms: Date.now() - started,
-    meta: { roles, session_version: sessionVersion }
-  });
-
+  const sess = await createSession(env, u.id, roles);
   const res = json(200, "ok", {
     id: u.id,
     email_norm: u.email_norm,
     display_name: u.display_name,
     roles,
-    exp: sess.exp,
-    must_change_password: Number(u.must_change_password || 0) === 1,
-    mfa_enabled: Number(u.mfa_enabled || 0) === 1
+    exp: sess.exp
   });
-
   res.headers.append("set-cookie", cookie("sid", sess.sid, { maxAge: sess.ttl }));
   return res;
 }

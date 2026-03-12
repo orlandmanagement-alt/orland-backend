@@ -52,7 +52,7 @@ export async function sha256Base64(str){
 }
 
 export async function pbkdf2Hash(password, saltB64, iterations){
-  const iter = Math.min(200000, Math.max(1000, Number(iterations || 100000)));
+  const iter = Math.min(100000, Math.max(1000, Number(iterations || 100000)));
   const salt = Uint8Array.from(atob(String(saltB64)), c => c.charCodeAt(0));
 
   const baseKey = await crypto.subtle.importKey(
@@ -212,13 +212,13 @@ export async function auditEvent(env, request, {
   }catch{}
 }
 
-export async function createSession(env, user_id, roles, meta = {}){
+export async function createSession(env, user_id, roles){
   const now = nowSec();
   const r = (roles || []).map(String);
 
   let ttlMin = Number(env.SESSION_TTL_MIN_STAFF || 240);
   if(r.includes("super_admin")) ttlMin = Number(env.SESSION_TTL_MIN_SUPER_ADMIN || 60);
-  else if(r.includes("admin")) ttlMin = Number(env.SESSION_TTL_MIN_ADMIN || 120);
+  if(r.includes("admin")) ttlMin = Number(env.SESSION_TTL_MIN_ADMIN || 120);
 
   const ttl = Math.max(10, ttlMin) * 60;
   const exp = now + ttl;
@@ -226,16 +226,15 @@ export async function createSession(env, user_id, roles, meta = {}){
   const sid = crypto.randomUUID();
   const token_hash = sid;
   const role_snapshot = JSON.stringify(r);
-  const sessionVersion = Number(meta.session_version || 1);
 
   await env.DB.prepare(`
     INSERT INTO sessions (
       id, user_id, token_hash,
       created_at, expires_at, revoked_at,
       ip_hash, ua_hash, role_snapshot, ip_prefix_hash,
-      last_seen_at, roles_json, session_version, revoke_reason
+      last_seen_at, roles_json
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
     sid,
     user_id,
@@ -243,36 +242,24 @@ export async function createSession(env, user_id, roles, meta = {}){
     now,
     exp,
     null,
-    meta.ip_hash || null,
-    meta.ua_hash || null,
+    null,
+    null,
     role_snapshot,
-    meta.ip_prefix_hash || null,
+    null,
     now,
-    JSON.stringify(r),
-    sessionVersion,
-    null
+    JSON.stringify(r)
   ).run();
 
-  return { sid, exp, ttl, session_version: sessionVersion };
+  return { sid, exp, ttl };
 }
 
-export async function revokeSessionBySid(env, sid, reason = "logout"){
+export async function revokeSessionBySid(env, sid){
   try{
     await env.DB.prepare(`
       UPDATE sessions
-      SET revoked_at = ?, revoke_reason = ?
+      SET revoked_at = ?
       WHERE id = ?
-    `).bind(nowSec(), String(reason || "logout"), sid).run();
-  }catch{}
-}
-
-export async function revokeAllSessionsForUser(env, user_id, reason = "admin_forced_logout"){
-  try{
-    await env.DB.prepare(`
-      UPDATE sessions
-      SET revoked_at = ?, revoke_reason = ?
-      WHERE user_id = ? AND revoked_at IS NULL
-    `).bind(nowSec(), String(reason || "admin_forced_logout"), user_id).run();
+    `).bind(nowSec(), sid).run();
   }catch{}
 }
 
@@ -282,82 +269,15 @@ export async function requireAuth(env, request){
   if(!sid) return { ok:false, res: json(401, "unauthorized", null) };
 
   const now = nowSec();
-  const sess = await env.DB.prepare(`
-    SELECT id, user_id, roles_json, expires_at, revoked_at, session_version
+  const row = await env.DB.prepare(`
+    SELECT id, user_id, roles_json, expires_at, revoked_at
     FROM sessions
     WHERE id = ?
     LIMIT 1
   `).bind(sid).first();
 
-  if(!sess || sess.revoked_at || now > Number(sess.expires_at || 0)){
+  if(!row || row.revoked_at || now > Number(row.expires_at || 0)){
     return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
-  let roles = [];
-  try{
-    roles = JSON.parse(sess.roles_json || "[]") || [];
-  }catch{
-    roles = [];
-  }
-
-  const user = await env.DB.prepare(`
-    SELECT
-      id,
-      email_norm,
-      display_name,
-      status,
-      created_at,
-      updated_at,
-      email_verified,
-      email_verified_at,
-      phone_verified,
-      phone_verified_at,
-      profile_completed,
-      tenant_id,
-      last_ip_hash,
-      last_ua_hash,
-      last_login_at,
-      last_login_success_at,
-      last_login_fail_at,
-      session_version,
-      pw_fail_count,
-      pw_fail_last_at,
-      locked_until,
-      lock_reason,
-      must_change_password,
-      mfa_enabled,
-      mfa_type,
-      disabled_at,
-      disabled_reason
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).bind(sess.user_id).first();
-
-  if(!user){
-    return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
-  if(String(user.status || "").toLowerCase() !== "active"){
-    return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
-  if(user.disabled_at != null){
-    return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
-  if(user.locked_until != null && Number(user.locked_until || 0) > now){
-    return { ok:false, res: json(423, "locked", {
-      message: "account_locked",
-      locked_until: Number(user.locked_until || 0),
-      lock_reason: user.lock_reason || null
-    }) };
-  }
-
-  const userSessionVersion = Number(user.session_version || 1);
-  const sessionVersion = Number(sess.session_version || 1);
-  if(userSessionVersion !== sessionVersion){
-    return { ok:false, res: json(401, "unauthorized", { message:"session_version_mismatch" }) };
   }
 
   try{
@@ -365,15 +285,38 @@ export async function requireAuth(env, request){
       UPDATE sessions
       SET last_seen_at = ?
       WHERE id = ?
-    `).bind(now, sess.id).run();
+    `).bind(now, row.id).run();
   }catch{}
+
+  let roles = [];
+  try{
+    roles = JSON.parse(row.roles_json || "[]") || [];
+  }catch{
+    roles = [];
+  }
+
+  const user = await env.DB.prepare(`
+    SELECT id, email_norm, display_name, status, created_at
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).bind(row.user_id).first();
+
+  if(!user){
+    return { ok:false, res: json(401, "unauthorized", null) };
+  }
+
+  const statusOk = String(user.status || "").toLowerCase() === "active";
+  if(!statusOk){
+    return { ok:false, res: json(401, "unauthorized", null) };
+  }
 
   return {
     ok: true,
-    uid: sess.user_id,
-    sid: sess.id,
-    token: sid,
+    uid: row.user_id,
+    user,
     roles,
-    user
+    token: sid,
+    sid
   };
 }

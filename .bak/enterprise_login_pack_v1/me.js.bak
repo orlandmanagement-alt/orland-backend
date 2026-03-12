@@ -13,7 +13,7 @@ export async function onRequestGet({ request, env }){
   let state = {
     effective: null,
     summary: null,
-    compliance: { compliant: true, scope: "admin", required_actions: [], checks: {} }
+    compliance: null
   };
 
   try{
