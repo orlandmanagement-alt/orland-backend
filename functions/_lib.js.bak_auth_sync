@@ -74,12 +74,17 @@ export async function pbkdf2Hash(password, saltB64, iterations){
 
 export function cookie(name, value, opt = {}){
   const parts = [`${name}=${value}`];
+
   parts.push(`Path=${opt.path || "/"}`);
-  if(opt.domain) parts.push(`Domain=${opt.domain}`);
+
+  const domain = (opt.domain !== undefined) ? opt.domain : ".orlandmanagement.com";
+  if(domain) parts.push(`Domain=${domain}`);
+
   if(opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
   if(opt.httpOnly !== false) parts.push("HttpOnly");
   if(opt.secure !== false) parts.push("Secure");
   parts.push(`SameSite=${opt.sameSite || "Lax"}`);
+
   return parts.join("; ");
 }
 
@@ -295,30 +300,10 @@ export async function requireAuth(env, request){
     roles = [];
   }
 
-  const user = await env.DB.prepare(`
-    SELECT id, email_norm, display_name, status, is_active, created_at
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).bind(row.user_id).first();
-
-  if(!user){
-    return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
-  const statusOk = String(user.status || "").toLowerCase() === "active";
-  const activeOk = user.is_active == null ? true : Number(user.is_active) === 1;
-
-  if(!(statusOk || activeOk)){
-    return { ok:false, res: json(401, "unauthorized", null) };
-  }
-
   return {
     ok: true,
     uid: row.user_id,
-    user,
     roles,
-    token: sid,
-    sid
+    token: sid
   };
 }
