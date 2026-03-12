@@ -1,5 +1,5 @@
 import { json, requireAuth } from "../_lib.js";
-import { getEffectiveVerificationState } from "../config/_global_policy.js";
+import { getEffectiveVerificationState } from "./config/_global_policy.js";
 
 export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
