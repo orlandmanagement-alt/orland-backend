@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ORLAND Setup - Bootstrap Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{
+      color-scheme: light dark;
+    }
+    body{
+      background:
+        radial-gradient(circle at top left, rgba(59,130,246,.16), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(168,85,247,.14), transparent 28%),
+        #0f172a;
+    }
+    .glass{
+      backdrop-filter: blur(12px);
+      background: rgba(255,255,255,.88);
+    }
+    @media (prefers-color-scheme: dark){
+      .glass{
+        background: rgba(15,23,42,.82);
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900 dark:text-slate-100">
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl rounded-3xl border border-slate-200/70 dark:border-slate-700/70 glass shadow-2xl overflow-hidden">
+      <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center text-xl font-black">
+            O
+          </div>
+          <div>
+            <h1 class="text-2xl font-extrabold">Bootstrap Super Admin</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Gunakan halaman ini hanya untuk pembuatan akun super admin pertama.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-200 px-4 py-3 text-sm">
+          Setelah super admin pertama berhasil dibuat, sebaiknya endpoint bootstrap dinonaktifkan atau dibatasi hanya sekali pakai.
+        </div>
+
+        <form id="setupForm" class="space-y-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Display Name</label>
+              <input
+                id="display_name"
+                name="display_name"
+                type="text"
+                placeholder="Super Admin"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="superadmin@orlandmanagement.com"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Minimal 10 karakter"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Disarankan kombinasi huruf besar, kecil, angka, dan simbol.
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Konfirmasi Password</label>
+              <input
+                id="password_confirm"
+                name="password_confirm"
+                type="password"
+                placeholder="Ulangi password"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Bootstrap Secret</label>
+              <input
+                id="bootstrap_secret"
+                name="bootstrap_secret"
+                type="password"
+                placeholder="Secret dari environment"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Secret ini dipakai untuk mencegah bootstrap dijalankan sembarang orang.
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Role</label>
+              <input
+                type="text"
+                value="super_admin"
+                class="w-full px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-semibold"
+                readonly
+              >
+            </div>
+          </div>
+
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-4">
+            <input id="agree" type="checkbox" class="mt-1 w-4 h-4" required>
+            <span class="text-sm text-slate-600 dark:text-slate-300">
+              Saya memahami bahwa halaman ini hanya untuk bootstrap pertama, dan harus dinonaktifkan setelah super admin dibuat.
+            </span>
+          </label>
+
+          <div id="msg" class="text-sm text-slate-500 dark:text-slate-400"></div>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              id="btnSubmit"
+              type="submit"
+              class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
+            >
+              Create Super Admin
+            </button>
+
+            <a
+              href="/login.html"
+              class="px-5 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 font-black text-sm"
+            >
+              Back to Login
+            </a>
+          </div>
+        </form>
+
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+          <div class="text-sm font-black mb-2">Target Endpoint</div>
+          <pre class="text-xs whitespace-pre-wrap text-slate-600 dark:text-slate-300">POST /api/setup/bootstrap-superadmin</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const form = document.getElementById("setupForm");
+      const msg = document.getElementById("msg");
+      const btn = document.getElementById("btnSubmit");
+
+      function setMsg(kind, text){
+        msg.className = "text-sm";
+        if(kind === "error") msg.classList.add("text-red-600");
+        else if(kind === "success") msg.classList.add("text-emerald-600");
+        else if(kind === "warning") msg.classList.add("text-amber-600");
+        else msg.classList.add("text-slate-500", "dark:text-slate-400");
+        msg.textContent = text || "";
+      }
+
+      async function api(path, opt = {}){
+        const headers = Object.assign({}, opt.headers || {});
+        if(opt.body != null && !headers["content-type"]){
+          headers["content-type"] = "application/json";
+        }
+
+        try{
+          const res = await fetch(path, {
+            method: opt.method || "GET",
+            headers,
+            body: opt.body || undefined,
+            credentials: "include"
+          });
+
+          const ct = res.headers.get("content-type") || "";
+          if(!ct.includes("application/json")){
+            const t = await res.text().catch(() => "");
+            return {
+              status: "server_error",
+              data: {
+                http: res.status,
+                body: t.slice(0, 500)
+              }
+            };
+          }
+
+          return await res.json();
+        }catch(err){
+          return {
+            status: "network_error",
+            data: { message: String(err?.message || err) }
+          };
+        }
+      }
+
+      form.addEventListener("submit", async function(ev){
+        ev.preventDefault();
+
+        const display_name = String(document.getElementById("display_name").value || "").trim();
+        const email = String(document.getElementById("email").value || "").trim().toLowerCase();
+        const password = String(document.getElementById("password").value || "");
+        const password_confirm = String(document.getElementById("password_confirm").value || "");
+        const bootstrap_secret = String(document.getElementById("bootstrap_secret").value || "");
+        const agree = document.getElementById("agree").checked;
+
+        if(!display_name){
+          return setMsg("error", "Display name wajib diisi.");
+        }
+        if(!email || !email.includes("@")){
+          return setMsg("error", "Email tidak valid.");
+        }
+        if(password.length < 10){
+          return setMsg("error", "Password minimal 10 karakter.");
+        }
+        if(password !== password_confirm){
+          return setMsg("error", "Konfirmasi password tidak sama.");
+        }
+        if(!bootstrap_secret){
+          return setMsg("error", "Bootstrap secret wajib diisi.");
+        }
+        if(!agree){
+          return setMsg("error", "Checklist persetujuan wajib dicentang.");
+        }
+
+        btn.disabled = true;
+        setMsg("muted", "Membuat super admin...");
+
+        const payload = {
+          display_name,
+          email,
+          password,
+          bootstrap_secret
+        };
+
+        const r = await api("/api/setup/bootstrap-superadmin", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+
+        btn.disabled = false;
+
+        if(r.status !== "ok"){
+          return setMsg("error", "Setup gagal: " + (r.data?.message || r.status));
+        }
+
+        setMsg("success", "Super admin berhasil dibuat. Redirect ke login...");
+        setTimeout(() => {
+          location.href = "/login.html";
+        }, 1200);
+      });
+    })();
+  </script>
+</body>
+</html>
