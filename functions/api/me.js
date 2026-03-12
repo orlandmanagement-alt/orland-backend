@@ -5,13 +5,33 @@ export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
 
-  const state = await getEffectiveVerificationState(env, a.user, a.roles || []);
+  const user = a.user || null;
+  if(!user){
+    return json(401, "unauthorized", null);
+  }
+
+  let state = {
+    effective: null,
+    summary: null,
+    compliance: null
+  };
+
+  try{
+    if(typeof getEffectiveVerificationState === "function"){
+      state = await getEffectiveVerificationState(env, user, a.roles || []) || state;
+    }
+  }catch(err){
+    return json(500, "server_error", {
+      step: "getEffectiveVerificationState",
+      message: String(err?.message || err)
+    });
+  }
 
   return json(200, "ok", {
-    ...a.user,
+    ...user,
     roles: a.roles || [],
-    verification_policy: state.effective,
-    verification_summary: state.summary,
-    verification_compliance: state.compliance
+    verification_policy: state?.effective || null,
+    verification_summary: state?.summary || null,
+    verification_compliance: state?.compliance || null
   });
 }
