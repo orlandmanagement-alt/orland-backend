@@ -4,26 +4,8 @@ function normPath(p){
   p = String(p || "").trim();
   if(!p) return "/";
   if(!p.startsWith("/")) p = "/" + p;
-  p = p.replace(/\/+/g, "/").replace(/\/+$/, "");
+  p = p.replace(/\/+/g, "/").replace(/\/+$/,"");
   return p || "/";
-}
-
-function shouldSkipRoute(row){
-  const code = String(row?.code || "").trim().toLowerCase();
-  const path = normPath(row?.path || "/");
-
-  const skipCodes = new Set([
-    "access_control"
-  ]);
-
-  const skipPaths = new Set([
-    "/access-control"
-  ]);
-
-  if(skipCodes.has(code)) return true;
-  if(skipPaths.has(path)) return true;
-
-  return false;
 }
 
 function guessModuleByCodeOrPath(code, path){
@@ -39,43 +21,21 @@ function guessModuleByCodeOrPath(code, path){
     users_talent: "/modules/mod_users_talent.js",
     users_tenant: "/modules/mod_users_tenant.js",
 
-    roles: "/modules/mod_role_builder.js",
-    rbac: "/modules/mod_rbac.js",
-    rbac_manager: "/modules/mod_rbac.js",
-    menus: "/modules/mod_menu_builder.js",
-    menu_builder: "/modules/mod_menu_builder.js",
-
-    audit: "/modules/mod_audit.js",
-
-    security: "/modules/mod_security.js",
-    security_policy: "/modules/mod_security_policy_console.js",
-    verification_admin: "/modules/mod_verification_admin.js",
-    verification_dashboard: "/modules/mod_verification_dashboard.js",
-    ipblocks: "/modules/mod_ipblocks.js",
-
-    security_center: "/modules/mod_security_center.js",
-    security_sessions_admin: "/modules/mod_sessions_admin.js",
-    security_login_timeline: "/modules/mod_login_audit_timeline.js",
-    security_force_password: "/modules/mod_force_password_reset_admin.js",
-    security_bootstrap_admin: "/modules/mod_bootstrap_admin.js",
-    security_mfa_policy: "/modules/mod_mfa_policy_console.js",
-    security_mfa_enrollment: "/modules/mod_mfa_enrollment.js",
-    security_mfa_challenge: "/modules/mod_mfa_challenge.js",
-    security_mfa_recovery: "/modules/mod_mfa_recovery_codes.js",
-    security_mfa_recovery_audit: "/modules/mod_mfa_recovery_audit.js",
-    security_mfa_compliance: "/modules/mod_mfa_compliance_dashboard.js",
-    security_mfa_user_inspector: "/modules/mod_admin_user_mfa_inspector.js",
-    security_final_health: "/modules/mod_security_final_health.js",
-
     ops: "/modules/mod_ops.js",
     ops_incidents: "/modules/mod_ops_incidents.js",
     ops_oncall: "/modules/mod_ops_oncall.js",
 
-    data: "/modules/mod_data.js",
-    data_export: "/modules/mod_data_export.js",
-    data_import: "/modules/mod_data_import.js",
+    audit: "/modules/mod_audit.js",
+    security: "/modules/mod_security.js",
+    security_policy: "/modules/mod_security_policy.js",
+    ipblocks: "/modules/mod_ipblocks.js",
 
-    config: "/modules/mod_config.js",
+    rbac: "/modules/mod_rbac.js",
+    rbac_manager: "/modules/mod_rbac_manager.js",
+
+    menus: "/modules/mod_menu_builder.js",
+    menu_builder: "/modules/mod_menu_builder.js",
+
     cfg_plugins: "/modules/mod_cfg_plugins.js",
     cfg_bulk_tools: "/modules/mod_cfg_bulk_tools.js",
     cfg_sec_policy: "/modules/mod_cfg_sec_policy.js",
@@ -94,9 +54,15 @@ function guessModuleByCodeOrPath(code, path){
     blogspot_widgets: "/modules/mod_blogspot_widgets.js",
     blogspot_sync: "/modules/mod_blogspot_sync.js",
 
+    data: "/modules/mod_data.js",
+    data_export: "/modules/mod_data_export.js",
+    data_import: "/modules/mod_data_import.js",
+
     profile: "/modules/mod_profile.js",
     profile_security: "/modules/mod_profile_security.js",
     verify_center: "/modules/mod_verify_center.js",
+    verification_admin: "/modules/mod_verification_admin.js",
+    verification_dashboard: "/modules/mod_verification_dashboard.js",
 
     plugins: "/modules/mod_plugins.js"
   };
@@ -112,43 +78,21 @@ function guessModuleByCodeOrPath(code, path){
     "/users/talent": "/modules/mod_users_talent.js",
     "/users/tenant": "/modules/mod_users_tenant.js",
 
-    "/roles": "/modules/mod_role_builder.js",
-    "/rbac": "/modules/mod_rbac.js",
-    "/rbac/manager": "/modules/mod_rbac.js",
-    "/menus": "/modules/mod_menu_builder.js",
-    "/menu-builder": "/modules/mod_menu_builder.js",
-
-    "/audit": "/modules/mod_audit.js",
-
-    "/security": "/modules/mod_security.js",
-    "/security/policy": "/modules/mod_security_policy_console.js",
-    "/security/verification-review": "/modules/mod_verification_admin.js",
-    "/security/verification-dashboard": "/modules/mod_verification_dashboard.js",
-    "/ipblocks": "/modules/mod_ipblocks.js",
-
-    "/security/center": "/modules/mod_security_center.js",
-    "/security/sessions": "/modules/mod_sessions_admin.js",
-    "/security/login-timeline": "/modules/mod_login_audit_timeline.js",
-    "/security/force-password-reset": "/modules/mod_force_password_reset_admin.js",
-    "/security/bootstrap-admin": "/modules/mod_bootstrap_admin.js",
-    "/security/mfa-policy": "/modules/mod_mfa_policy_console.js",
-    "/security/mfa-enrollment": "/modules/mod_mfa_enrollment.js",
-    "/security/mfa-challenge": "/modules/mod_mfa_challenge.js",
-    "/security/mfa-recovery-codes": "/modules/mod_mfa_recovery_codes.js",
-    "/security/mfa-recovery-audit": "/modules/mod_mfa_recovery_audit.js",
-    "/security/mfa-compliance": "/modules/mod_mfa_compliance_dashboard.js",
-    "/security/mfa-user-inspector": "/modules/mod_admin_user_mfa_inspector.js",
-    "/security/final-health": "/modules/mod_security_final_health.js",
-
     "/ops": "/modules/mod_ops.js",
     "/ops/incidents": "/modules/mod_ops_incidents.js",
     "/ops/oncall": "/modules/mod_ops_oncall.js",
 
-    "/data": "/modules/mod_data.js",
-    "/data/export": "/modules/mod_data_export.js",
-    "/data/import": "/modules/mod_data_import.js",
+    "/audit": "/modules/mod_audit.js",
+    "/security": "/modules/mod_security.js",
+    "/security/policy": "/modules/mod_security_policy.js",
+    "/ipblocks": "/modules/mod_ipblocks.js",
 
-    "/config": "/modules/mod_config.js",
+    "/rbac": "/modules/mod_rbac.js",
+    "/rbac/manager": "/modules/mod_rbac_manager.js",
+
+    "/menus": "/modules/mod_menu_builder.js",
+    "/menu-builder": "/modules/mod_menu_builder.js",
+
     "/config/plugins": "/modules/mod_cfg_plugins.js",
     "/config/bulk-tools": "/modules/mod_cfg_bulk_tools.js",
     "/config/security-policy": "/modules/mod_cfg_sec_policy.js",
@@ -167,11 +111,19 @@ function guessModuleByCodeOrPath(code, path){
     "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
     "/integrations/blogspot/sync": "/modules/mod_blogspot_sync.js",
 
+    "/data": "/modules/mod_data.js",
+    "/data/export": "/modules/mod_data_export.js",
+    "/data/import": "/modules/mod_data_import.js",
+
     "/profile": "/modules/mod_profile.js",
     "/profile/security": "/modules/mod_profile_security.js",
     "/verify-center": "/modules/mod_verify_center.js",
+    "/security/verification-review": "/modules/mod_verification_admin.js",
+    "/security/verification-dashboard": "/modules/mod_verification_dashboard.js",
 
     "/plugins": "/modules/mod_plugins.js"
+    
+    
   };
 
   if(pathMap[p]) return pathMap[p];
@@ -196,9 +148,9 @@ async function getMenusForRoles(env, roles){
   const r = await env.DB.prepare(`
     SELECT DISTINCT m.id, m.code, m.label, m.path
     FROM role_menus rm
-    JOIN roles ro ON ro.id = rm.role_id
+    JOIN roles r ON r.id = rm.role_id
     JOIN menus m ON m.id = rm.menu_id
-    WHERE ro.name IN (${ph})
+    WHERE r.name IN (${ph})
     ORDER BY m.sort_order ASC, m.created_at ASC
   `).bind(...cleanRoles).all();
 
@@ -209,15 +161,7 @@ export async function onRequestGet({ request, env }){
   const a = await requireAuth(env, request);
   if(!a.ok) return a.res;
 
-  if(!hasRole(a.roles, [
-    "super_admin",
-    "admin",
-    "staff",
-    "security_admin",
-    "audit_admin",
-    "access_admin",
-    "ops_admin"
-  ])){
+  if(!hasRole(a.roles, ["super_admin","admin","staff"])){
     return json(403, "forbidden", null);
   }
 
@@ -227,7 +171,6 @@ export async function onRequestGet({ request, env }){
   for(const row of rows){
     const p = normPath(row.path || "/");
     if(!p || p === "/") continue;
-    if(shouldSkipRoute(row)) continue;
 
     routes[p] = {
       module: guessModuleByCodeOrPath(row.code, p),

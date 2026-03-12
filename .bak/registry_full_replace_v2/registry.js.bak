@@ -13,11 +13,13 @@ function shouldSkipRoute(row){
   const path = normPath(row?.path || "/");
 
   const skipCodes = new Set([
-    "access_control"
+    "access_control",
+    "config"
   ]);
 
   const skipPaths = new Set([
-    "/access-control"
+    "/access-control",
+    "/config"
   ]);
 
   if(skipCodes.has(code)) return true;
@@ -39,16 +41,16 @@ function guessModuleByCodeOrPath(code, path){
     users_talent: "/modules/mod_users_talent.js",
     users_tenant: "/modules/mod_users_tenant.js",
 
-    roles: "/modules/mod_role_builder.js",
+    roles: "/modules/mod_roles.js",
     rbac: "/modules/mod_rbac.js",
-    rbac_manager: "/modules/mod_rbac.js",
+    rbac_manager: "/modules/mod_rbac_manager.js",
     menus: "/modules/mod_menu_builder.js",
     menu_builder: "/modules/mod_menu_builder.js",
 
     audit: "/modules/mod_audit.js",
 
     security: "/modules/mod_security.js",
-    security_policy: "/modules/mod_security_policy_console.js",
+    security_policy: "/modules/mod_security_policy.js",
     verification_admin: "/modules/mod_verification_admin.js",
     verification_dashboard: "/modules/mod_verification_dashboard.js",
     ipblocks: "/modules/mod_ipblocks.js",
@@ -75,7 +77,6 @@ function guessModuleByCodeOrPath(code, path){
     data_export: "/modules/mod_data_export.js",
     data_import: "/modules/mod_data_import.js",
 
-    config: "/modules/mod_config.js",
     cfg_plugins: "/modules/mod_cfg_plugins.js",
     cfg_bulk_tools: "/modules/mod_cfg_bulk_tools.js",
     cfg_sec_policy: "/modules/mod_cfg_sec_policy.js",
@@ -112,16 +113,16 @@ function guessModuleByCodeOrPath(code, path){
     "/users/talent": "/modules/mod_users_talent.js",
     "/users/tenant": "/modules/mod_users_tenant.js",
 
-    "/roles": "/modules/mod_role_builder.js",
+    "/roles": "/modules/mod_roles.js",
     "/rbac": "/modules/mod_rbac.js",
-    "/rbac/manager": "/modules/mod_rbac.js",
+    "/rbac/manager": "/modules/mod_rbac_manager.js",
     "/menus": "/modules/mod_menu_builder.js",
     "/menu-builder": "/modules/mod_menu_builder.js",
 
     "/audit": "/modules/mod_audit.js",
 
     "/security": "/modules/mod_security.js",
-    "/security/policy": "/modules/mod_security_policy_console.js",
+    "/security/policy": "/modules/mod_security_policy.js",
     "/security/verification-review": "/modules/mod_verification_admin.js",
     "/security/verification-dashboard": "/modules/mod_verification_dashboard.js",
     "/ipblocks": "/modules/mod_ipblocks.js",
@@ -148,7 +149,6 @@ function guessModuleByCodeOrPath(code, path){
     "/data/export": "/modules/mod_data_export.js",
     "/data/import": "/modules/mod_data_import.js",
 
-    "/config": "/modules/mod_config.js",
     "/config/plugins": "/modules/mod_cfg_plugins.js",
     "/config/bulk-tools": "/modules/mod_cfg_bulk_tools.js",
     "/config/security-policy": "/modules/mod_cfg_sec_policy.js",
@@ -166,6 +166,10 @@ function guessModuleByCodeOrPath(code, path){
     "/integrations/blogspot/pages": "/modules/mod_blogspot_pages.js",
     "/integrations/blogspot/widgets": "/modules/mod_blogspot_widgets.js",
     "/integrations/blogspot/sync": "/modules/mod_blogspot_sync.js",
+
+    "/data": "/modules/mod_data.js",
+    "/data/export": "/modules/mod_data_export.js",
+    "/data/import": "/modules/mod_data_import.js",
 
     "/profile": "/modules/mod_profile.js",
     "/profile/security": "/modules/mod_profile_security.js",
