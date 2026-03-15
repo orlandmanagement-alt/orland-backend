@@ -8,13 +8,20 @@ import {
   createSession,
   cookie,
   audit,
+  portalAccessFromRoles,
+  canAccessPortal,
+  defaultPortalFromRoles,
+  portalRedirectUrl,
   inferCookieDomain
-} from "../_lib.js";
+} from "../../_lib.js";
 
 export async function onRequestPost({ request, env }) {
   const body = await readJson(request);
+
   const email = normEmail(body?.email);
   const password = String(body?.password || "");
+  const requestedPortal = String(body?.portal || "").trim().toLowerCase();
+  const nextPath = String(body?.next || "/").trim();
 
   if (!email.includes("@") || password.length < 1) {
     return json(400, "invalid_input", null);
@@ -54,14 +61,19 @@ export async function onRequestPost({ request, env }) {
   }
 
   const roles = await getRolesForUser(env, u.id);
+  const portals = portalAccessFromRoles(roles);
 
-  const allowed =
-    roles.includes("super_admin") ||
-    roles.includes("admin") ||
-    roles.includes("staff");
+  const targetPortal = requestedPortal || defaultPortalFromRoles(roles);
 
-  if (!allowed) {
-    return json(403, "forbidden", { message: "role_not_allowed_for_dashboard" });
+  if (!targetPortal) {
+    return json(403, "forbidden", { message: "no_portal_access" });
+  }
+
+  if (requestedPortal && !canAccessPortal(roles, requestedPortal)) {
+    return json(403, "forbidden", {
+      message: "role_not_allowed_for_portal",
+      portal: requestedPortal
+    });
   }
 
   const sess = await createSession(env, u.id, roles);
@@ -71,6 +83,9 @@ export async function onRequestPost({ request, env }) {
     email_norm: u.email_norm,
     display_name: u.display_name,
     roles,
+    portals,
+    portal: targetPortal,
+    redirect_url: portalRedirectUrl(env, targetPortal, nextPath),
     exp: sess.exp
   });
 
@@ -90,10 +105,10 @@ export async function onRequestPost({ request, env }) {
   try {
     await audit(env, {
       actor_user_id: u.id,
-      action: "auth.login.ok",
-      route: "POST /api/login",
+      action: "auth.sso.login.ok",
+      route: "POST /api/sso/login",
       http_status: 200,
-      meta: { roles }
+      meta: { roles, portal: targetPortal }
     });
   } catch {}
 

@@ -1,10 +1,19 @@
-import { bumpMetric } from "./api/security/metrics_writer.js";
+/**
+ * Orland Dashboard — shared lib (SSO STABLE MODE)
+ * Fokus:
+ * - JSON helpers
+ * - password hash
+ * - session SID cookie
+ * - auth check
+ * - dashboard + talent + client SSO
+ * - tanpa lock / rate-limit enforcement
+ */
 
-export function nowSec(){
+export function nowSec() {
   return Math.floor(Date.now() / 1000);
 }
 
-export function json(status, st, data){
+export function json(status, st, data) {
   return new Response(JSON.stringify({ status: st, data }, null, 0), {
     status,
     headers: {
@@ -14,45 +23,49 @@ export function json(status, st, data){
   });
 }
 
-export async function readJson(request){
-  try{
+export async function readJson(request) {
+  try {
     const ct = request.headers.get("content-type") || "";
-    if(!ct.includes("application/json")) return null;
+    if (!ct.includes("application/json")) return null;
     return await request.json();
-  }catch{
+  } catch {
     return null;
   }
 }
 
-export function normEmail(email){
+export function normEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-export function timingSafeEqual(a, b){
+export function timingSafeEqual(a, b) {
   a = String(a || "");
   b = String(b || "");
-  if(a.length !== b.length) return false;
+  if (a.length !== b.length) return false;
+
   let r = 0;
-  for(let i = 0; i < a.length; i++){
+  for (let i = 0; i < a.length; i++) {
     r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return r === 0;
 }
 
-export function randomB64(bytes = 18){
+export function randomB64(bytes = 18) {
   const u8 = crypto.getRandomValues(new Uint8Array(bytes));
   let s = "";
-  for(const c of u8) s += String.fromCharCode(c);
+  for (const c of u8) s += String.fromCharCode(c);
   return btoa(s);
 }
 
-export async function sha256Base64(str){
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(str)));
+export async function sha256Base64(str) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(String(str))
+  );
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
-export async function pbkdf2Hash(password, saltB64, iterations){
-  const iter = Math.min(200000, Math.max(1000, Number(iterations || 100000)));
+export async function pbkdf2Hash(password, saltB64, iterations) {
+  const iter = Math.min(100000, Math.max(1000, Number(iterations || 100000)));
   const salt = Uint8Array.from(atob(String(saltB64)), c => c.charCodeAt(0));
 
   const baseKey = await crypto.subtle.importKey(
@@ -64,7 +77,7 @@ export async function pbkdf2Hash(password, saltB64, iterations){
   );
 
   const bits = await crypto.subtle.deriveBits(
-    { name:"PBKDF2", hash:"SHA-256", salt, iterations: iter },
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: iter },
     baseKey,
     256
   );
@@ -72,71 +85,78 @@ export async function pbkdf2Hash(password, saltB64, iterations){
   return btoa(String.fromCharCode(...new Uint8Array(bits)));
 }
 
-export function cookie(name, value, opt = {}){
+export function cookie(name, value, opt = {}) {
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opt.path || "/"}`);
-  if(opt.domain) parts.push(`Domain=${opt.domain}`);
-  if(opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
-  if(opt.httpOnly !== false) parts.push("HttpOnly");
-  if(opt.secure !== false) parts.push("Secure");
+
+  if (opt.domain) parts.push(`Domain=${opt.domain}`);
+  if (opt.maxAge != null) parts.push(`Max-Age=${Math.floor(opt.maxAge)}`);
+  if (opt.httpOnly !== false) parts.push("HttpOnly");
+  if (opt.secure !== false) parts.push("Secure");
   parts.push(`SameSite=${opt.sameSite || "Lax"}`);
+
   return parts.join("; ");
 }
 
-export function parseCookies(request){
+export function parseCookies(request) {
   const h = request.headers.get("cookie") || "";
   const out = {};
-  h.split(";").map(s => s.trim()).filter(Boolean).forEach(kv => {
-    const i = kv.indexOf("=");
-    if(i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
-  });
+
+  h.split(";")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .forEach(kv => {
+      const i = kv.indexOf("=");
+      if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
+    });
+
   return out;
 }
 
-export function requireEnv(env, keys){
+export function requireEnv(env, keys) {
   const miss = [];
-  for(const k of keys){
-    if(!env[k]) miss.push(k);
+  for (const k of keys) {
+    if (!env[k]) miss.push(k);
   }
   return miss;
 }
 
-export function hasRole(roles, allowed){
+export function hasRole(roles, allowed) {
   const s = new Set((roles || []).map(String));
   return allowed.some(r => s.has(r));
 }
 
-export async function getRolesForUser(env, user_id){
-  const r = await env.DB.prepare(`
-    SELECT ro.name AS name
-    FROM user_roles ur
-    JOIN roles ro ON ro.id = ur.role_id
-    WHERE ur.user_id = ?
-  `).bind(user_id).all();
+export async function getRolesForUser(env, user_id) {
+  try {
+    const r = await env.DB.prepare(`
+      SELECT r.name AS name
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = ?
+    `).bind(user_id).all();
 
-  return (r.results || []).map(x => String(x.name));
+    return (r.results || []).map(x => x.name);
+  } catch {
+    return [];
+  }
 }
 
 let MENUS_HAS_ICON = null;
-export async function menusHasIcon(env){
-  if(MENUS_HAS_ICON !== null) return MENUS_HAS_ICON;
-  try{
+export async function menusHasIcon(env) {
+  if (MENUS_HAS_ICON !== null) return MENUS_HAS_ICON;
+
+  try {
     const r = await env.DB.prepare(`PRAGMA table_info('menus')`).all();
     MENUS_HAS_ICON = (r.results || []).some(x => String(x.name) === "icon");
-  }catch{
+  } catch {
     MENUS_HAS_ICON = false;
   }
+
   return MENUS_HAS_ICON;
 }
 
-export async function audit(env, {
-  actor_user_id,
-  action,
-  route,
-  http_status,
-  meta
-}){
-  try{
+export async function audit(env, { actor_user_id, action, route, http_status, meta }) {
+  try {
     const id = crypto.randomUUID();
     const created_at = nowSec();
     const meta_json = JSON.stringify({
@@ -149,7 +169,7 @@ export async function audit(env, {
       INSERT INTO audit_logs (
         id, actor_user_id, action, target_type, target_id, meta_json, created_at
       )
-      VALUES (?,?,?,?,?,?,?)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       actor_user_id || null,
@@ -159,221 +179,256 @@ export async function audit(env, {
       meta_json,
       created_at
     ).run();
-  }catch{}
+  } catch {
+    // best-effort only
+  }
 }
 
-export async function auditEvent(env, request, {
-  actor_user_id = null,
-  actor_identifier_hash = null,
-  action = "event",
-  target_type = null,
-  target_id = null,
-  ip_hash = null,
-  ua_hash = null,
-  meta = null,
-  http_status = null,
-  duration_ms = null
-} = {}){
-  try{
-    const id = crypto.randomUUID();
-    const created_at = nowSec();
-
-    let route = null;
-    try{
-      route = new URL(request.url).pathname || null;
-    }catch{}
-
-    await env.DB.prepare(`
-      INSERT INTO audit_logs (
-        id, actor_user_id, actor_identifier_hash, action,
-        target_type, target_id, ip_hash, meta_json,
-        created_at, ua_hash, route, http_status, duration_ms
-      )
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).bind(
-      id,
-      actor_user_id,
-      actor_identifier_hash,
-      String(action || "event"),
-      target_type,
-      target_id,
-      ip_hash,
-      JSON.stringify(meta || {}),
-      created_at,
-      ua_hash,
-      route,
-      http_status,
-      duration_ms
-    ).run();
-  }catch{}
-
-  try{
-    await bumpMetric(env, String(action || "event"), 1);
-  }catch{}
+function toNum(v, d) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
 }
 
-export async function createSession(env, user_id, roles, meta = {}){
+/**
+ * Session mode:
+ * - cookie "sid" = sessions.id
+ * - minimal, stabil, shared lintas subdomain
+ */
+export async function createSession(env, user_id, roles) {
   const now = nowSec();
-  const r = (roles || []).map(String);
+  const r = Array.isArray(roles) ? roles : [];
 
-  let ttlMin = Number(env.SESSION_TTL_MIN_STAFF || 240);
-  if(r.includes("super_admin")) ttlMin = Number(env.SESSION_TTL_MIN_SUPER_ADMIN || 60);
-  else if(r.includes("admin")) ttlMin = Number(env.SESSION_TTL_MIN_ADMIN || 120);
-
+  const ttlMin = toNum(env.SESSION_TTL_MIN, 720); // default 12 jam
   const ttl = Math.max(10, ttlMin) * 60;
   const exp = now + ttl;
-
   const sid = crypto.randomUUID();
-  const token_hash = sid;
-  const role_snapshot = JSON.stringify(r);
-  const sessionVersion = Number(meta.session_version || 1);
 
   await env.DB.prepare(`
     INSERT INTO sessions (
-      id, user_id, token_hash,
-      created_at, expires_at, revoked_at,
-      ip_hash, ua_hash, role_snapshot, ip_prefix_hash,
-      last_seen_at, roles_json, session_version, revoke_reason
+      id, user_id, token_hash, created_at, expires_at, revoked_at,
+      ip_hash, ua_hash, role_snapshot, ip_prefix_hash, last_seen_at
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     sid,
     user_id,
-    token_hash,
+    sid,
     now,
     exp,
     null,
-    meta.ip_hash || null,
-    meta.ua_hash || null,
-    role_snapshot,
-    meta.ip_prefix_hash || null,
-    now,
+    null,
+    null,
     JSON.stringify(r),
-    sessionVersion,
-    null
+    null,
+    now
   ).run();
 
-  return { sid, exp, ttl, session_version: sessionVersion };
+  return { sid, exp, ttl };
 }
 
-export async function revokeSessionBySid(env, sid, reason = "logout"){
-  try{
+export async function revokeSessionBySid(env, sid) {
+  try {
     await env.DB.prepare(`
       UPDATE sessions
-      SET revoked_at = ?, revoke_reason = ?
+      SET revoked_at = ?
       WHERE id = ?
-    `).bind(nowSec(), String(reason || "logout"), sid).run();
-  }catch{}
+    `).bind(nowSec(), sid).run();
+  } catch {}
 }
 
-export async function revokeAllSessionsForUser(env, user_id, reason = "admin_forced_logout"){
-  try{
-    await env.DB.prepare(`
-      UPDATE sessions
-      SET revoked_at = ?, revoke_reason = ?
-      WHERE user_id = ? AND revoked_at IS NULL
-    `).bind(nowSec(), String(reason || "admin_forced_logout"), user_id).run();
-  }catch{}
-}
-
-export async function requireAuth(env, request){
+export async function requireAuth(env, request) {
   const cookies = parseCookies(request);
-  const sid = cookies.sid || "";
-  if(!sid) return { ok:false, res: json(401, "unauthorized", null) };
+  const sid = String(cookies.sid || "").trim();
 
-  const now = nowSec();
-  const sess = await env.DB.prepare(`
-    SELECT id, user_id, roles_json, expires_at, revoked_at, session_version
-    FROM sessions
-    WHERE id = ?
-    LIMIT 1
-  `).bind(sid).first();
-
-  if(!sess || sess.revoked_at || now > Number(sess.expires_at || 0)){
-    return { ok:false, res: json(401, "unauthorized", null) };
+  if (!sid) {
+    return { ok: false, res: json(401, "unauthorized", null) };
   }
 
-  let roles = [];
-  try{
-    roles = JSON.parse(sess.roles_json || "[]") || [];
-  }catch{
-    roles = [];
+  let row = null;
+  try {
+    row = await env.DB.prepare(`
+      SELECT id, user_id, role_snapshot, expires_at, revoked_at
+      FROM sessions
+      WHERE id = ?
+      LIMIT 1
+    `).bind(sid).first();
+  } catch {
+    return { ok: false, res: json(401, "unauthorized", null) };
   }
 
-  const user = await env.DB.prepare(`
-    SELECT
-      id,
-      email_norm,
-      display_name,
-      status,
-      created_at,
-      updated_at,
-      email_verified,
-      email_verified_at,
-      phone_verified,
-      phone_verified_at,
-      profile_completed,
-      tenant_id,
-      last_ip_hash,
-      last_ua_hash,
-      last_login_at,
-      last_login_success_at,
-      last_login_fail_at,
-      session_version,
-      pw_fail_count,
-      pw_fail_last_at,
-      locked_until,
-      lock_reason,
-      must_change_password,
-      mfa_enabled,
-      mfa_type,
-      disabled_at,
-      disabled_reason
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).bind(sess.user_id).first();
-
-  if(!user){
-    return { ok:false, res: json(401, "unauthorized", null) };
+  if (!row) {
+    return { ok: false, res: json(401, "unauthorized", null) };
   }
 
-  if(String(user.status || "").toLowerCase() !== "active"){
-    return { ok:false, res: json(401, "unauthorized", null) };
+  if (row.revoked_at) {
+    return { ok: false, res: json(401, "unauthorized", null) };
   }
 
-  if(user.disabled_at != null){
-    return { ok:false, res: json(401, "unauthorized", null) };
+  const exp = Number(row.expires_at || 0);
+  if (!Number.isFinite(exp) || nowSec() > exp) {
+    return { ok: false, res: json(401, "unauthorized", null) };
   }
 
-  if(user.locked_until != null && Number(user.locked_until || 0) > now){
-    return { ok:false, res: json(423, "locked", {
-      message: "account_locked",
-      locked_until: Number(user.locked_until || 0),
-      lock_reason: user.lock_reason || null
-    }) };
-  }
-
-  const userSessionVersion = Number(user.session_version || 1);
-  const sessionVersion = Number(sess.session_version || 1);
-  if(userSessionVersion !== sessionVersion){
-    return { ok:false, res: json(401, "unauthorized", { message:"session_version_mismatch" }) };
-  }
-
-  try{
+  try {
     await env.DB.prepare(`
       UPDATE sessions
       SET last_seen_at = ?
       WHERE id = ?
-    `).bind(now, sess.id).run();
-  }catch{}
+    `).bind(nowSec(), row.id).run();
+  } catch {}
+
+  let roles = [];
+  try {
+    roles = JSON.parse(row.role_snapshot || "[]") || [];
+  } catch {
+    roles = [];
+  }
 
   return {
     ok: true,
-    uid: sess.user_id,
-    sid: sess.id,
-    token: sid,
+    uid: row.user_id,
     roles,
-    user
+    token: sid
   };
+}
+
+/* =========================================================
+   Portal helpers
+   ========================================================= */
+
+export function portalAccessFromRoles(roles) {
+  const r = new Set((roles || []).map(x => String(x)));
+
+  return {
+    dashboard: r.has("super_admin") || r.has("admin") || r.has("staff"),
+    talent: r.has("super_admin") || r.has("admin") || r.has("staff") || r.has("talent"),
+    client: r.has("super_admin") || r.has("admin") || r.has("staff") || r.has("client")
+  };
+}
+
+export function canAccessPortal(roles, portal) {
+  const p = portalAccessFromRoles(roles);
+  return !!p[String(portal || "")];
+}
+
+export function defaultPortalFromRoles(roles) {
+  const p = portalAccessFromRoles(roles);
+  if (p.dashboard) return "dashboard";
+  if (p.talent) return "talent";
+  if (p.client) return "client";
+  return null;
+}
+
+export function portalBaseUrl(env, portal) {
+  if (portal === "dashboard") return env.DASHBOARD_URL || "https://dashboard.orlandmanagement.com";
+  if (portal === "talent") return env.TALENT_URL || "https://talent.orlandmanagement.com";
+  if (portal === "client") return env.CLIENT_URL || "https://client.orlandmanagement.com";
+  return env.DASHBOARD_URL || "https://dashboard.orlandmanagement.com";
+}
+
+export function safeNextPath(nextPath, fallback = "/") {
+  const s = String(nextPath || "").trim();
+  if (!s.startsWith("/") || s.startsWith("//")) return fallback;
+  return s;
+}
+
+export function portalRedirectUrl(env, portal, nextPath = "/") {
+  return `${portalBaseUrl(env, portal)}${safeNextPath(nextPath, "/")}`;
+}
+
+export function inferCookieDomain(request, env) {
+  if (env.COOKIE_DOMAIN) return env.COOKIE_DOMAIN;
+
+  try {
+    const host = new URL(request.url).hostname;
+    if (host === "orlandmanagement.com" || host.endsWith(".orlandmanagement.com")) {
+      return ".orlandmanagement.com";
+    }
+  } catch {}
+
+  return undefined;
+}
+
+export async function requirePortalAuth(env, request, portal) {
+  const a = await requireAuth(env, request);
+  if (!a.ok) return a;
+
+  if (!canAccessPortal(a.roles, portal)) {
+    return {
+      ok: false,
+      res: json(403, "forbidden", {
+        message: "role_not_allowed_for_portal",
+        portal
+      })
+    };
+  }
+
+  return a;
+}
+
+/* =========================================================
+   Compat helpers: sengaja longgar agar tidak memblok login
+   ========================================================= */
+
+export function getClientIp(request) {
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    ""
+  );
+}
+
+export function ipPrefix(ip) {
+  ip = String(ip || "").trim();
+  if (!ip) return "";
+
+  if (ip.includes(".")) {
+    const p = ip.split(".");
+    if (p.length >= 3) return `${p[0]}.${p[1]}.${p[2]}.0/24`;
+  }
+
+  if (ip.includes(":")) {
+    const parts = ip.split(":").filter(Boolean);
+    return parts.slice(0, 4).join(":") + "::/64";
+  }
+
+  return ip;
+}
+
+export async function hashIpPrefix(env, request) {
+  try {
+    const ip = getClientIp(request);
+    const pref = ipPrefix(ip);
+    if (!pref) return "";
+    const pepper = env.HASH_PEPPER || "";
+    return await sha256Base64(`${pref}|${pepper}`);
+  } catch {
+    return "";
+  }
+}
+
+export async function hashUa(env, request) {
+  try {
+    const ua = request.headers.get("user-agent") || "";
+    if (!ua) return "";
+    const pepper = env.HASH_PEPPER || "";
+    return await sha256Base64(`${ua}|${pepper}`);
+  } catch {
+    return "";
+  }
+}
+
+// nonaktif sementara
+export async function rateLimitKV(env, name, limit, windowSec) {
+  return { ok: true, left: null };
+}
+
+// nonaktif sementara
+export async function applyLoginFailPolicy(env, user_id, now, opt) {
+  return { nextCount: 0, locked_until: null };
+}
+
+// nonaktif sementara
+export async function clearLoginFailPolicy(env, user_id, now) {
+  return true;
 }

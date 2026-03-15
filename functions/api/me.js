@@ -1,37 +1,18 @@
 import { json, requireAuth } from "../_lib.js";
-import { getEffectiveVerificationState } from "./config/_global_policy.js";
 
-export async function onRequestGet({ request, env }){
+export async function onRequestGet({ request, env }) {
   const a = await requireAuth(env, request);
-  if(!a.ok) return a.res;
+  if (!a.ok) return a.res;
 
-  const user = a.user || null;
-  if(!user){
-    return json(401, "unauthorized", null);
-  }
-
-  let state = {
-    effective: null,
-    summary: null,
-    compliance: { compliant: true, scope: "admin", required_actions: [], checks: {} }
-  };
-
-  try{
-    if(typeof getEffectiveVerificationState === "function"){
-      state = await getEffectiveVerificationState(env, user, a.roles || []) || state;
-    }
-  }catch(err){
-    return json(500, "server_error", {
-      step: "getEffectiveVerificationState",
-      message: String(err?.message || err)
-    });
-  }
+  const u = await env.DB.prepare(
+    "SELECT id,email_norm,display_name,status FROM users WHERE id=? LIMIT 1"
+  ).bind(a.uid).first();
 
   return json(200, "ok", {
-    ...user,
-    roles: a.roles || [],
-    verification_policy: state?.effective || null,
-    verification_summary: state?.summary || null,
-    verification_compliance: state?.compliance || null
+    id: u?.id,
+    email_norm: u?.email_norm,
+    display_name: u?.display_name,
+    status: u?.status,
+    roles: a.roles
   });
 }
