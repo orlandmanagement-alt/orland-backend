@@ -205,7 +205,6 @@ function guessModuleByCodeOrPath(code, path){
     "/config/cron-global": "/modules/mod_cfg_cron_global.js",
     "/settings-center": "/modules/mod_settings_center.js",
     "/settings/otp-providers": "/modules/mod_otp_providers.js",
-    "/settings/otp-providers/push": "/modules/mod_otp_providers.js",
     "/preferences/appearance": "/modules/mod_preferences_appearance.js",
 
     "/integrations/blogspot": "/modules/mod_blogspot.js",

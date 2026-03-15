@@ -1,0 +1,248 @@
+export default function(Orland){
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
+
+  async function apiGet(){
+    return await Orland.api("/api/settings/otp-providers");
+  }
+
+  async function apiSave(payload){
+    return await Orland.api("/api/settings/otp-providers", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  return {
+    title: "OTP Provider Settings",
+    async mount(host){
+      host.innerHTML = `
+        <div class="space-y-5 max-w-5xl ui-animated-surface">
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-2xl font-extrabold ui-title-gradient">OTP Provider Settings</div>
+                <div class="text-slate-500 mt-1">Kelola provider OTP email, SMS, WhatsApp, cooldown resend, dan masa berlaku kode.</div>
+              </div>
+              <div class="flex gap-2">
+                <button id="btnReload" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Reload</button>
+                <button id="btnSave" class="px-4 py-3 rounded-2xl bg-primary text-white font-black text-sm">Save Settings</button>
+                <button id="btnPushSso" class="px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder font-black text-sm">Push to SSO</button>
+              </div>
+            </div>
+            <div id="msg" class="mt-4 text-sm text-slate-500"></div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 ui-gap-grid">
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-lg font-extrabold">General</div>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <label class="block text-sm font-black mb-2">Default Channel</label>
+                  <select id="otp.default_channel" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">Resend Cooldown (sec)</label>
+                  <input id="otp.resend_cooldown_sec" type="number" min="5" max="600" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">OTP Expiry (sec)</label>
+                  <input id="otp.expiry_sec" type="number" min="60" max="1800" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                </div>
+              </div>
+            </div>
+
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-lg font-extrabold">Email Provider</div>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <label class="block text-sm font-black mb-2">Provider</label>
+                  <select id="otp.email_provider" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                    <option value="resend">Resend</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">From Email</label>
+                  <input id="otp.email_from" type="text" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">Resend API Key</label>
+                  <input id="otp.resend_api_key" type="password" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark" placeholder="re_xxxxxxxxx">
+                  <div id="otp.resend_api_key.masked" class="mt-2 text-xs text-slate-500"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-lg font-extrabold">SMS Provider</div>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <label class="block text-sm font-black mb-2">Provider</label>
+                  <select id="otp.sms_provider" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                    <option value="disabled">Disabled</option>
+                    <option value="twilio">Twilio</option>
+                    <option value="vonage">Vonage</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">Sender</label>
+                  <input id="otp.sms_sender" type="text" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">SMS API Key</label>
+                  <input id="otp.sms_api_key" type="password" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                  <div id="otp.sms_api_key.masked" class="mt-2 text-xs text-slate-500"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+              <div class="text-lg font-extrabold">WhatsApp Provider</div>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <label class="block text-sm font-black mb-2">Provider</label>
+                  <select id="otp.wa_provider" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                    <option value="disabled">Disabled</option>
+                    <option value="twilio">Twilio</option>
+                    <option value="wablas">Wablas</option>
+                    <option value="fonnte">Fonnte</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">Sender</label>
+                  <input id="otp.wa_sender" type="text" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                </div>
+                <div>
+                  <label class="block text-sm font-black mb-2">WhatsApp API Key</label>
+                  <input id="otp.wa_api_key" type="password" class="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-dark">
+                  <div id="otp.wa_api_key.masked" class="mt-2 text-xs text-slate-500"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ui-panel ui-pad-panel rounded-3xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkLighter p-5">
+            <div class="text-lg font-extrabold">Notes</div>
+            <div class="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm text-slate-500">
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">Resend cocok untuk OTP email awal.</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">SMS/WhatsApp provider bisa tetap disabled sampai siap produksi.</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-darkBorder p-4">Cooldown resend 30 detik disarankan agar tidak abuse.</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const q = (id)=>host.querySelector("#" + CSS.escape(id));
+      const msg = host.querySelector("#msg");
+
+      function setMsg(text, cls = "text-slate-500"){
+        msg.className = "mt-4 text-sm " + cls;
+        msg.textContent = text;
+      }
+
+      function fill(settings = {}, masked = {}){
+        const ids = [
+          "otp.default_channel",
+          "otp.resend_cooldown_sec",
+          "otp.expiry_sec",
+          "otp.email_provider",
+          "otp.email_from",
+          "otp.resend_api_key",
+          "otp.sms_provider",
+          "otp.sms_api_key",
+          "otp.sms_sender",
+          "otp.wa_provider",
+          "otp.wa_api_key",
+          "otp.wa_sender"
+        ];
+
+        for(const id of ids){
+          const el = q(id);
+          if(el) el.value = String(settings[id] ?? "");
+        }
+
+        const mk = [
+          "otp.resend_api_key",
+          "otp.sms_api_key",
+          "otp.wa_api_key"
+        ];
+        for(const id of mk){
+          const el = q(id + ".masked");
+          if(el) el.textContent = masked[id] ? `Saved key: ${masked[id]}` : "No saved key";
+        }
+      }
+
+      function collect(){
+        return {
+          "otp.default_channel": q("otp.default_channel")?.value || "email",
+          "otp.resend_cooldown_sec": q("otp.resend_cooldown_sec")?.value || "30",
+          "otp.expiry_sec": q("otp.expiry_sec")?.value || "300",
+          "otp.email_provider": q("otp.email_provider")?.value || "resend",
+          "otp.email_from": q("otp.email_from")?.value || "",
+          "otp.resend_api_key": q("otp.resend_api_key")?.value || "",
+          "otp.sms_provider": q("otp.sms_provider")?.value || "disabled",
+          "otp.sms_api_key": q("otp.sms_api_key")?.value || "",
+          "otp.sms_sender": q("otp.sms_sender")?.value || "",
+          "otp.wa_provider": q("otp.wa_provider")?.value || "disabled",
+          "otp.wa_api_key": q("otp.wa_api_key")?.value || "",
+          "otp.wa_sender": q("otp.wa_sender")?.value || ""
+        };
+      }
+
+      async function load(){
+        setMsg("Loading settings...");
+        const r = await apiGet();
+
+        if(r.status !== "ok"){
+          setMsg("Failed loading OTP settings.", "text-red-600");
+          return;
+        }
+
+        fill(r.data?.settings || {}, r.data?.masked || {});
+        setMsg("Settings loaded.", "text-emerald-600");
+      }
+
+
+      async function pushSso(){
+        setMsg("Pushing settings to SSO...");
+        const r = await Orland.api("/api/settings/otp-providers-push", {
+          method: "POST"
+        });
+
+        if(r.status !== "ok"){
+          setMsg("Failed push settings to SSO.", "text-red-600");
+          return;
+        }
+
+        setMsg("Settings pushed to SSO.", "text-emerald-600");
+      }
+
+      async function save(){
+        setMsg("Saving settings...");
+        const r = await apiSave(collect());
+
+        if(r.status !== "ok"){
+          setMsg("Failed saving OTP settings.", "text-red-600");
+          return;
+        }
+
+        fill(r.data?.settings || {}, r.data?.masked || {});
+        setMsg("Settings saved.", "text-emerald-600");
+      }
+
+      host.querySelector("#btnReload")?.addEventListener("click", load);
+      host.querySelector("#btnSave")?.addEventListener("click", save);
+      host.querySelector("#btnPushSso")?.addEventListener("click", pushSso);
+
+      await load();
+    }
+  };
+}

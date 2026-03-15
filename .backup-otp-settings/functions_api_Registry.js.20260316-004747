@@ -99,7 +99,6 @@ function guessModuleByCodeOrPath(code, path){
     cfg_bulk_tools: "/modules/mod_cfg_bulk_tools.js",
     cfg_sec_policy: "/modules/mod_cfg_sec_policy.js",
     cfg_otp: "/modules/mod_cfg_otp.js",
-    cfg_otp_providers: "/modules/mod_otp_providers.js",
     cfg_verify: "/modules/mod_cfg_verify.js",
     cfg_analytics: "/modules/mod_cfg_analytics.js",
     cfg_blogspot: "/modules/mod_cfg_blogspot.js",
@@ -204,8 +203,6 @@ function guessModuleByCodeOrPath(code, path){
     "/config/global": "/modules/mod_cfg_global.js",
     "/config/cron-global": "/modules/mod_cfg_cron_global.js",
     "/settings-center": "/modules/mod_settings_center.js",
-    "/settings/otp-providers": "/modules/mod_otp_providers.js",
-    "/settings/otp-providers/push": "/modules/mod_otp_providers.js",
     "/preferences/appearance": "/modules/mod_preferences_appearance.js",
 
     "/integrations/blogspot": "/modules/mod_blogspot.js",

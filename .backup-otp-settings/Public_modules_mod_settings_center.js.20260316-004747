@@ -8,7 +8,6 @@ export default function(Orland){
     { title:"Verification Dashboard", desc:"Audit summary dan event verifikasi untuk admin review.", path:"/security/verification-dashboard", icon:"fa-solid fa-chart-column", category:"verification", tags:["verification","dashboard","audit","kyc"] },
     { title:"Verification Review", desc:"Review request KYC, approve, reject, dan audit review.", path:"/security/verification-review", icon:"fa-solid fa-user-check", category:"verification", tags:["verification","review","kyc","approve","reject"] },
     { title:"Verify Center", desc:"Pusat tindakan verifikasi untuk memenuhi global verification policy.", path:"/verify-center", icon:"fa-solid fa-badge-check", category:"verification", tags:["verification","otp","email","phone","kyc"] },
-    { title:"OTP Providers", desc:"Atur provider OTP email, SMS, WhatsApp, cooldown resend, dan masa berlaku kode.", path:"/settings/otp-providers", icon:"fa-solid fa-key", category:"security", tags:["otp","provider","email","sms","whatsapp","resend"] },
     { title:"Security Module", desc:"Ringkasan keamanan, alert, policy, incident, dan quick actions.", path:"/security", icon:"fa-solid fa-lock", category:"security", tags:["security","module","alerts","incident"] }
   ];
 
