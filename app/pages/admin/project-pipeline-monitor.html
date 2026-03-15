@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Project Pipeline Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_project_pipeline_monitor.js";
+
+    mountAdminShell("Project Pipeline Monitor", `
+      <div style="margin-bottom:12px;">
+        <button type="button" id="adminPipelineExportBtn">Export CSV</button>
+      </div>
+      <div id="projectPipelineMonitorInfo">Loading...</div>
+      <ul id="projectPipelineMonitorList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

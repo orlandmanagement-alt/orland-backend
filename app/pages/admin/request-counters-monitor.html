@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Request Counters Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_request_counters_monitor.js";
+
+    mountAdminShell("Request Counters Monitor", `
+      <form id="adminRequestCountersFilterForm">
+        <input id="adminRequestCountersSearch" type="text" placeholder="Search counter key">
+        <select id="adminRequestCountersLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button type="submit">Apply</button>
+        <button type="button" id="adminRequestCountersExportBtn">Export CSV</button>
+      </form>
+      <div id="requestCountersInfo">Loading...</div>
+      <ul id="requestCountersList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

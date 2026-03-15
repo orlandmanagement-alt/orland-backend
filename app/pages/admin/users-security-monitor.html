@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Users Security Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_users_security_monitor.js";
+
+    mountAdminShell("Users Security Monitor", `
+      <form id="adminUsersSecurityFilterForm">
+        <input id="adminUsersSecuritySearch" type="text" placeholder="Search user / email / display name">
+        <select id="adminUsersSecurityLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <label>
+          <input id="adminUsersSecurityRiskOnly" type="checkbox">
+          Risk only
+        </label>
+        <button type="submit">Apply</button>
+      </form>
+
+      <div id="usersSecurityInfo">Loading...</div>
+      <div id="usersSecurityPaging"></div>
+      <ul id="usersSecurityList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

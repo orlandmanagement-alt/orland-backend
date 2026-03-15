@@ -1,0 +1,366 @@
+==================================================
+CLIENT / TALENT / PROJECT DATABASE AUDIT CHECKLIST
+==================================================
+
+Tujuan:
+Memastikan semua endpoint dan page yang sudah dibuat punya tabel dan kolom yang cukup.
+
+--------------------------------------------------
+A. AUTH CORE
+--------------------------------------------------
+Tabel wajib:
+[ ] users
+[ ] roles
+[ ] user_roles
+[ ] sessions
+[ ] audit_logs
+[ ] request_counters
+[ ] ip_blocks
+
+users minimal:
+[ ] id
+[ ] email_norm
+[ ] display_name
+[ ] status
+[ ] phone_e164
+[ ] phone_verified
+[ ] phone_verified_at
+[ ] email_verified
+[ ] email_verified_at
+[ ] profile_completed
+[ ] session_version
+[ ] disabled_at
+[ ] disabled_reason
+
+roles minimal:
+[ ] id
+[ ] name
+
+user_roles minimal:
+[ ] user_id
+[ ] role_id
+
+sessions minimal:
+[ ] id
+[ ] user_id
+[ ] expires_at
+[ ] revoked_at
+[ ] roles_json
+[ ] session_version
+
+--------------------------------------------------
+B. SSO BRIDGE
+--------------------------------------------------
+Tabel wajib:
+[ ] sso_login_challenges
+[ ] sso_step_up_challenges
+[ ] sso_trusted_devices
+[ ] sso_login_events
+[ ] sso_redirect_audit
+
+sso_login_challenges minimal:
+[ ] id
+[ ] user_id
+[ ] identity_type
+[ ] identity_value
+[ ] otp_code
+[ ] status
+[ ] expires_at
+[ ] created_at
+[ ] consumed_at
+[ ] ip_hash
+[ ] ua_hash
+
+sso_step_up_challenges minimal:
+[ ] id
+[ ] user_id
+[ ] action_code
+[ ] otp_code
+[ ] status
+[ ] expires_at
+[ ] created_at
+[ ] consumed_at
+[ ] ip_hash
+[ ] ua_hash
+
+sso_trusted_devices minimal:
+[ ] id
+[ ] user_id
+[ ] device_hash
+[ ] device_name
+[ ] status
+[ ] first_ip_hash
+[ ] last_ip_hash
+[ ] first_ua_hash
+[ ] last_ua_hash
+[ ] last_seen_at
+[ ] created_at
+[ ] updated_at
+
+--------------------------------------------------
+C. CLIENT / ORGANIZATION / PROJECT CORE
+--------------------------------------------------
+Tabel wajib:
+[ ] organizations
+[ ] client_members
+[ ] projects
+[ ] project_roles
+
+organizations minimal:
+[ ] id
+[ ] owner_user_id
+[ ] name
+[ ] status
+[ ] created_at
+[ ] updated_at
+
+client_members minimal:
+[ ] id
+[ ] organization_id
+[ ] user_id
+[ ] role_name
+[ ] status
+[ ] created_at
+
+projects minimal:
+[ ] id
+[ ] organization_id
+[ ] owner_user_id
+[ ] title
+[ ] status
+[ ] project_type
+[ ] location_text
+[ ] description
+[ ] created_at
+[ ] updated_at
+
+project_roles minimal:
+[ ] id
+[ ] project_id
+[ ] title
+[ ] status
+[ ] gender_requirement
+[ ] age_range
+[ ] location_text
+[ ] role_description
+[ ] created_at
+[ ] updated_at
+
+--------------------------------------------------
+D. TALENT PROFILE CORE
+--------------------------------------------------
+Tabel wajib:
+[ ] talent_profiles
+[ ] talent_profile_basic
+[ ] talent_contact_public
+[ ] talent_interests
+[ ] talent_skills
+[ ] talent_appearance
+[ ] talent_social_links
+[ ] talent_progress
+
+talent_profiles minimal:
+[ ] id
+[ ] user_id
+[ ] display_name
+[ ] public_slug
+[ ] visibility_status
+[ ] visibility_reason
+[ ] created_at
+[ ] updated_at
+
+talent_profile_basic minimal:
+[ ] id
+[ ] user_id
+[ ] gender
+[ ] dob
+[ ] location
+[ ] created_at
+[ ] updated_at
+
+talent_contact_public minimal:
+[ ] id
+[ ] user_id
+[ ] email
+[ ] phone
+[ ] website
+[ ] contact_visibility
+[ ] created_at
+[ ] updated_at
+
+talent_interests minimal:
+[ ] id
+[ ] user_id
+[ ] interest_name
+[ ] created_at
+
+talent_skills minimal:
+[ ] id
+[ ] user_id
+[ ] skill_name
+[ ] created_at
+
+talent_appearance minimal:
+[ ] id
+[ ] user_id
+[ ] height_cm
+[ ] weight_kg
+[ ] eye_color
+[ ] hair_color
+[ ] created_at
+[ ] updated_at
+
+talent_social_links minimal:
+[ ] id
+[ ] user_id
+[ ] platform
+[ ] url
+[ ] created_at
+[ ] updated_at
+
+talent_progress minimal:
+[ ] user_id
+[ ] completion_percent
+[ ] visibility_status
+[ ] visibility_reason
+[ ] phone_verified
+[ ] updated_at
+
+--------------------------------------------------
+E. WORKFLOW CORE
+--------------------------------------------------
+Tabel wajib:
+[ ] project_applications
+[ ] project_shortlists
+[ ] project_invites
+[ ] project_bookings
+
+project_applications minimal:
+[ ] id
+[ ] project_role_id
+[ ] talent_user_id
+[ ] status
+[ ] message
+[ ] created_at
+[ ] updated_at
+
+project_shortlists minimal:
+[ ] id
+[ ] project_role_id
+[ ] talent_user_id
+[ ] status
+[ ] created_at
+
+project_invites minimal:
+[ ] id
+[ ] project_role_id
+[ ] talent_user_id
+[ ] status
+[ ] message
+[ ] response_message
+[ ] created_at
+[ ] responded_at
+
+project_bookings minimal:
+[ ] id
+[ ] project_role_id
+[ ] talent_user_id
+[ ] status
+[ ] notes
+[ ] created_at
+[ ] updated_at
+
+--------------------------------------------------
+F. OPTIONAL BUT STRONGLY RECOMMENDED
+--------------------------------------------------
+[ ] project_status_history
+[ ] talent_media
+[ ] talent_credits
+[ ] notifications
+[ ] login timeline / security views
+[ ] moderation / review tables
+
+--------------------------------------------------
+G. ENDPOINT TO TABLE MAP
+--------------------------------------------------
+
+/functions/api/client/projects_get
+-> projects
+
+/functions/api/client/project_detail
+-> projects
+
+/functions/api/client/project_roles_get
+-> project_roles + projects
+
+/functions/api/client/project_applications_get
+-> project_applications + project_roles + projects + users
+
+/functions/api/client/project_shortlists_get
+-> project_shortlists + project_roles + projects + users
+
+/functions/api/client/project_shortlist_create
+-> project_shortlists + project_roles + users
+
+/functions/api/client/project_invites_get
+-> project_invites + project_roles + projects + users
+
+/functions/api/client/project_invite_create
+-> project_invites + project_roles + users
+
+/functions/api/client/project_bookings_get
+-> project_bookings + project_roles + projects + users
+
+/functions/api/client/project_booking_create
+-> project_bookings + project_roles + users
+
+/functions/api/client/booking_patch
+-> project_bookings
+
+/functions/api/project/pipeline_get
+-> project_applications + project_shortlists + project_invites + project_bookings + project_roles
+
+/functions/api/talent/profile_get
+-> talent_profiles + talent_profile_basic + talent_contact_public + talent_interests + talent_skills + talent_progress
+
+/functions/api/talent/projects_list
+-> projects + project_roles
+
+/functions/api/talent/project_apply
+-> project_applications + project_roles + projects
+
+/functions/api/talent/my_applications
+-> project_applications + project_roles + projects
+
+/functions/api/talent/application_withdraw
+-> project_applications
+
+/functions/api/talent/my_invites
+-> project_invites + project_roles + projects
+
+/functions/api/talent/invite_detail
+-> project_invites + project_roles + projects
+
+/functions/api/talent/invite_respond
+-> project_invites
+
+/functions/api/talent/my_bookings
+-> project_bookings + project_roles + projects
+
+--------------------------------------------------
+H. FINAL GO / NO GO
+--------------------------------------------------
+GO if:
+[ ] all core tables exist
+[ ] all mandatory columns exist
+[ ] all workflow tables exist
+[ ] route pages load without schema error
+[ ] endpoint test returns ok for happy path
+[ ] no missing column / no such table error in logs
+
+NO GO if:
+[ ] any core workflow table missing
+[ ] any endpoint crashes on missing column
+[ ] session cannot cross subdomain
+[ ] project / invite / booking workflow not consistent
+==================================================

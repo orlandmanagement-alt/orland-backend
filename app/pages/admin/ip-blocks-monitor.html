@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin IP Blocks Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_ip_blocks_monitor.js";
+
+    mountAdminShell("IP Blocks Monitor", `
+      <form id="adminIpBlocksFilterForm">
+        <select id="adminIpBlocksLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <label>
+          <input id="adminIpBlocksActiveOnly" type="checkbox" checked>
+          Active only
+        </label>
+        <button type="submit">Apply</button>
+        <button type="button" id="adminIpBlocksBulkUnblockBtn">Bulk Unblock</button>
+        <button type="button" id="adminIpBlocksExportBtn">Export CSV</button>
+      </form>
+      <div id="ipBlocksInfo">Loading...</div>
+      <div id="ipBlocksPaging"></div>
+      <ul id="ipBlocksList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

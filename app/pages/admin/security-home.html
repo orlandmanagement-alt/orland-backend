@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Security Home</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_security_home.js";
+
+    mountAdminShell("Security Home", `
+      <div id="securityHomeInfo">Loading...</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Active Sessions</div>
+          <strong id="homeActiveSessions">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Blocked IPs</div>
+          <strong id="homeBlockedIps">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Locked Users</div>
+          <strong id="homeLockedUsers">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Failed Auth 24h</div>
+          <strong id="homeFailedAuth24h">0</strong>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h2>Quick Links</h2>
+        <ul>
+          <li><a href="/app/pages/admin/users-security-monitor.html">Users Security Monitor</a></li>
+          <li><a href="/app/pages/admin/sessions-monitor.html">Sessions Monitor</a></li>
+          <li><a href="/app/pages/admin/auth-risk-monitor.html">Auth Risk Monitor</a></li>
+          <li><a href="/app/pages/admin/audit-logs-monitor.html">Audit Logs Monitor</a></li>
+          <li><a href="/app/pages/admin/ip-blocks-monitor.html">IP Blocks Monitor</a></li>
+        </ul>
+      </div>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

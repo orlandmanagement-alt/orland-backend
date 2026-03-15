@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Bookings Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_bookings_monitor.js";
+
+    mountAdminShell("Bookings Monitor", `
+      <form id="adminBookingsFilterForm">
+        <input id="adminBookingsSearch" type="text" placeholder="Search booking">
+        <select id="adminBookingsLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button type="submit">Apply</button>
+        <button type="button" id="adminBookingsExportBtn">Export CSV</button>
+      </form>
+      <div id="bookingsMonitorInfo">Loading...</div>
+      <div id="bookingsMonitorPaging"></div>
+      <ul id="bookingsMonitorList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

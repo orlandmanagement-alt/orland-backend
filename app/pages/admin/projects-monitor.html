@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Projects Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_projects_monitor.js";
+
+    mountAdminShell("Projects Monitor", `
+      <form id="adminProjectsFilterForm">
+        <input id="adminProjectsSearch" type="text" placeholder="Search project">
+        <select id="adminProjectsLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button type="submit">Apply</button>
+        <button type="button" id="adminProjectsExportBtn">Export CSV</button>
+      </form>
+      <div id="projectsMonitorInfo">Loading...</div>
+      <div id="projectsMonitorPaging"></div>
+      <ul id="projectsMonitorList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

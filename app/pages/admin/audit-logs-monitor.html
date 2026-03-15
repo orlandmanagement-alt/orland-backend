@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Audit Logs Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_audit_logs_monitor.js";
+
+    mountAdminShell("Audit Logs Monitor", `
+      <form id="adminAuditFilterForm">
+        <input id="adminAuditSearch" type="text" placeholder="Search action / route / target">
+        <select id="adminAuditLimit">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button type="submit">Apply</button>
+        <button type="button" id="adminAuditExportBtn">Export CSV</button>
+      </form>
+      <div id="auditLogsInfo">Loading...</div>
+      <div id="auditLogsPaging"></div>
+      <ul id="auditLogsList"></ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

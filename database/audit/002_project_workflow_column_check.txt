@@ -1,0 +1,12 @@
+PRAGMA table_info('projects');
+PRAGMA table_info('project_roles');
+PRAGMA table_info('project_applications');
+PRAGMA table_info('project_shortlists');
+PRAGMA table_info('project_invites');
+PRAGMA table_info('project_bookings');
+PRAGMA table_info('talent_profiles');
+PRAGMA table_info('talent_profile_basic');
+PRAGMA table_info('talent_contact_public');
+PRAGMA table_info('talent_interests');
+PRAGMA table_info('talent_skills');
+PRAGMA table_info('talent_progress');

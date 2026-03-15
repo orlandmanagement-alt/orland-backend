@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Audit Log Detail</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_audit_log_detail.js";
+
+    mountAdminShell("Audit Log Detail", `
+      <div id="auditLogDetailInfo">Loading...</div>
+      <pre id="auditLogDetailBox" style="white-space:pre-wrap;border:1px solid #ddd;padding:12px;border-radius:8px;"></pre>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

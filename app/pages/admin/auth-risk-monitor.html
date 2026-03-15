@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Auth Risk Monitor</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_auth_risk_monitor.js";
+
+    mountAdminShell("Auth Risk Monitor", `
+      <div style="margin-bottom:12px;">
+        <button type="button" id="adminAuthRiskExportBtn">Export CSV</button>
+      </div>
+      <div id="authRiskInfo">Loading...</div>
+      <ul>
+        <li>Failed Logins 24h: <strong id="riskFailedLogins">0</strong></li>
+        <li>Login Success 24h: <strong id="riskLoginSuccess">0</strong></li>
+        <li>Active Blocked IPs: <strong id="riskBlockedIps">0</strong></li>
+        <li>Locked Users: <strong id="riskLockedUsers">0</strong></li>
+      </ul>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>

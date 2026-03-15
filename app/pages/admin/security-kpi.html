@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Security KPI</title>
+</head>
+<body>
+  <script type="module">
+    import { mountAdminShell } from "../../js/admin_shell.js";
+    import mod from "../../modules/admin/mod_admin_security_kpi.js";
+
+    mountAdminShell("Security KPI Dashboard", `
+      <div id="securityKpiInfo">Loading...</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Active Sessions</div>
+          <strong id="kpiActiveSessions">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Blocked IPs</div>
+          <strong id="kpiBlockedIps">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Locked Users</div>
+          <strong id="kpiLockedUsers">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Audit Events 24h</div>
+          <strong id="kpiAudit24h">0</strong>
+        </div>
+        <div style="border:1px solid #ddd;padding:12px;border-radius:8px;">
+          <div>Failed Auth 24h</div>
+          <strong id="kpiFailedAuth24h">0</strong>
+        </div>
+      </div>
+    `);
+
+    mod();
+  </script>
+</body>
+</html>
