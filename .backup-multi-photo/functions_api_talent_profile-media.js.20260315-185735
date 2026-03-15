@@ -1,0 +1,51 @@
+import { json, requireAuth, hasRole } from "../../_lib.js";
+
+async function ensureTables(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS talent_media (
+      id TEXT PRIMARY KEY,
+      talent_id TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      storage_key TEXT NOT NULL,
+      mime_type TEXT,
+      file_size INTEGER,
+      width INTEGER,
+      height INTEGER,
+      duration_sec INTEGER,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      meta_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+
+  if(!hasRole(a.roles, ["super_admin","admin","staff","talent"])){
+    return json(403, "forbidden", null);
+  }
+
+  await ensureTables(env);
+
+  const rows = await env.DB.prepare(`
+    SELECT id, talent_id, media_type, storage_key, mime_type, file_size, sort_order, status, meta_json, created_at
+    FROM talent_media
+    WHERE talent_id=? AND status='active'
+    ORDER BY sort_order ASC, created_at DESC
+  `).bind(a.uid).all();
+
+  const items = (rows.results || []).map(x => {
+    let meta = {};
+    try{ meta = JSON.parse(x.meta_json || "{}"); }catch{}
+    return {
+      ...x,
+      meta_json: meta,
+      is_primary: Number(meta.is_primary || 0) === 1
+    };
+  });
+
+  return json(200, "ok", { items });
+}

@@ -1,0 +1,96 @@
+{
+  "parents": {
+    "added_base": 2,
+    "added_suggested": 13,
+    "skipped": [
+      {
+        "added": false,
+        "reason": "duplicate_code",
+        "source": "suggested.parents",
+        "value": "certificates",
+        "item": {
+          "id": "m_auto_certificates",
+          "code": "certificates",
+          "label": "Certificates",
+          "path": "/certificates",
+          "parent_id": null,
+          "sort_order": 100,
+          "icon": "fa-solid fa-certificate",
+          "group_key": "system",
+          "roles": [
+            "super_admin",
+            "admin",
+            "staff"
+          ]
+        }
+      }
+    ]
+  },
+  "children": {
+    "added_base": 4,
+    "added_suggested": 69,
+    "skipped": [
+      {
+        "added": false,
+        "reason": "duplicate_path",
+        "source": "suggested.children",
+        "value": "/certificates/issue",
+        "item": {
+          "id": "m_auto_certificates_issue",
+          "code": "certificates_issue",
+          "label": "Certificates / Issue",
+          "path": "/certificates/issue",
+          "parent_id": "m_auto_certificates",
+          "sort_order": 201,
+          "icon": "fa-solid fa-certificate",
+          "group_key": "system",
+          "roles": [
+            "super_admin",
+            "admin",
+            "staff"
+          ]
+        }
+      },
+      {
+        "added": false,
+        "reason": "duplicate_path",
+        "source": "suggested.children",
+        "value": "/certificates/templates",
+        "item": {
+          "id": "m_auto_certificates_templates",
+          "code": "certificates_templates",
+          "label": "Certificates / Templates",
+          "path": "/certificates/templates",
+          "parent_id": "m_auto_certificates",
+          "sort_order": 202,
+          "icon": "fa-solid fa-certificate",
+          "group_key": "system",
+          "roles": [
+            "super_admin"
+          ]
+        }
+      },
+      {
+        "added": false,
+        "reason": "duplicate_code",
+        "source": "suggested.children",
+        "value": "projects_archive_view",
+        "item": {
+          "id": "m_auto_projects_archive_view",
+          "code": "projects_archive_view",
+          "label": "Projects / Archive View",
+          "path": "/projects/archive-view",
+          "parent_id": "m_auto_projects",
+          "sort_order": 240,
+          "icon": "fa-solid fa-box-archive",
+          "group_key": "system",
+          "roles": [
+            "super_admin",
+            "admin",
+            "staff"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "parents": [
+    {
+      "id": "m_projects_root",
+      "code": "projects",
+      "label": "Projects",
+      "path": "/projects",
+      "parent_id": null,
+      "sort_order": 109,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_cert_root",
+      "code": "certificates",
+      "label": "Certificates",
+      "path": "/certificates",
+      "parent_id": null,
+      "sort_order": 110,
+      "icon": "fa-solid fa-certificate",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_proj_archive_root",
+      "code": "projects_archive",
+      "label": "Project Archive",
+      "path": "/projects/archive",
+      "parent_id": "m_projects_root",
+      "sort_order": 113,
+      "icon": "fa-solid fa-box-archive",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    }
+  ],
+  "children": [
+    {
+      "id": "m_cert_templates",
+      "code": "certificate_templates",
+      "label": "Certificate Templates",
+      "path": "/certificates/templates",
+      "parent_id": "m_cert_root",
+      "sort_order": 111,
+      "icon": "fa-solid fa-file-signature",
+      "group_key": "system",
+      "roles": [
+        "super_admin"
+      ]
+    },
+    {
+      "id": "m_cert_issue",
+      "code": "certificate_issue",
+      "label": "Issue Certificates",
+      "path": "/certificates/issue",
+      "parent_id": "m_cert_root",
+      "sort_order": 112,
+      "icon": "fa-solid fa-award",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_proj_finish_bulk",
+      "code": "projects_finish_bulk",
+      "label": "Finish Project Bulk",
+      "path": "/projects/finish-bulk",
+      "parent_id": "m_proj_archive_root",
+      "sort_order": 114,
+      "icon": "fa-solid fa-flag-checkered",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_proj_archive_view",
+      "code": "projects_archive_view",
+      "label": "Archived Projects",
+      "path": "/projects/archive-view",
+      "parent_id": "m_proj_archive_root",
+      "sort_order": 115,
+      "icon": "fa-solid fa-box-archive",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    }
+  ],
+  "generated_at": "2026-03-15T14:43:42.191Z",
+  "notes": [
+    "Auto fixed from menu_sync_config.json",
+    "Added /projects parent if missing",
+    "Moved project archive root under /projects",
+    "Re-numbered sort_order to reduce collisions"
+  ]
+}

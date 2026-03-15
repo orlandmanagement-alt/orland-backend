@@ -57,31 +57,18 @@ function pathStartsWith(activePath, basePath){
   return a.startsWith(b + "/");
 }
 
-function flattenNavTree(items, parentId = null, out = []){
-  const rows = Array.isArray(items) ? items : [];
-  for(const x of rows){
-    const row = {
-      id: String(x?.id || ""),
-      code: String(x?.code || ""),
-      label: String(x?.label || x?.id || "-"),
-      path: String(x?.path || "/dashboard"),
-      parent_id: parentId ? String(parentId) : (x?.parent_id ? String(x.parent_id) : null),
-      sort_order: Number(x?.sort_order ?? 9999),
-      icon: String(x?.icon || "fa-solid fa-circle-dot"),
-      group_key: normalizeGroupKey(x?.group_key)
-    };
-    out.push(row);
-
-    const children = Array.isArray(x?.children) ? x.children : [];
-    if(children.length){
-      flattenNavTree(children, row.id, out);
-    }
-  }
-  return out;
-}
-
 function normalizeNavItems(items){
-  return flattenNavTree(items);
+  const rows = Array.isArray(items) ? items : [];
+  return rows.map(x => ({
+    id: String(x?.id || ""),
+    code: String(x?.code || ""),
+    label: String(x?.label || x?.id || "-"),
+    path: String(x?.path || "/dashboard"),
+    parent_id: x?.parent_id ? String(x.parent_id) : null,
+    sort_order: Number(x?.sort_order ?? 9999),
+    icon: String(x?.icon || "fa-solid fa-circle-dot"),
+    group_key: normalizeGroupKey(x?.group_key)
+  }));
 }
 
 function groupNavItemsIntoLegacyBuckets(items){

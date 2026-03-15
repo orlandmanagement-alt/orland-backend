@@ -1,0 +1,136 @@
+import { api, esc, ensureBaseStyles, mountNode, statusBadge, fmtDate, promptRequired } from "./_admin_common.js";
+
+export default function(){
+  return {
+    title:"Projects",
+    async mount(root){
+      ensureBaseStyles();
+      const el = mountNode(root);
+      let q = "";
+
+      async function load(){
+        const data = await api("/api/projects" + (q ? ("?q=" + encodeURIComponent(q)) : ""));
+        const items = data.items || [];
+
+        el.innerHTML = `
+          <div class="oa-wrap">
+            <div class="oa-head">
+              <h1 class="oa-title">Projects</h1>
+              <div class="oa-tools">
+                <input id="prj-q" class="oa-input" placeholder="Cari code / nama / client" value="${esc(q)}">
+                <button class="oa-btn alt" id="prj-search">Cari</button>
+                <button class="oa-btn" id="prj-add">Tambah Project</button>
+              </div>
+            </div>
+
+            <div class="oa-grid cols-3" style="margin-bottom:12px">
+              <div class="oa-card"><div class="oa-stat">Total Project<b>${esc(items.length)}</b></div></div>
+              <div class="oa-card"><div class="oa-stat">Active<b>${esc(items.filter(x => String(x.status) === "active").length)}</b></div></div>
+              <div class="oa-card"><div class="oa-stat">Done<b>${esc(items.filter(x => String(x.status) === "done").length)}</b></div></div>
+            </div>
+
+            <div class="oa-card">
+              <table class="oa-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Project</th>
+                    <th>Client</th>
+                    <th>Owner</th>
+                    <th>Status</th>
+                    <th>Budget</th>
+                    <th>Updated</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${items.length ? items.map(x => `
+                    <tr>
+                      <td>${esc(x.code || "-")}</td>
+                      <td>${esc(x.name || "-")}</td>
+                      <td>${esc(x.client_name || "-")}</td>
+                      <td>${esc(x.owner_name || "-")}</td>
+                      <td>${statusBadge(x.status)}</td>
+                      <td>${esc(x.budget || 0)}</td>
+                      <td>${esc(fmtDate(x.updated_at))}</td>
+                      <td>
+                        <div class="oa-actions">
+                          <button class="oa-btn alt" data-act="edit" data-id="${esc(x.id)}" data-code="${esc(x.code || "")}" data-name="${esc(x.name || "")}" data-client="${esc(x.client_name || "")}" data-owner="${esc(x.owner_name || "")}" data-status="${esc(x.status || "")}" data-budget="${esc(x.budget || 0)}">Edit</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join("") : `<tr><td colspan="8"><div class="oa-empty">Belum ada project.</div></td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        el.querySelector("#prj-search").onclick = async () => {
+          q = String(el.querySelector("#prj-q").value || "").trim();
+          await load();
+        };
+
+        el.querySelector("#prj-add").onclick = async () => {
+          const code = promptRequired("Code project");
+          if(code == null) return;
+          const name = promptRequired("Nama project");
+          if(name == null) return;
+          const client_name = promptRequired("Nama client");
+          if(client_name == null) return;
+          const owner_name = promptRequired("PIC / owner");
+          if(owner_name == null) return;
+          const status = promptRequired("Status (draft|active|hold|done)", "draft");
+          if(status == null) return;
+          const budget = promptRequired("Budget", "0");
+          if(budget == null) return;
+
+          try{
+            await api("/api/projects", {
+              method: "POST",
+              body: { code, name, client_name, owner_name, status, budget: Number(budget || 0) }
+            });
+            alert("Project berhasil ditambahkan");
+            await load();
+          }catch(err){
+            alert("Gagal tambah project: " + err.message);
+          }
+        };
+
+        el.querySelectorAll("[data-act='edit']").forEach(btn => {
+          btn.onclick = async () => {
+            const id = btn.getAttribute("data-id");
+            const code = promptRequired("Code", btn.getAttribute("data-code") || "");
+            if(code == null) return;
+            const name = promptRequired("Nama project", btn.getAttribute("data-name") || "");
+            if(name == null) return;
+            const client_name = promptRequired("Nama client", btn.getAttribute("data-client") || "");
+            if(client_name == null) return;
+            const owner_name = promptRequired("PIC / owner", btn.getAttribute("data-owner") || "");
+            if(owner_name == null) return;
+            const status = promptRequired("Status (draft|active|hold|done)", btn.getAttribute("data-status") || "draft");
+            if(status == null) return;
+            const budget = promptRequired("Budget", btn.getAttribute("data-budget") || "0");
+            if(budget == null) return;
+
+            try{
+              await api("/api/projects", {
+                method: "PUT",
+                body: { action: "update", project_id: id, code, name, client_name, owner_name, status, budget: Number(budget || 0) }
+              });
+              await load();
+            }catch(err){
+              alert("Gagal update project: " + err.message);
+            }
+          };
+        });
+      }
+
+      try{
+        await load();
+      }catch(err){
+        el.innerHTML = '<div class="oa-wrap"><div class="oa-empty">Gagal memuat project: ' + esc(err.message) + '</div></div>';
+      }
+    }
+  };
+}

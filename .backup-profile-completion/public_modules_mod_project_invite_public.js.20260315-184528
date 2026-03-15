@@ -1,0 +1,303 @@
+import { api, esc, ensureBaseStyles, mountNode } from "./_admin_common.js";
+
+export default function(){
+  return {
+    title:"Project Invite",
+    async mount(root){
+      ensureBaseStyles();
+      const el = mountNode(root);
+
+      const url = new URL(location.href);
+      const token = String(url.searchParams.get("token") || "").trim();
+
+      function card(html){
+        return `<div class="oa-wrap"><div class="oa-card">${html}</div></div>`;
+      }
+
+      async function uploadPhoto(file){
+        const fd = new FormData();
+        fd.append("file", file);
+
+        const r = await fetch("/api/upload/talent-photo", {
+          method: "POST",
+          credentials: "include",
+          body: fd
+        });
+
+        let j = null;
+        try{ j = await r.json(); }catch{}
+
+        if(!r.ok){
+          throw new Error(j?.data?.message || j?.status || (r.status + " " + r.statusText));
+        }
+
+        return j?.data || {};
+      }
+
+      async function setPrimary(mediaId){
+        return await api("/api/talent/photo-primary", {
+          method: "POST",
+          body: { media_id: mediaId }
+        });
+      }
+
+      function formRegister(inv){
+        return `
+          <div class="oa-grid cols-2">
+            <div class="oa-form-group" style="grid-column:1/-1">
+              <label class="oa-form-label">Project</label>
+              <div><b>${esc(inv.project_title || "-")}</b></div>
+              <div class="oa-muted">${esc(inv.role_name || "-")} • ${esc(inv.location_text || "-")}</div>
+            </div>
+
+            <div class="oa-form-group" style="grid-column:1/-1">
+              <label class="oa-form-label">Nama Lengkap</label>
+              <input id="f_display_name" class="oa-input" placeholder="Nama lengkap">
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Email</label>
+              <input id="f_email" class="oa-input" type="email" placeholder="nama@email.com">
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Phone</label>
+              <input id="f_phone" class="oa-input" placeholder="08xxxx">
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Password</label>
+              <input id="f_password" class="oa-input" type="password" placeholder="Minimal 10 karakter">
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Gender</label>
+              <select id="f_gender" class="oa-select">
+                <option value="">- pilih -</option>
+                <option value="male">male</option>
+                <option value="female">female</option>
+                <option value="other">other</option>
+              </select>
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Tanggal Lahir</label>
+              <input id="f_dob" class="oa-input" type="date">
+            </div>
+
+            <div class="oa-form-group">
+              <label class="oa-form-label">Location</label>
+              <input id="f_location" class="oa-input" placeholder="Jakarta">
+            </div>
+
+            <div class="oa-form-group" style="grid-column:1/-1">
+              <label class="oa-form-label">Foto Profil</label>
+              <input id="f_photo" class="oa-input" type="file" accept="image/jpeg,image/png,image/webp">
+              <div id="photo_preview_wrap" class="oa-muted" style="margin-top:8px;display:none">
+                <img id="photo_preview" alt="preview" style="max-width:180px;border-radius:12px;border:1px solid #ddd">
+              </div>
+              <div class="oa-muted">Format: JPG, PNG, WEBP. Maks 5MB.</div>
+            </div>
+          </div>
+
+          <div class="oa-muted" style="margin-top:12px">
+            Approval: <b>${Number(inv.require_approval || 0) === 1 ? "required" : "auto approve"}</b>
+          </div>
+
+          <div id="reg_msg" class="oa-muted" style="margin-top:12px"></div>
+
+          <div class="oa-actions" style="margin-top:14px">
+            <button id="btn_register" class="oa-btn">Daftar & Join Project</button>
+            <button id="btn_claim" class="oa-btn alt">Saya Sudah Punya Akun</button>
+          </div>
+        `;
+      }
+
+      function formClaim(inv){
+        return `
+          <div class="oa-grid cols-2">
+            <div class="oa-form-group" style="grid-column:1/-1">
+              <label class="oa-form-label">Project</label>
+              <div><b>${esc(inv.project_title || "-")}</b></div>
+              <div class="oa-muted">${esc(inv.role_name || "-")} • ${esc(inv.location_text || "-")}</div>
+            </div>
+          </div>
+
+          <div class="oa-muted" style="margin-top:12px">
+            Gunakan tombol ini jika kamu sudah login sebagai talent.
+          </div>
+
+          <div id="claim_msg" class="oa-muted" style="margin-top:12px"></div>
+
+          <div class="oa-actions" style="margin-top:14px">
+            <button id="btn_claim_now" class="oa-btn">Claim Invite</button>
+          </div>
+        `;
+      }
+
+      async function loadInvite(){
+        if(!token){
+          el.innerHTML = card(`<div class="oa-empty">Token invite tidak ditemukan.</div>`);
+          return;
+        }
+
+        try{
+          const res = await api("/api/public/project-invite?token=" + encodeURIComponent(token));
+
+          if(!res.valid){
+            el.innerHTML = card(`
+              <div class="oa-empty">
+                Invite tidak valid.<br>
+                Reason: ${esc(res.reason || "-")}
+              </div>
+            `);
+            return;
+          }
+
+          const inv = res.invite || {};
+
+          el.innerHTML = `
+            <div class="oa-wrap">
+              <div class="oa-head">
+                <h1 class="oa-title">Project Invite</h1>
+              </div>
+
+              <div class="oa-grid cols-2">
+                <div class="oa-card">
+                  <h2 style="margin-top:0">Info Project</h2>
+                  <div><b>${esc(inv.project_title || "-")}</b></div>
+                  <div class="oa-muted">Role: ${esc(inv.role_name || "-")}</div>
+                  <div class="oa-muted">Type: ${esc(inv.role_type || "-")}</div>
+                  <div class="oa-muted">Location: ${esc(inv.location_text || "-")}</div>
+                  <div class="oa-muted">Project Type: ${esc(inv.project_type || "-")}</div>
+                  <div class="oa-muted">Qty Needed: ${esc(inv.qty_needed || "-")}</div>
+                  <div class="oa-muted">Expire: ${esc(inv.expires_at || "-")}</div>
+                  <div style="margin-top:10px"><b>${esc(inv.title || "Invite")}</b></div>
+                  <div class="oa-muted">${esc(inv.message || "-")}</div>
+                </div>
+
+                <div class="oa-card">
+                  <div class="oa-actions" style="margin-bottom:12px">
+                    <button id="tab_register" class="oa-btn">Register Baru</button>
+                    <button id="tab_claim" class="oa-btn alt">Sudah Punya Akun</button>
+                  </div>
+                  <div id="tab_box"></div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          const box = el.querySelector("#tab_box");
+
+          function bindRegister(){
+            box.innerHTML = formRegister(inv);
+
+            const photoInput = box.querySelector("#f_photo");
+            const previewWrap = box.querySelector("#photo_preview_wrap");
+            const preview = box.querySelector("#photo_preview");
+
+            photoInput.onchange = ()=>{
+              const f = photoInput.files && photoInput.files[0];
+              if(!f){
+                previewWrap.style.display = "none";
+                preview.removeAttribute("src");
+                return;
+              }
+              const url = URL.createObjectURL(f);
+              preview.src = url;
+              previewWrap.style.display = "block";
+            };
+
+            box.querySelector("#btn_register").onclick = async ()=>{
+              const msg = box.querySelector("#reg_msg");
+              msg.textContent = "Submitting...";
+
+              try{
+                const out = await api("/api/public/project-invite", {
+                  method: "POST",
+                  body: {
+                    action: "register",
+                    token,
+                    email: box.querySelector("#f_email").value.trim(),
+                    display_name: box.querySelector("#f_display_name").value.trim(),
+                    password: box.querySelector("#f_password").value,
+                    phone: box.querySelector("#f_phone").value.trim(),
+                    gender: box.querySelector("#f_gender").value.trim(),
+                    dob: box.querySelector("#f_dob").value.trim(),
+                    location: box.querySelector("#f_location").value.trim()
+                  }
+                });
+
+                let uploadInfo = "skip";
+                let progressInfo = "-";
+
+                if(photoInput && photoInput.files && photoInput.files[0]){
+                  msg.textContent = "Akun dibuat. Upload foto...";
+                  const up = await uploadPhoto(photoInput.files[0]);
+                  uploadInfo = "uploaded";
+                  if(up.media_id){
+                    msg.textContent = "Foto terupload. Menandai foto utama...";
+                    const prim = await setPrimary(up.media_id);
+                    progressInfo = String(prim.completion_percent || "-");
+                  }
+                }
+
+                msg.innerHTML = `
+                  <span style="color:green">
+                    Berhasil daftar.<br>
+                    approval_status: ${esc(out.approval_status || "-")}<br>
+                    booking_status: ${esc(out.booking_status || "-")}<br>
+                    Foto: ${esc(uploadInfo)}<br>
+                    Completion: ${esc(progressInfo)}
+                  </span>
+                `;
+              }catch(err){
+                msg.innerHTML = `<span style="color:#b91c1c">Gagal: ${esc(err.message)}</span>`;
+              }
+            };
+
+            box.querySelector("#btn_claim").onclick = bindClaim;
+          }
+
+          function bindClaim(){
+            box.innerHTML = formClaim(inv);
+
+            box.querySelector("#btn_claim_now").onclick = async ()=>{
+              const msg = box.querySelector("#claim_msg");
+              msg.textContent = "Submitting...";
+
+              try{
+                const out = await api("/api/public/project-invite", {
+                  method: "POST",
+                  body: {
+                    action: "claim",
+                    token
+                  }
+                });
+
+                msg.innerHTML = `
+                  <span style="color:green">
+                    Invite berhasil di-claim.<br>
+                    approval_status: ${esc(out.approval_status || "-")}<br>
+                    booking_status: ${esc(out.booking_status || "-")}
+                  </span>
+                `;
+              }catch(err){
+                msg.innerHTML = `<span style="color:#b91c1c">Gagal: ${esc(err.message)}</span>`;
+              }
+            };
+          }
+
+          el.querySelector("#tab_register").onclick = bindRegister;
+          el.querySelector("#tab_claim").onclick = bindClaim;
+
+          bindRegister();
+        }catch(err){
+          el.innerHTML = card(`<div class="oa-empty">Gagal memuat invite: ${esc(err.message)}</div>`);
+        }
+      }
+
+      await loadInvite();
+    }
+  };
+}

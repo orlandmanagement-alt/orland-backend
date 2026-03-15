@@ -1,0 +1,141 @@
+import { api, esc, ensureBaseStyles, mountNode } from "./_admin_common.js";
+
+export default function(){
+  return {
+    title:"Certificate Verify",
+    async mount(root){
+      ensureBaseStyles();
+      const host = mountNode(root);
+
+      function getParam(name){
+        const u = new URL(location.href);
+        return String(u.searchParams.get(name) || "").trim();
+      }
+
+      function setParam(name, value){
+        const u = new URL(location.href);
+        if(value) u.searchParams.set(name, value);
+        else u.searchParams.delete(name);
+        history.replaceState({}, "", u.toString());
+      }
+
+      function renderShell(){
+        host.innerHTML = `
+          <style>
+            .cv-wrap{max-width:920px;margin:0 auto;padding:18px 14px 40px;background:#f4f6fb;color:#111827}
+            .cv-hero{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 10px 30px rgba(17,24,39,.08);padding:18px}
+            .cv-title{margin:0;font-size:28px;font-weight:900;line-height:1.1}
+            .cv-sub{margin-top:8px;color:#6b7280;font-size:14px}
+            .cv-form{margin-top:16px;display:grid;grid-template-columns:1fr 1fr auto;gap:10px}
+            .cv-form input{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;font:inherit;background:#fff;outline:none}
+            .cv-form input:focus{border-color:#93c5fd;box-shadow:0 0 0 4px rgba(59,130,246,.12)}
+            .cv-btn{border:0;padding:12px 16px;border-radius:12px;cursor:pointer;background:#2563eb;color:#fff;font-weight:700}
+            .cv-result{margin-top:16px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 10px 30px rgba(17,24,39,.08);padding:18px}
+            .cv-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-weight:900;font-size:13px}
+            .cv-badge.ok{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+            .cv-badge.bad{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+            .cv-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+            .cv-field{border:1px solid #eef2f7;border-radius:12px;padding:12px;background:#fff}
+            .cv-field .k{font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:800;letter-spacing:.04em}
+            .cv-field .v{font-size:14px;color:#0f172a;font-weight:900;word-break:break-word}
+            .cv-empty{padding:22px;text-align:center;color:#6b7280;border:1px dashed #cbd5e1;border-radius:14px;background:#fafafa}
+            .cv-help{margin-top:12px;color:#6b7280;font-size:13px;line-height:1.5}
+            @media (max-width:760px){.cv-form{grid-template-columns:1fr}.cv-grid{grid-template-columns:1fr}}
+          </style>
+
+          <div class="cv-wrap">
+            <div class="cv-hero">
+              <h1 class="cv-title">Certificate Verification</h1>
+              <div class="cv-sub">Verifikasi sertifikat pengalaman project yang diterbitkan oleh Orland Management.</div>
+
+              <div class="cv-form">
+                <input id="cv_certificate_no" placeholder="Certificate No, contoh: OM-CERT-2026-000001">
+                <input id="cv_code" placeholder="Verification Code, contoh: ABCDEFGH">
+                <button class="cv-btn" id="cv_btn_check" type="button">Verify</button>
+              </div>
+
+              <div class="cv-help">
+                Isi salah satu: <b>Certificate No</b> atau <b>Verification Code</b>.
+              </div>
+            </div>
+
+            <div id="cv_result_box"></div>
+          </div>
+        `;
+      }
+
+      function renderInvalid(message){
+        const box = document.getElementById("cv_result_box");
+        box.innerHTML = `
+          <div class="cv-result">
+            <div class="cv-badge bad">Invalid Certificate</div>
+            <div class="cv-empty" style="margin-top:14px">${esc(message || "Certificate not found")}</div>
+          </div>
+        `;
+      }
+
+      function renderValid(item){
+        const box = document.getElementById("cv_result_box");
+        box.innerHTML = `
+          <div class="cv-result">
+            <div class="cv-badge ok">Verified by Orland Management</div>
+
+            <div class="cv-grid">
+              <div class="cv-field"><div class="k">Certificate No</div><div class="v">${esc(item.certificate_no || "-")}</div></div>
+              <div class="cv-field"><div class="k">Verification Code</div><div class="v">${esc(item.verification_code || "-")}</div></div>
+              <div class="cv-field"><div class="k">Issued To</div><div class="v">${esc(item.issued_to_name || "-")}</div></div>
+              <div class="cv-field"><div class="k">Role</div><div class="v">${esc(item.role_title || "-")}</div></div>
+              <div class="cv-field"><div class="k">Project</div><div class="v">${esc(item.project_title || "-")}</div></div>
+              <div class="cv-field"><div class="k">Organization</div><div class="v">${esc(item.organization_name || "-")}</div></div>
+              <div class="cv-field"><div class="k">Issue Date</div><div class="v">${esc(item.issue_date || "-")}</div></div>
+              <div class="cv-field"><div class="k">Project Period</div><div class="v">${esc(((item.event_date_start || "") + (item.event_date_end ? " - " + item.event_date_end : "")).trim() || "-")}</div></div>
+              <div class="cv-field"><div class="k">City</div><div class="v">${esc(item.city || "-")}</div></div>
+              <div class="cv-field"><div class="k">Signer</div><div class="v">${esc(((item.signer_name || "") + (item.signer_title ? " / " + item.signer_title : "")).trim() || "-")}</div></div>
+              <div class="cv-field"><div class="k">Status</div><div class="v">${esc(item.status || "-")}</div></div>
+              <div class="cv-field"><div class="k">Open Certificate</div><div class="v"><a href="/certificate/view?certificate_no=${encodeURIComponent(item.certificate_no || "")}&code=${encodeURIComponent(item.verification_code || "")}">View Document</a></div></div>
+            </div>
+          </div>
+        `;
+      }
+
+      async function verifyNow(){
+        const certificateNo = (document.getElementById("cv_certificate_no")?.value || "").trim();
+        const code = (document.getElementById("cv_code")?.value || "").trim();
+
+        if(!certificateNo && !code){
+          renderInvalid("Isi certificate number atau verification code.");
+          return;
+        }
+
+        const qs = new URLSearchParams();
+        if(certificateNo) qs.set("certificate_no", certificateNo);
+        if(code) qs.set("code", code);
+
+        setParam("certificate_no", certificateNo);
+        setParam("code", code);
+
+        const box = document.getElementById("cv_result_box");
+        box.innerHTML = `<div class="cv-result"><div class="cv-empty">Checking certificate...</div></div>`;
+
+        try{
+          const res = await api("/api/certificates/verify?" + qs.toString());
+          if(res.valid) renderValid(res.item || {});
+          else renderInvalid(res.message || "Certificate not found");
+        }catch(err){
+          renderInvalid(err.message || "Failed to verify certificate");
+        }
+      }
+
+      renderShell();
+
+      const certificateNo = getParam("certificate_no");
+      const code = getParam("code");
+
+      document.getElementById("cv_certificate_no").value = certificateNo;
+      document.getElementById("cv_code").value = code;
+      document.getElementById("cv_btn_check").onclick = verifyNow;
+
+      if(certificateNo || code) verifyNow();
+    }
+  };
+}

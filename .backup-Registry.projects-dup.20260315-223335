@@ -31,7 +31,6 @@ function guessModuleByCodeOrPath(code, path){
   const p = normPath(path);
 
   const codeMap = {
-    projects_list: "/modules/mod_projects.js",
     projects_finish_bulk: "/modules/mod_projects_finish_bulk.js",
     client_accounts: "/modules/mod_client_accounts.js",
     talent_verification: "/modules/mod_talent_verification.js",
@@ -130,7 +129,6 @@ function guessModuleByCodeOrPath(code, path){
   if(codeMap[c]) return codeMap[c];
 
   const pathMap = {
-    "/projects/list": "/modules/mod_projects.js",
     "/projects/finish-bulk": "/modules/mod_projects_finish_bulk.js",
     "/client/accounts": "/modules/mod_client_accounts.js",
     "/talent/verification": "/modules/mod_talent_verification.js",

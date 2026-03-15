@@ -1,0 +1,13 @@
+{
+  "file": "tools/menu_sync_config.json",
+  "checked_at": "2026-03-15T14:46:07.074Z",
+  "counts": {
+    "parents": 3,
+    "children": 4,
+    "total": 7,
+    "errors": 0,
+    "warnings": 0
+  },
+  "errors": [],
+  "warnings": []
+}

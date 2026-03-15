@@ -1,0 +1,111 @@
+import { json, readJson, requireAuth, hasRole, nowSec } from "../../_lib.js";
+import { upsertBooking } from "./_invite_common.js";
+import { applyTalentContactPrivacy } from "../../_contact_privacy.js";
+
+function canReview(a){
+  return hasRole(a.roles, ["super_admin","admin","staff","client"]);
+}
+
+export async function onRequestGet({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+  if(!canReview(a)) return json(403, "forbidden", null);
+
+  const url = new URL(request.url);
+  const status = String(url.searchParams.get("status") || "pending").trim();
+  const project_role_id = String(url.searchParams.get("project_role_id") || "").trim();
+
+  const r = await env.DB.prepare(`
+    SELECT
+      pi.id,
+      pi.project_role_id,
+      pi.talent_user_id,
+      pi.status,
+      pi.message,
+      pi.response_message,
+      pi.created_at,
+      pi.responded_at,
+      pr.role_name,
+      p.title AS project_title,
+      u.display_name,
+      u.email_norm,
+      COALESCE(tcp.phone, u.phone_e164) AS phone
+    FROM project_invites pi
+    JOIN project_roles pr ON pr.id = pi.project_role_id
+    JOIN projects p ON p.id = pr.project_id
+    JOIN users u ON u.id = pi.talent_user_id
+    LEFT JOIN talent_contact_public tcp ON tcp.user_id = u.id
+    WHERE (? = '' OR pi.status = ?)
+      AND (? = '' OR pi.project_role_id = ?)
+    ORDER BY pi.created_at DESC
+  `).bind(status, status, project_role_id, project_role_id).all();
+
+  const items = (r.results || []).map(row => applyTalentContactPrivacy(row, a.roles));
+
+  return json(200, "ok", { items });
+}
+
+export async function onRequestPost({ request, env }){
+  const a = await requireAuth(env, request);
+  if(!a.ok) return a.res;
+  if(!canReview(a)) return json(403, "forbidden", null);
+
+  const body = await readJson(request) || {};
+  const action = String(body.action || "").trim();
+  const invite_id = String(body.invite_id || "").trim();
+  const response_message = String(body.response_message || "").trim();
+  const now = nowSec();
+
+  if(!invite_id) return json(400, "invalid_input", { message: "invite_id" });
+
+  const row = await env.DB.prepare(`
+    SELECT id, project_role_id, talent_user_id, status
+    FROM project_invites
+    WHERE id=?
+    LIMIT 1
+  `).bind(invite_id).first();
+
+  if(!row) return json(404, "not_found", { message: "invite_not_found" });
+
+  if(action === "approve"){
+    await env.DB.prepare(`
+      UPDATE project_invites
+      SET status='approved',
+          response_message=?,
+          responded_at=?
+      WHERE id=?
+    `).bind(response_message || null, now, invite_id).run();
+
+    await upsertBooking(
+      env,
+      row.project_role_id,
+      row.talent_user_id,
+      "approved",
+      response_message || "approved by reviewer"
+    );
+
+    return json(200, "ok", { approved: true });
+  }
+
+  if(action === "reject"){
+    await env.DB.prepare(`
+      UPDATE project_invites
+      SET status='rejected',
+          response_message=?,
+          responded_at=?
+      WHERE id=?
+    `).bind(response_message || null, now, invite_id).run();
+
+    await upsertBooking(
+      env,
+      row.project_role_id,
+      row.talent_user_id,
+      "rejected",
+      response_message || "rejected by reviewer"
+    );
+
+    return json(200, "ok", { rejected: true });
+  }
+
+  return json(400, "invalid_input", { message: "unknown_action" });
+}

@@ -1,0 +1,383 @@
+{
+  "registry_file": "functions/api/registry.js",
+  "menus_dump_file": null,
+  "role_menus_dump_file": null,
+  "counts": {
+    "registry_paths": 77,
+    "registry_code_map": 77,
+    "menus": 0,
+    "role_menus": 0,
+    "module_files": 102
+  },
+  "expected_checks": {
+    "users_client": true,
+    "users_talent": true,
+    "project_invites": true,
+    "project_invites_review": true,
+    "project_invite_public": true,
+    "certificates_issue": true,
+    "certificates_templates": true,
+    "certificate_verify": true,
+    "certificate_view": true,
+    "projects_finish_bulk": false,
+    "projects_archive_view": true,
+    "client_accounts": false,
+    "talent_verification": false,
+    "projects_board": false,
+    "projects_root": false
+  },
+  "menu_not_in_registry": [],
+  "registry_not_in_menus": [
+    {
+      "path": "/audit",
+      "module": "/modules/mod_audit.js"
+    },
+    {
+      "path": "/certificate/verify",
+      "module": "/modules/mod_certificate_verify.js"
+    },
+    {
+      "path": "/certificate/view",
+      "module": "/modules/mod_certificate_document.js"
+    },
+    {
+      "path": "/certificates/issue",
+      "module": "/modules/mod_certificate_issue.js"
+    },
+    {
+      "path": "/certificates/templates",
+      "module": "/modules/mod_certificate_templates.js"
+    },
+    {
+      "path": "/config",
+      "module": "/modules/mod_config.js"
+    },
+    {
+      "path": "/config/analytics",
+      "module": "/modules/mod_cfg_analytics.js"
+    },
+    {
+      "path": "/config/bulk-tools",
+      "module": "/modules/mod_cfg_bulk_tools.js"
+    },
+    {
+      "path": "/config/cron-global",
+      "module": "/modules/mod_cfg_cron_global.js"
+    },
+    {
+      "path": "/config/global",
+      "module": "/modules/mod_cfg_global.js"
+    },
+    {
+      "path": "/config/otp",
+      "module": "/modules/mod_cfg_otp.js"
+    },
+    {
+      "path": "/config/plugins",
+      "module": "/modules/mod_cfg_plugins.js"
+    },
+    {
+      "path": "/config/security-policy",
+      "module": "/modules/mod_cfg_sec_policy.js"
+    },
+    {
+      "path": "/config/verify",
+      "module": "/modules/mod_cfg_verify.js"
+    },
+    {
+      "path": "/dashboard",
+      "module": "/modules/mod_dashboard.js"
+    },
+    {
+      "path": "/data",
+      "module": "/modules/mod_data.js"
+    },
+    {
+      "path": "/data/export",
+      "module": "/modules/mod_data_export.js"
+    },
+    {
+      "path": "/data/import",
+      "module": "/modules/mod_data_import.js"
+    },
+    {
+      "path": "/debug/menu",
+      "module": "/modules/mod_menu_debug.js"
+    },
+    {
+      "path": "/integrations/blogspot",
+      "module": "/modules/mod_blogspot.js"
+    },
+    {
+      "path": "/integrations/blogspot/audit-ledger",
+      "module": "/modules/mod_blogspot_audit_ledger.js"
+    },
+    {
+      "path": "/integrations/blogspot/job-breaker",
+      "module": "/modules/mod_blogspot_job_breaker.js"
+    },
+    {
+      "path": "/integrations/blogspot/job-idempotency",
+      "module": "/modules/mod_blogspot_job_idempotency.js"
+    },
+    {
+      "path": "/integrations/blogspot/job-policy",
+      "module": "/modules/mod_blogspot_job_policy.js"
+    },
+    {
+      "path": "/integrations/blogspot/pages",
+      "module": "/modules/mod_blogspot_pages.js"
+    },
+    {
+      "path": "/integrations/blogspot/posts",
+      "module": "/modules/mod_blogspot_posts.js"
+    },
+    {
+      "path": "/integrations/blogspot/queue-center",
+      "module": "/modules/mod_blogspot_queue_center.js"
+    },
+    {
+      "path": "/integrations/blogspot/schedule-calendar",
+      "module": "/modules/mod_blogspot_schedule_calendar.js"
+    },
+    {
+      "path": "/integrations/blogspot/settings",
+      "module": "/modules/mod_cfg_blogspot.js"
+    },
+    {
+      "path": "/integrations/blogspot/sites-multi",
+      "module": "/modules/mod_blogspot_sites_multi.js"
+    },
+    {
+      "path": "/integrations/blogspot/sync",
+      "module": "/modules/mod_blogspot_sync.js"
+    },
+    {
+      "path": "/integrations/blogspot/widgets",
+      "module": "/modules/mod_blogspot_widgets.js"
+    },
+    {
+      "path": "/ipblocks",
+      "module": "/modules/mod_ipblocks.js"
+    },
+    {
+      "path": "/menu-builder",
+      "module": "/modules/mod_menu_builder.js"
+    },
+    {
+      "path": "/menus",
+      "module": "/modules/mod_menu_builder.js"
+    },
+    {
+      "path": "/ops",
+      "module": "/modules/mod_ops.js"
+    },
+    {
+      "path": "/ops/incidents",
+      "module": "/modules/mod_ops_incidents.js"
+    },
+    {
+      "path": "/ops/oncall",
+      "module": "/modules/mod_ops_oncall.js"
+    },
+    {
+      "path": "/plugins",
+      "module": "/modules/mod_plugins.js"
+    },
+    {
+      "path": "/preferences/appearance",
+      "module": "/modules/mod_preferences_appearance.js"
+    },
+    {
+      "path": "/profile",
+      "module": "/modules/mod_profile.js"
+    },
+    {
+      "path": "/profile/security",
+      "module": "/modules/mod_profile_security.js"
+    },
+    {
+      "path": "/project-invite",
+      "module": "/modules/mod_project_invite_public.js"
+    },
+    {
+      "path": "/projects/archive-view",
+      "module": "/modules/mod_projects_archive_view.js"
+    },
+    {
+      "path": "/projects/detail",
+      "module": "/modules/mod_projects.js"
+    },
+    {
+      "path": "/projects/invites",
+      "module": "/modules/mod_project_invites.js"
+    },
+    {
+      "path": "/projects/invites/review",
+      "module": "/modules/mod_project_invite_reviews.js"
+    },
+    {
+      "path": "/rbac",
+      "module": "/modules/mod_rbac.js"
+    },
+    {
+      "path": "/rbac/manager",
+      "module": "/modules/mod_rbac.js"
+    },
+    {
+      "path": "/roles",
+      "module": "/modules/mod_role_builder.js"
+    },
+    {
+      "path": "/security",
+      "module": "/modules/mod_security.js"
+    },
+    {
+      "path": "/security/bootstrap-admin",
+      "module": "/modules/mod_bootstrap_admin.js"
+    },
+    {
+      "path": "/security/center",
+      "module": "/modules/mod_security_center.js"
+    },
+    {
+      "path": "/security/final-health",
+      "module": "/modules/mod_security_final_health.js"
+    },
+    {
+      "path": "/security/force-password-reset",
+      "module": "/modules/mod_force_password_reset_admin.js"
+    },
+    {
+      "path": "/security/login-timeline",
+      "module": "/modules/mod_login_audit_timeline.js"
+    },
+    {
+      "path": "/security/mfa-challenge",
+      "module": "/modules/mod_mfa_challenge.js"
+    },
+    {
+      "path": "/security/mfa-compliance",
+      "module": "/modules/mod_mfa_compliance_dashboard.js"
+    },
+    {
+      "path": "/security/mfa-enrollment",
+      "module": "/modules/mod_mfa_enrollment.js"
+    },
+    {
+      "path": "/security/mfa-policy",
+      "module": "/modules/mod_mfa_policy_console.js"
+    },
+    {
+      "path": "/security/mfa-recovery-audit",
+      "module": "/modules/mod_mfa_recovery_audit.js"
+    },
+    {
+      "path": "/security/mfa-recovery-codes",
+      "module": "/modules/mod_mfa_recovery_codes.js"
+    },
+    {
+      "path": "/security/mfa-user-inspector",
+      "module": "/modules/mod_admin_user_mfa_inspector.js"
+    },
+    {
+      "path": "/security/policy",
+      "module": "/modules/mod_security_policy_console.js"
+    },
+    {
+      "path": "/security/sessions",
+      "module": "/modules/mod_sessions_admin.js"
+    },
+    {
+      "path": "/security/verification-dashboard",
+      "module": "/modules/mod_verification_dashboard.js"
+    },
+    {
+      "path": "/security/verification-review",
+      "module": "/modules/mod_verification_admin.js"
+    },
+    {
+      "path": "/settings-center",
+      "module": "/modules/mod_settings_center.js"
+    },
+    {
+      "path": "/talent/profile/edit",
+      "module": "/modules/mod_talent_profile_theme.js"
+    },
+    {
+      "path": "/talent/public",
+      "module": "/modules/mod_placeholder.js"
+    },
+    {
+      "path": "/talent/public-view",
+      "module": "/modules/mod_talent_public_theme.js"
+    },
+    {
+      "path": "/users",
+      "module": "/modules/mod_users.js"
+    },
+    {
+      "path": "/users/admin",
+      "module": "/modules/mod_users_admin.js"
+    },
+    {
+      "path": "/users/client",
+      "module": "/modules/mod_users_client.js"
+    },
+    {
+      "path": "/users/talent",
+      "module": "/modules/mod_users_talent.js"
+    },
+    {
+      "path": "/users/tenant",
+      "module": "/modules/mod_users_tenant.js"
+    },
+    {
+      "path": "/verify-center",
+      "module": "/modules/mod_verify_center.js"
+    }
+  ],
+  "missing_module_files": [
+    {
+      "path": "/integrations/blogspot/job-idempotency",
+      "module": "/modules/mod_blogspot_job_idempotency.js"
+    },
+    {
+      "path": "/integrations/blogspot/job-policy",
+      "module": "/modules/mod_blogspot_job_policy.js"
+    }
+  ],
+  "unused_module_files": [
+    "/modules/_admin_common.js",
+    "/modules/_sidebar_nav.js",
+    "/modules/mod_access_review_apply.js",
+    "/modules/mod_access_review_approval.js",
+    "/modules/mod_access_simulation.js",
+    "/modules/mod_blogspot_archive_center.js",
+    "/modules/mod_blogspot_bulk_drift_review.js",
+    "/modules/mod_blogspot_conflict_resolver.js",
+    "/modules/mod_blogspot_evidence_center.js",
+    "/modules/mod_blogspot_job_queue.js",
+    "/modules/mod_blogspot_job_runner.js",
+    "/modules/mod_blogspot_revision_center.js",
+    "/modules/mod_client_accounts.js",
+    "/modules/mod_invites_talent.js",
+    "/modules/mod_mfa_recovery_export.js",
+    "/modules/mod_password_change_required.js",
+    "/modules/mod_permission_matrix.js",
+    "/modules/mod_projects_board.js",
+    "/modules/mod_projects_finish_bulk.js",
+    "/modules/mod_protected_menu_policy.js",
+    "/modules/mod_registry.js",
+    "/modules/mod_registry_audit.js",
+    "/modules/mod_role_templates.js",
+    "/modules/mod_security_policy.js",
+    "/modules/mod_sessions_me.js",
+    "/modules/mod_talent_verification.js",
+    "/modules/mod_user_lifecycle.js",
+    "/modules/mod_user_offboarding.js",
+    "/modules/mod_user_role_assignment.js"
+  ],
+  "role_menu_missing_menu": [],
+  "menu_without_roles": []
+}

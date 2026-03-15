@@ -1,0 +1,1282 @@
+{
+  "generated_from": "functions/api/registry.js",
+  "generated_at": "2026-03-15T14:31:13.096Z",
+  "notes": [
+    "Review this file before copying into tools/menu_sync_config.json",
+    "Public routes were excluded automatically",
+    "Sort orders are draft values and may need cleanup"
+  ],
+  "parents": [
+    {
+      "id": "m_auto_certificates",
+      "code": "certificates",
+      "label": "Certificates",
+      "path": "/certificates",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-certificate",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_config",
+      "code": "config",
+      "label": "Config",
+      "path": "/config",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_data",
+      "code": "data",
+      "label": "Data",
+      "path": "/data",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations",
+      "code": "integrations",
+      "label": "Integrations",
+      "path": "/integrations",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot",
+      "code": "integrations_blogspot",
+      "label": "Integrations / Blogspot",
+      "path": "/integrations/blogspot",
+      "parent_id": "m_auto_integrations",
+      "sort_order": 100,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_ops",
+      "code": "ops",
+      "label": "Ops",
+      "path": "/ops",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_preferences",
+      "code": "preferences",
+      "label": "Preferences",
+      "path": "/preferences",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_profile",
+      "code": "profile",
+      "label": "Profile",
+      "path": "/profile",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects",
+      "code": "projects",
+      "label": "Projects",
+      "path": "/projects",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects_invites",
+      "code": "projects_invites",
+      "label": "Projects / Invites",
+      "path": "/projects/invites",
+      "parent_id": "m_auto_projects",
+      "sort_order": 100,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_rbac",
+      "code": "rbac",
+      "label": "Rbac",
+      "path": "/rbac",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_security",
+      "code": "security",
+      "label": "Security",
+      "path": "/security",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_talent_profile",
+      "code": "talent_profile",
+      "label": "Talent / Profile",
+      "path": "/talent/profile",
+      "parent_id": "m_auto_talent",
+      "sort_order": 100,
+      "icon": "fa-solid fa-star",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_users",
+      "code": "users",
+      "label": "Users",
+      "path": "/users",
+      "parent_id": null,
+      "sort_order": 100,
+      "icon": "fa-solid fa-users",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    }
+  ],
+  "children": [
+    {
+      "id": "m_auto_audit",
+      "code": "audit",
+      "label": "Audit",
+      "path": "/audit",
+      "parent_id": null,
+      "sort_order": 200,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_certificates_issue",
+      "code": "certificates_issue",
+      "label": "Certificates / Issue",
+      "path": "/certificates/issue",
+      "parent_id": "m_auto_certificates",
+      "sort_order": 201,
+      "icon": "fa-solid fa-certificate",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_certificates_templates",
+      "code": "certificates_templates",
+      "label": "Certificates / Templates",
+      "path": "/certificates/templates",
+      "parent_id": "m_auto_certificates",
+      "sort_order": 202,
+      "icon": "fa-solid fa-certificate",
+      "group_key": "system",
+      "roles": [
+        "super_admin"
+      ]
+    },
+    {
+      "id": "m_auto_config",
+      "code": "config",
+      "label": "Config",
+      "path": "/config",
+      "parent_id": null,
+      "sort_order": 203,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_analytics",
+      "code": "config_analytics",
+      "label": "Config / Analytics",
+      "path": "/config/analytics",
+      "parent_id": "m_auto_config",
+      "sort_order": 204,
+      "icon": "fa-solid fa-chart-line",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_bulk_tools",
+      "code": "config_bulk_tools",
+      "label": "Config / Bulk Tools",
+      "path": "/config/bulk-tools",
+      "parent_id": "m_auto_config",
+      "sort_order": 205,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_cron_global",
+      "code": "config_cron_global",
+      "label": "Config / Cron Global",
+      "path": "/config/cron-global",
+      "parent_id": "m_auto_config",
+      "sort_order": 206,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_global",
+      "code": "config_global",
+      "label": "Config / Global",
+      "path": "/config/global",
+      "parent_id": "m_auto_config",
+      "sort_order": 207,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_otp",
+      "code": "config_otp",
+      "label": "Config / Otp",
+      "path": "/config/otp",
+      "parent_id": "m_auto_config",
+      "sort_order": 208,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_plugins",
+      "code": "config_plugins",
+      "label": "Config / Plugins",
+      "path": "/config/plugins",
+      "parent_id": "m_auto_config",
+      "sort_order": 209,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_security_policy",
+      "code": "config_security_policy",
+      "label": "Config / Security Policy",
+      "path": "/config/security-policy",
+      "parent_id": "m_auto_config",
+      "sort_order": 210,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_config_verify",
+      "code": "config_verify",
+      "label": "Config / Verify",
+      "path": "/config/verify",
+      "parent_id": "m_auto_config",
+      "sort_order": 211,
+      "icon": "fa-solid fa-sliders",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_dashboard",
+      "code": "dashboard",
+      "label": "Dashboard",
+      "path": "/dashboard",
+      "parent_id": null,
+      "sort_order": 212,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_data",
+      "code": "data",
+      "label": "Data",
+      "path": "/data",
+      "parent_id": null,
+      "sort_order": 213,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_data_export",
+      "code": "data_export",
+      "label": "Data / Export",
+      "path": "/data/export",
+      "parent_id": "m_auto_data",
+      "sort_order": 214,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_data_import",
+      "code": "data_import",
+      "label": "Data / Import",
+      "path": "/data/import",
+      "parent_id": "m_auto_data",
+      "sort_order": 215,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot",
+      "code": "integrations_blogspot",
+      "label": "Integrations / Blogspot",
+      "path": "/integrations/blogspot",
+      "parent_id": "m_auto_integrations",
+      "sort_order": 216,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_audit_ledger",
+      "code": "integrations_blogspot_audit_ledger",
+      "label": "Integrations / Blogspot / Audit Ledger",
+      "path": "/integrations/blogspot/audit-ledger",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 217,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_job_breaker",
+      "code": "integrations_blogspot_job_breaker",
+      "label": "Integrations / Blogspot / Job Breaker",
+      "path": "/integrations/blogspot/job-breaker",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 218,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_job_idempotency",
+      "code": "integrations_blogspot_job_idempotency",
+      "label": "Integrations / Blogspot / Job Idempotency",
+      "path": "/integrations/blogspot/job-idempotency",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 219,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_job_policy",
+      "code": "integrations_blogspot_job_policy",
+      "label": "Integrations / Blogspot / Job Policy",
+      "path": "/integrations/blogspot/job-policy",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 220,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_pages",
+      "code": "integrations_blogspot_pages",
+      "label": "Integrations / Blogspot / Pages",
+      "path": "/integrations/blogspot/pages",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 221,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_posts",
+      "code": "integrations_blogspot_posts",
+      "label": "Integrations / Blogspot / Posts",
+      "path": "/integrations/blogspot/posts",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 222,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_queue_center",
+      "code": "integrations_blogspot_queue_center",
+      "label": "Integrations / Blogspot / Queue Center",
+      "path": "/integrations/blogspot/queue-center",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 223,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_schedule_calendar",
+      "code": "integrations_blogspot_schedule_calendar",
+      "label": "Integrations / Blogspot / Schedule Calendar",
+      "path": "/integrations/blogspot/schedule-calendar",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 224,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_settings",
+      "code": "integrations_blogspot_settings",
+      "label": "Integrations / Blogspot / Settings",
+      "path": "/integrations/blogspot/settings",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 225,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_sites_multi",
+      "code": "integrations_blogspot_sites_multi",
+      "label": "Integrations / Blogspot / Sites Multi",
+      "path": "/integrations/blogspot/sites-multi",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 226,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_sync",
+      "code": "integrations_blogspot_sync",
+      "label": "Integrations / Blogspot / Sync",
+      "path": "/integrations/blogspot/sync",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 227,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_integrations_blogspot_widgets",
+      "code": "integrations_blogspot_widgets",
+      "label": "Integrations / Blogspot / Widgets",
+      "path": "/integrations/blogspot/widgets",
+      "parent_id": "m_auto_integrations_blogspot",
+      "sort_order": 228,
+      "icon": "fa-brands fa-blogger",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_ipblocks",
+      "code": "ipblocks",
+      "label": "Ipblocks",
+      "path": "/ipblocks",
+      "parent_id": null,
+      "sort_order": 229,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_menu_builder",
+      "code": "menu_builder",
+      "label": "Menu Builder",
+      "path": "/menu-builder",
+      "parent_id": null,
+      "sort_order": 230,
+      "icon": "fa-solid fa-sitemap",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_menus",
+      "code": "menus",
+      "label": "Menus",
+      "path": "/menus",
+      "parent_id": null,
+      "sort_order": 231,
+      "icon": "fa-solid fa-sitemap",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_ops",
+      "code": "ops",
+      "label": "Ops",
+      "path": "/ops",
+      "parent_id": null,
+      "sort_order": 232,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_ops_incidents",
+      "code": "ops_incidents",
+      "label": "Ops / Incidents",
+      "path": "/ops/incidents",
+      "parent_id": "m_auto_ops",
+      "sort_order": 233,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_ops_oncall",
+      "code": "ops_oncall",
+      "label": "Ops / Oncall",
+      "path": "/ops/oncall",
+      "parent_id": "m_auto_ops",
+      "sort_order": 234,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_plugins",
+      "code": "plugins",
+      "label": "Plugins",
+      "path": "/plugins",
+      "parent_id": null,
+      "sort_order": 235,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_preferences_appearance",
+      "code": "preferences_appearance",
+      "label": "Preferences / Appearance",
+      "path": "/preferences/appearance",
+      "parent_id": "m_auto_preferences",
+      "sort_order": 236,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_profile",
+      "code": "profile",
+      "label": "Profile",
+      "path": "/profile",
+      "parent_id": null,
+      "sort_order": 237,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_profile_security",
+      "code": "profile_security",
+      "label": "Profile / Security",
+      "path": "/profile/security",
+      "parent_id": "m_auto_profile",
+      "sort_order": 238,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_project_invite",
+      "code": "project_invite",
+      "label": "Project Invite",
+      "path": "/project-invite",
+      "parent_id": null,
+      "sort_order": 239,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects_archive_view",
+      "code": "projects_archive_view",
+      "label": "Projects / Archive View",
+      "path": "/projects/archive-view",
+      "parent_id": "m_auto_projects",
+      "sort_order": 240,
+      "icon": "fa-solid fa-box-archive",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects_detail",
+      "code": "projects_detail",
+      "label": "Projects / Detail",
+      "path": "/projects/detail",
+      "parent_id": "m_auto_projects",
+      "sort_order": 241,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects_invites",
+      "code": "projects_invites",
+      "label": "Projects / Invites",
+      "path": "/projects/invites",
+      "parent_id": "m_auto_projects",
+      "sort_order": 242,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_projects_invites_review",
+      "code": "projects_invites_review",
+      "label": "Projects / Invites / Review",
+      "path": "/projects/invites/review",
+      "parent_id": "m_auto_projects_invites",
+      "sort_order": 243,
+      "icon": "fa-solid fa-diagram-project",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_rbac",
+      "code": "rbac",
+      "label": "Rbac",
+      "path": "/rbac",
+      "parent_id": null,
+      "sort_order": 244,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_rbac_manager",
+      "code": "rbac_manager",
+      "label": "Rbac / Manager",
+      "path": "/rbac/manager",
+      "parent_id": "m_auto_rbac",
+      "sort_order": 245,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_roles",
+      "code": "roles",
+      "label": "Roles",
+      "path": "/roles",
+      "parent_id": null,
+      "sort_order": 246,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security",
+      "code": "security",
+      "label": "Security",
+      "path": "/security",
+      "parent_id": null,
+      "sort_order": 247,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_bootstrap_admin",
+      "code": "security_bootstrap_admin",
+      "label": "Security / Bootstrap Admin",
+      "path": "/security/bootstrap-admin",
+      "parent_id": "m_auto_security",
+      "sort_order": 248,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_center",
+      "code": "security_center",
+      "label": "Security / Center",
+      "path": "/security/center",
+      "parent_id": "m_auto_security",
+      "sort_order": 249,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_final_health",
+      "code": "security_final_health",
+      "label": "Security / Final Health",
+      "path": "/security/final-health",
+      "parent_id": "m_auto_security",
+      "sort_order": 250,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_force_password_reset",
+      "code": "security_force_password_reset",
+      "label": "Security / Force Password Reset",
+      "path": "/security/force-password-reset",
+      "parent_id": "m_auto_security",
+      "sort_order": 251,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_login_timeline",
+      "code": "security_login_timeline",
+      "label": "Security / Login Timeline",
+      "path": "/security/login-timeline",
+      "parent_id": "m_auto_security",
+      "sort_order": 252,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_challenge",
+      "code": "security_mfa_challenge",
+      "label": "Security / Mfa Challenge",
+      "path": "/security/mfa-challenge",
+      "parent_id": "m_auto_security",
+      "sort_order": 253,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_compliance",
+      "code": "security_mfa_compliance",
+      "label": "Security / Mfa Compliance",
+      "path": "/security/mfa-compliance",
+      "parent_id": "m_auto_security",
+      "sort_order": 254,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_enrollment",
+      "code": "security_mfa_enrollment",
+      "label": "Security / Mfa Enrollment",
+      "path": "/security/mfa-enrollment",
+      "parent_id": "m_auto_security",
+      "sort_order": 255,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_policy",
+      "code": "security_mfa_policy",
+      "label": "Security / Mfa Policy",
+      "path": "/security/mfa-policy",
+      "parent_id": "m_auto_security",
+      "sort_order": 256,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_recovery_audit",
+      "code": "security_mfa_recovery_audit",
+      "label": "Security / Mfa Recovery Audit",
+      "path": "/security/mfa-recovery-audit",
+      "parent_id": "m_auto_security",
+      "sort_order": 257,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_recovery_codes",
+      "code": "security_mfa_recovery_codes",
+      "label": "Security / Mfa Recovery Codes",
+      "path": "/security/mfa-recovery-codes",
+      "parent_id": "m_auto_security",
+      "sort_order": 258,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_mfa_user_inspector",
+      "code": "security_mfa_user_inspector",
+      "label": "Security / Mfa User Inspector",
+      "path": "/security/mfa-user-inspector",
+      "parent_id": "m_auto_security",
+      "sort_order": 259,
+      "icon": "fa-solid fa-users",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_policy",
+      "code": "security_policy",
+      "label": "Security / Policy",
+      "path": "/security/policy",
+      "parent_id": "m_auto_security",
+      "sort_order": 260,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_sessions",
+      "code": "security_sessions",
+      "label": "Security / Sessions",
+      "path": "/security/sessions",
+      "parent_id": "m_auto_security",
+      "sort_order": 261,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_verification_dashboard",
+      "code": "security_verification_dashboard",
+      "label": "Security / Verification Dashboard",
+      "path": "/security/verification-dashboard",
+      "parent_id": "m_auto_security",
+      "sort_order": 262,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_security_verification_review",
+      "code": "security_verification_review",
+      "label": "Security / Verification Review",
+      "path": "/security/verification-review",
+      "parent_id": "m_auto_security",
+      "sort_order": 263,
+      "icon": "fa-solid fa-shield-halved",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_settings_center",
+      "code": "settings_center",
+      "label": "Settings Center",
+      "path": "/settings-center",
+      "parent_id": null,
+      "sort_order": 264,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_talent_profile_edit",
+      "code": "talent_profile_edit",
+      "label": "Talent / Profile / Edit",
+      "path": "/talent/profile/edit",
+      "parent_id": "m_auto_talent_profile",
+      "sort_order": 265,
+      "icon": "fa-solid fa-star",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    },
+    {
+      "id": "m_auto_users",
+      "code": "users",
+      "label": "Users",
+      "path": "/users",
+      "parent_id": null,
+      "sort_order": 266,
+      "icon": "fa-solid fa-users",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_users_admin",
+      "code": "users_admin",
+      "label": "Users / Admin",
+      "path": "/users/admin",
+      "parent_id": "m_auto_users",
+      "sort_order": 267,
+      "icon": "fa-solid fa-users",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_users_client",
+      "code": "users_client",
+      "label": "Users / Client",
+      "path": "/users/client",
+      "parent_id": "m_auto_users",
+      "sort_order": 268,
+      "icon": "fa-solid fa-building",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_users_talent",
+      "code": "users_talent",
+      "label": "Users / Talent",
+      "path": "/users/talent",
+      "parent_id": "m_auto_users",
+      "sort_order": 269,
+      "icon": "fa-solid fa-star",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_users_tenant",
+      "code": "users_tenant",
+      "label": "Users / Tenant",
+      "path": "/users/tenant",
+      "parent_id": "m_auto_users",
+      "sort_order": 270,
+      "icon": "fa-solid fa-users",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    {
+      "id": "m_auto_verify_center",
+      "code": "verify_center",
+      "label": "Verify Center",
+      "path": "/verify-center",
+      "parent_id": null,
+      "sort_order": 271,
+      "icon": "fa-solid fa-folder",
+      "group_key": "system",
+      "roles": [
+        "super_admin",
+        "admin",
+        "staff"
+      ]
+    }
+  ]
+}

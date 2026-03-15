@@ -1,0 +1,327 @@
+import { api, esc, ensureBaseStyles, mountNode, statusBadge, fmtDate, promptRequired } from "./_admin_common.js";
+
+export default function(){
+  return {
+    title:"Projects",
+    async mount(root){
+      ensureBaseStyles();
+      const el = mountNode(root);
+      let q = "";
+      let activeId = "";
+
+      async function load(){
+        const data = await api("/api/projects" + (q ? ("?q=" + encodeURIComponent(q)) : ""));
+        const items = data.items || [];
+
+        el.innerHTML = `
+          <div class="oa-wrap">
+            <div class="oa-head">
+              <h1 class="oa-title">Projects</h1>
+              <div class="oa-tools">
+                <input id="prj-q" class="oa-input" placeholder="Cari code / nama / client" value="${esc(q)}">
+                <button class="oa-btn alt" id="prj-search">Cari</button>
+                <button class="oa-btn" id="prj-add">Tambah Project</button>
+              </div>
+            </div>
+
+            <div class="oa-grid cols-3" style="margin-bottom:12px">
+              <div class="oa-card"><div class="oa-stat">Total Project<b>${esc(items.length)}</b></div></div>
+              <div class="oa-card"><div class="oa-stat">Active<b>${esc(items.filter(x => String(x.status) === "active").length)}</b></div></div>
+              <div class="oa-card"><div class="oa-stat">Done<b>${esc(items.filter(x => String(x.status) === "done").length)}</b></div></div>
+            </div>
+
+            <div class="oa-card">
+              <table class="oa-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Project</th>
+                    <th>Client</th>
+                    <th>Owner</th>
+                    <th>Status</th>
+                    <th>Talent</th>
+                    <th>Client User</th>
+                    <th>Updated</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${items.length ? items.map(x => `
+                    <tr>
+                      <td>${esc(x.code || "-")}</td>
+                      <td>${esc(x.name || "-")}</td>
+                      <td>${esc(x.client_name || "-")}</td>
+                      <td>${esc(x.owner_name || "-")}</td>
+                      <td>${statusBadge(x.status)}</td>
+                      <td>${esc(x.talent_count || 0)}</td>
+                      <td>${esc(x.client_count || 0)}</td>
+                      <td>${esc(fmtDate(x.updated_at))}</td>
+                      <td>
+                        <div class="oa-actions">
+                          <button class="oa-btn alt" data-act="detail" data-id="${esc(x.id)}">Detail</button>
+                          <button class="oa-btn alt" data-act="edit" data-id="${esc(x.id)}" data-code="${esc(x.code || "")}" data-name="${esc(x.name || "")}" data-client="${esc(x.client_name || "")}" data-owner="${esc(x.owner_name || "")}" data-status="${esc(x.status || "")}" data-budget="${esc(x.budget || 0)}" data-start="${esc(x.start_date || "")}" data-end="${esc(x.end_date || "")}">Edit</button>
+                          <button class="oa-btn warn" data-act="delete" data-id="${esc(x.id)}">Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join("") : `<tr><td colspan="9"><div class="oa-empty">Belum ada project.</div></td></tr>`}
+                </tbody>
+              </table>
+            </div>
+
+            <div id="detailBox" style="margin-top:12px"></div>
+          </div>
+        `;
+
+        el.querySelector("#prj-search").onclick = async () => {
+          q = String(el.querySelector("#prj-q").value || "").trim();
+          await load();
+        };
+
+        el.querySelector("#prj-add").onclick = async () => {
+          const code = promptRequired("Code project");
+          if(code == null) return;
+          const name = promptRequired("Nama project");
+          if(name == null) return;
+          const client_name = promptRequired("Nama client");
+          if(client_name == null) return;
+          const owner_name = promptRequired("PIC / owner");
+          if(owner_name == null) return;
+          const status = promptRequired("Status (draft|active|hold|done)", "draft");
+          if(status == null) return;
+          const budget = promptRequired("Budget", "0");
+          if(budget == null) return;
+          const start_date = promptRequired("Start date (YYYY-MM-DD)", "");
+          if(start_date == null) return;
+          const end_date = promptRequired("End date (YYYY-MM-DD)", "");
+          if(end_date == null) return;
+
+          try{
+            await api("/api/projects", {
+              method: "POST",
+              body: { code, name, client_name, owner_name, status, budget: Number(budget || 0), start_date, end_date }
+            });
+            alert("Project berhasil ditambahkan");
+            await load();
+          }catch(err){
+            alert("Gagal tambah project: " + err.message);
+          }
+        };
+
+        el.querySelectorAll("[data-act]").forEach(btn => {
+          btn.onclick = async () => {
+            const act = btn.getAttribute("data-act");
+            const id = btn.getAttribute("data-id");
+
+            try{
+              if(act === "detail"){
+                activeId = id;
+                await renderDetail(id);
+                return;
+              }
+
+              if(act === "edit"){
+                const code = promptRequired("Code", btn.getAttribute("data-code") || "");
+                if(code == null) return;
+                const name = promptRequired("Nama project", btn.getAttribute("data-name") || "");
+                if(name == null) return;
+                const client_name = promptRequired("Nama client", btn.getAttribute("data-client") || "");
+                if(client_name == null) return;
+                const owner_name = promptRequired("PIC / owner", btn.getAttribute("data-owner") || "");
+                if(owner_name == null) return;
+                const status = promptRequired("Status (draft|active|hold|done)", btn.getAttribute("data-status") || "draft");
+                if(status == null) return;
+                const budget = promptRequired("Budget", btn.getAttribute("data-budget") || "0");
+                if(budget == null) return;
+                const start_date = promptRequired("Start date (YYYY-MM-DD)", btn.getAttribute("data-start") || "");
+                if(start_date == null) return;
+                const end_date = promptRequired("End date (YYYY-MM-DD)", btn.getAttribute("data-end") || "");
+                if(end_date == null) return;
+
+                await api("/api/projects", {
+                  method: "PUT",
+                  body: { action: "update", project_id: id, code, name, client_name, owner_name, status, budget: Number(budget || 0), start_date, end_date }
+                });
+                await load();
+                if(activeId === id) await renderDetail(id);
+                return;
+              }
+
+              if(act === "delete"){
+                if(!confirm("Hapus project ini?")) return;
+                await api("/api/projects", {
+                  method: "PUT",
+                  body: { action: "delete", project_id: id }
+                });
+                activeId = "";
+                await load();
+              }
+            }catch(err){
+              alert("Aksi gagal: " + err.message);
+            }
+          };
+        });
+
+        if(activeId){
+          await renderDetail(activeId);
+        }
+      }
+
+      async function renderDetail(projectId){
+        const box = el.querySelector("#detailBox");
+        box.innerHTML = '<div class="oa-card">Loading detail...</div>';
+
+        try{
+          const data = await api("/api/projects/detail?project_id=" + encodeURIComponent(projectId));
+          const p = data.project || {};
+          const talents = data.talents || [];
+          const clients = data.clients || [];
+          const talentPool = data.talent_pool || [];
+          const clientPool = data.client_pool || [];
+
+          box.innerHTML = `
+            <div class="oa-card">
+              <div class="oa-head">
+                <h2 class="oa-title" style="font-size:20px">Detail Project: ${esc(p.name || "-")}</h2>
+                <div class="oa-tools">
+                  <button class="oa-btn alt" id="asg-talent">Assign Talent</button>
+                  <button class="oa-btn alt" id="asg-client">Assign Client</button>
+                </div>
+              </div>
+
+              <div class="oa-grid cols-3">
+                <div class="oa-card"><div class="oa-stat">Code<b>${esc(p.code || "-")}</b></div></div>
+                <div class="oa-card"><div class="oa-stat">Status<b>${esc(p.status || "-")}</b></div></div>
+                <div class="oa-card"><div class="oa-stat">Budget<b>${esc(p.budget || 0)}</b></div></div>
+              </div>
+
+              <div class="oa-grid cols-3" style="margin-top:12px">
+                <div class="oa-col">
+                  <h3>Talent Assigned</h3>
+                  ${talents.length ? talents.map(x => `
+                    <div class="oa-item">
+                      <div><b>${esc(x.display_name || "-")}</b></div>
+                      <div class="oa-muted">${esc(x.email_norm || "-")}</div>
+                      <div class="oa-muted">${esc(x.role_label || "-")}</div>
+                      <div style="margin-top:6px">
+                        <button class="oa-btn warn rm-talent" data-user="${esc(x.user_id)}">Remove</button>
+                      </div>
+                    </div>
+                  `).join("") : `<div class="oa-empty">Belum ada talent</div>`}
+                </div>
+
+                <div class="oa-col">
+                  <h3>Client Assigned</h3>
+                  ${clients.length ? clients.map(x => `
+                    <div class="oa-item">
+                      <div><b>${esc(x.display_name || "-")}</b></div>
+                      <div class="oa-muted">${esc(x.email_norm || "-")}</div>
+                      <div class="oa-muted">${esc(x.role_label || "-")}</div>
+                      <div style="margin-top:6px">
+                        <button class="oa-btn warn rm-client" data-user="${esc(x.user_id)}">Remove</button>
+                      </div>
+                    </div>
+                  `).join("") : `<div class="oa-empty">Belum ada client</div>`}
+                </div>
+
+                <div class="oa-col">
+                  <h3>Timeline</h3>
+                  <div class="oa-item">
+                    <div><b>Start</b></div>
+                    <div class="oa-muted">${esc(p.start_date || "-")}</div>
+                  </div>
+                  <div class="oa-item">
+                    <div><b>End</b></div>
+                    <div class="oa-muted">${esc(p.end_date || "-")}</div>
+                  </div>
+                  <div class="oa-item">
+                    <div><b>Updated</b></div>
+                    <div class="oa-muted">${esc(fmtDate(p.updated_at))}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          box.querySelector("#asg-talent").onclick = async ()=>{
+            const picked = promptRequired(
+              "Masukkan USER ID talent:\n" + talentPool.map(x => `${x.id} | ${x.display_name || "-"} | ${x.email_norm || "-"}`).join("\n"),
+              ""
+            );
+            if(picked == null) return;
+            const role_label = promptRequired("Role label talent di project", "member");
+            if(role_label == null) return;
+            try{
+              await api("/api/projects/assignments", {
+                method: "POST",
+                body: { action: "add_talent", project_id: projectId, user_id: picked, role_label }
+              });
+              await renderDetail(projectId);
+              await load();
+            }catch(err){
+              alert("Gagal assign talent: " + err.message);
+            }
+          };
+
+          box.querySelector("#asg-client").onclick = async ()=>{
+            const picked = promptRequired(
+              "Masukkan USER ID client:\n" + clientPool.map(x => `${x.id} | ${x.display_name || "-"} | ${x.email_norm || "-"}`).join("\n"),
+              ""
+            );
+            if(picked == null) return;
+            const role_label = promptRequired("Role label client di project", "owner");
+            if(role_label == null) return;
+            try{
+              await api("/api/projects/assignments", {
+                method: "POST",
+                body: { action: "add_client", project_id: projectId, user_id: picked, role_label }
+              });
+              await renderDetail(projectId);
+              await load();
+            }catch(err){
+              alert("Gagal assign client: " + err.message);
+            }
+          };
+
+          box.querySelectorAll(".rm-talent").forEach(btn=>{
+            btn.onclick = async ()=>{
+              try{
+                await api("/api/projects/assignments", {
+                  method: "POST",
+                  body: { action: "remove_talent", project_id: projectId, user_id: btn.getAttribute("data-user") }
+                });
+                await renderDetail(projectId);
+                await load();
+              }catch(err){
+                alert("Gagal remove talent: " + err.message);
+              }
+            };
+          });
+
+          box.querySelectorAll(".rm-client").forEach(btn=>{
+            btn.onclick = async ()=>{
+              try{
+                await api("/api/projects/assignments", {
+                  method: "POST",
+                  body: { action: "remove_client", project_id: projectId, user_id: btn.getAttribute("data-user") }
+                });
+                await renderDetail(projectId);
+                await load();
+              }catch(err){
+                alert("Gagal remove client: " + err.message);
+              }
+            };
+          });
+        }catch(err){
+          box.innerHTML = '<div class="oa-card"><div class="oa-empty">Gagal memuat detail: ' + esc(err.message) + '</div></div>';
+        }
+      }
+
+      try{
+        await load();
+      }catch(err){
+        el.innerHTML = '<div class="oa-wrap"><div class="oa-empty">Gagal memuat project: ' + esc(err.message) + '</div></div>';
+      }
+    }
+  };
+}

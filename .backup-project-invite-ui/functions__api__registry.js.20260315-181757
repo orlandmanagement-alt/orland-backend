@@ -31,24 +31,6 @@ function guessModuleByCodeOrPath(code, path){
   const p = normPath(path);
 
   const codeMap = {
-    projects_list: "/modules/mod_projects.js",
-    projects_finish_bulk: "/modules/mod_projects_finish_bulk.js",
-    client_accounts: "/modules/mod_client_accounts.js",
-    talent_verification: "/modules/mod_talent_verification.js",
-    projects_board: "/modules/mod_projects_board.js",
-    projects: "/modules/mod_projects.js",
-    menu_debug: "/modules/mod_menu_debug.js",
-    projects_archive_view: "/modules/mod_projects_archive_view.js",
-    certificate_document: "/modules/mod_certificate_document.js",
-    certificate_verify_page: "/modules/mod_certificate_verify.js",
-    certificate_issue: "/modules/mod_certificate_issue.js",
-    certificate_templates: "/modules/mod_certificate_templates.js",
-    talent_public_theme: "/modules/mod_talent_public_theme.js",
-    talent_profile_theme: "/modules/mod_talent_profile_theme.js",
-    talent_public_profile: "/modules/mod_placeholder.js",
-    project_invite_reviews: "/modules/mod_project_invite_reviews.js",
-    project_invite_public: "/modules/mod_project_invite_public.js",
-    project_invites: "/modules/mod_project_invites.js",
     projects_detail: "/modules/mod_projects.js",
     dashboard: "/modules/mod_dashboard.js",
 
@@ -130,24 +112,6 @@ function guessModuleByCodeOrPath(code, path){
   if(codeMap[c]) return codeMap[c];
 
   const pathMap = {
-    "/projects/list": "/modules/mod_projects.js",
-    "/projects/finish-bulk": "/modules/mod_projects_finish_bulk.js",
-    "/client/accounts": "/modules/mod_client_accounts.js",
-    "/talent/verification": "/modules/mod_talent_verification.js",
-    "/projects/board": "/modules/mod_projects_board.js",
-    "/projects": "/modules/mod_projects.js",
-    "/debug/menu": "/modules/mod_menu_debug.js",
-    "/projects/archive-view": "/modules/mod_projects_archive_view.js",
-    "/certificate/view": "/modules/mod_certificate_document.js",
-    "/certificate/verify": "/modules/mod_certificate_verify.js",
-    "/certificates/issue": "/modules/mod_certificate_issue.js",
-    "/certificates/templates": "/modules/mod_certificate_templates.js",
-    "/talent/public-view": "/modules/mod_talent_public_theme.js",
-    "/talent/profile/edit": "/modules/mod_talent_profile_theme.js",
-    "/talent/public": "/modules/mod_placeholder.js",
-    "/projects/invites/review": "/modules/mod_project_invite_reviews.js",
-    "/project-invite": "/modules/mod_project_invite_public.js",
-    "/projects/invites": "/modules/mod_project_invites.js",
     "/projects/detail": "/modules/mod_projects.js",
     "/dashboard": "/modules/mod_dashboard.js",
 
